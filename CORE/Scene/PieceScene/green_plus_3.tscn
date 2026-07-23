@@ -1,0 +1,60 @@
+[gd_scene load_steps=12 format=3 uid="uid://4xfixi1y483a"]
+
+[ext_resource type="PackedScene" uid="uid://bftqiu3je1q6a" path="res://CORE/Scene/PieceScene/Piece.tscn" id="1_7eneq"]
+[ext_resource type="Texture2D" uid="uid://bbyc40e7b6f7m" path="res://CORE/Assets/Art/Game/Cubes/Green/Green_2.svg" id="2_fci58"]
+[ext_resource type="Texture2D" uid="uid://de2o68yd8vx5j" path="res://CORE/Assets/Art/Game/Cubes/_PLUS/Green/Green_plus3.svg" id="2_nlqli"]
+[ext_resource type="Texture2D" uid="uid://cw1idtu3aas2o" path="res://CORE/Assets/Art/Game/Cubes/Green/Green_3.svg" id="4_g204q"]
+[ext_resource type="Texture2D" uid="uid://ca1f2lj0sjvno" path="res://CORE/Assets/Art/Game/Cubes/Green/Green_4.svg" id="5_6vwg2"]
+[ext_resource type="Texture2D" uid="uid://kn4e80kpb4vt" path="res://CORE/Assets/Art/Game/Cubes/Green/Green_5.svg" id="6_2slcu"]
+[ext_resource type="Texture2D" uid="uid://dsu43lnnr5btr" path="res://CORE/Assets/Art/Game/Cubes/Green/Green_6.svg" id="7_q8v6s"]
+[ext_resource type="Texture2D" uid="uid://wyuhtpow1xoj" path="res://CORE/Assets/Art/Game/Cubes/Green/Green_7.svg" id="8_xmefu"]
+
+[sub_resource type="Animation" id="Animation_w3xxi"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [ExtResource("2_fci58")]
+}
+
+[sub_resource type="Animation" id="Animation_2layi"]
+resource_name = "match"
+length = 0.3
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [ExtResource("2_nlqli"), ExtResource("2_fci58"), ExtResource("4_g204q"), ExtResource("5_6vwg2"), ExtResource("6_2slcu"), ExtResource("7_q8v6s"), ExtResource("8_xmefu")]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_n5wf3"]
+_data = {
+&"RESET": SubResource("Animation_w3xxi"),
+&"match": SubResource("Animation_2layi")
+}
+
+[node name="green_plus3" instance=ExtResource("1_7eneq")]
+color = "green"
+mooves = 3
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2_nlqli")
+
+[node name="AnimationPlayer" parent="." index="1"]
+active = false
+libraries = {
+&"": SubResource("AnimationLibrary_n5wf3")
+}

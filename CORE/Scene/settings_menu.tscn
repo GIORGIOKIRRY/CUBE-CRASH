@@ -1,0 +1,327 @@
+[gd_scene load_steps=15 format=3 uid="uid://bebf65fodfnno"]
+
+[ext_resource type="Texture2D" uid="uid://cpayvf1b45vp5" path="res://CORE/Assets/Art/UI/Settings/Settings_menu.svg" id="1_1qx3n"]
+[ext_resource type="Script" uid="uid://d0ars7ukadbd1" path="res://CORE/Script/settings_menu.gd" id="1_n4f0s"]
+[ext_resource type="Texture2D" uid="uid://pabg1s2jlb3c" path="res://CORE/Assets/Art/UI/Settings/Slide_On.svg" id="2_1b6rt"]
+[ext_resource type="Texture2D" uid="uid://dgqexh1mu1pei" path="res://CORE/Assets/Art/UI/Settings/Settings_Frame.svg" id="2_ypt1k"]
+[ext_resource type="Texture2D" uid="uid://bmgjkyxbh4tq4" path="res://CORE/Assets/Art/UI/Menu/Close.svg" id="3_l8srb"]
+[ext_resource type="FontFile" uid="uid://gq80lnfikflh" path="res://CORE/Assets/Font/Jersey10-Regular.ttf" id="4_u1e2v"]
+[ext_resource type="Texture2D" uid="uid://bt642v2g6bmfv" path="res://CORE/Assets/Art/UI/Settings/Divider.svg" id="5_l8srb"]
+[ext_resource type="Texture2D" uid="uid://dmib5xhger1et" path="res://CORE/Assets/Art/UI/Settings/Audio.svg" id="5_u1e2v"]
+[ext_resource type="Texture2D" uid="uid://cmrfs1gss2kv0" path="res://CORE/Assets/Art/UI/Settings/Slide_Off.svg" id="6_x2han"]
+[ext_resource type="Texture2D" uid="uid://bvntuxhgwx3qg" path="res://CORE/Assets/Art/UI/Settings/Music.svg" id="8_ob3hs"]
+[ext_resource type="Texture2D" uid="uid://bgp7i4c253pve" path="res://CORE/Assets/Art/UI/Settings/Vibration.svg" id="9_gm2sg"]
+[ext_resource type="Texture2D" uid="uid://dmbumnbb6feqw" path="res://CORE/Assets/Art/UI/Settings/Settings.svg" id="10_2vb7i"]
+[ext_resource type="Texture2D" uid="uid://ccjh3i0y7tb18" path="res://CORE/Assets/Art/UI/Settings/More.svg" id="11_qvo15"]
+[ext_resource type="Texture2D" uid="uid://c0rk7brn4n3ct" path="res://CORE/Assets/Art/UI/Settings/Share.svg" id="12_qvo15"]
+
+[node name="SettingsMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_n4f0s")
+sound_on_texture = ExtResource("2_1b6rt")
+sound_off_texture = ExtResource("6_x2han")
+music_on_texture = ExtResource("2_1b6rt")
+music_off_texture = ExtResource("6_x2han")
+vibration_on_texture = ExtResource("2_1b6rt")
+vibration_off_texture = ExtResource("6_x2han")
+metadata/_edit_horizontal_guides_ = [361.0, 738.0, 281.0, 302.0, 323.0, 343.0, 436.0, 511.0, 586.0, 661.0, 383.0]
+metadata/_edit_vertical_guides_ = [107.0, 470.0, 127.0, 190.0, 384.0]
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -1848.0
+offset_top = -1377.0
+offset_right = 1765.0
+offset_bottom = 1151.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.3647059)
+
+[node name="Menu" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -197.5
+offset_top = -249.0
+offset_right = 197.5
+offset_bottom = 249.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("1_1qx3n")
+
+[node name="BG" type="TextureRect" parent="Menu"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -181.5
+offset_top = -151.5
+offset_right = 181.5
+offset_bottom = 225.5
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_ypt1k")
+
+[node name="CloseButton" type="TextureButton" parent="Menu"]
+layout_mode = 0
+offset_left = 316.5
+offset_top = 18.0
+offset_right = 378.5
+offset_bottom = 80.0
+texture_normal = ExtResource("3_l8srb")
+
+[node name="Label" type="Label" parent="Menu"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -55.0
+offset_top = 31.0
+offset_right = 55.0
+offset_bottom = 70.0
+grow_horizontal = 2
+theme_override_fonts/font = ExtResource("4_u1e2v")
+theme_override_font_sizes/font_size = 36
+text = "SETTINGS"
+
+[node name="Control" type="Control" parent="Menu"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -181.0
+offset_top = -151.0
+offset_right = 182.0
+offset_bottom = 226.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SoundSettings" type="Control" parent="Menu/Control"]
+anchors_preset = 0
+offset_right = 363.0
+offset_bottom = 74.0
+
+[node name="SoundICO" type="TextureRect" parent="Menu/Control/SoundSettings"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 22.0
+offset_right = 60.0
+offset_bottom = 62.0
+texture = ExtResource("5_u1e2v")
+
+[node name="Sound" type="Label" parent="Menu/Control/SoundSettings"]
+layout_mode = 0
+offset_left = 83.0
+offset_top = 22.0
+offset_right = 162.0
+offset_bottom = 61.0
+theme_override_fonts/font = ExtResource("4_u1e2v")
+theme_override_font_sizes/font_size = 36
+text = "SOUND"
+
+[node name="SoundButton" type="TextureButton" parent="Menu/Control/SoundSettings"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 276.0
+offset_top = 22.0
+offset_right = 349.0
+offset_bottom = 55.0
+texture_normal = ExtResource("6_x2han")
+
+[node name="Divider1" type="TextureRect" parent="Menu/Control"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -162.5
+offset_top = 74.0
+offset_right = 162.5
+offset_bottom = 76.0
+grow_horizontal = 2
+texture = ExtResource("5_l8srb")
+
+[node name="MusicSettings" type="Control" parent="Menu/Control"]
+anchors_preset = 0
+offset_top = 76.0
+offset_right = 363.0
+offset_bottom = 149.0
+
+[node name="MusicICO" type="TextureRect" parent="Menu/Control/MusicSettings"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 22.0
+offset_right = 60.0
+offset_bottom = 62.0
+texture = ExtResource("8_ob3hs")
+
+[node name="Music" type="Label" parent="Menu/Control/MusicSettings"]
+layout_mode = 0
+offset_left = 83.0
+offset_top = 22.0
+offset_right = 162.0
+offset_bottom = 61.0
+theme_override_fonts/font = ExtResource("4_u1e2v")
+theme_override_font_sizes/font_size = 36
+text = "MUSIC"
+
+[node name="MusicButton" type="TextureButton" parent="Menu/Control/MusicSettings"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 276.0
+offset_top = 22.0
+offset_right = 349.0
+offset_bottom = 55.0
+texture_normal = ExtResource("6_x2han")
+
+[node name="Divider2" type="TextureRect" parent="Menu/Control"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -162.5
+offset_top = 149.0
+offset_right = 162.5
+offset_bottom = 151.0
+grow_horizontal = 2
+texture = ExtResource("5_l8srb")
+
+[node name="VibrationSettings" type="Control" parent="Menu/Control"]
+anchors_preset = 0
+offset_top = 151.0
+offset_right = 363.0
+offset_bottom = 224.0
+
+[node name="VibrationICO" type="TextureRect" parent="Menu/Control/VibrationSettings"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 22.0
+offset_right = 60.0
+offset_bottom = 62.0
+texture = ExtResource("9_gm2sg")
+
+[node name="Vibration" type="Label" parent="Menu/Control/VibrationSettings"]
+layout_mode = 0
+offset_left = 83.0
+offset_top = 22.0
+offset_right = 162.0
+offset_bottom = 61.0
+theme_override_fonts/font = ExtResource("4_u1e2v")
+theme_override_font_sizes/font_size = 36
+text = "VIBRATION"
+
+[node name="VibrationButton" type="TextureButton" parent="Menu/Control/VibrationSettings"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 276.0
+offset_top = 22.0
+offset_right = 349.0
+offset_bottom = 55.0
+texture_normal = ExtResource("6_x2han")
+
+[node name="Divider3" type="TextureRect" parent="Menu/Control"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -162.5
+offset_top = 224.0
+offset_right = 162.5
+offset_bottom = 226.0
+grow_horizontal = 2
+texture = ExtResource("5_l8srb")
+
+[node name="MoreSettings" type="Control" parent="Menu/Control"]
+anchors_preset = 0
+offset_top = 226.0
+offset_right = 363.0
+offset_bottom = 299.0
+
+[node name="MoreICO" type="TextureRect" parent="Menu/Control/MoreSettings"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 22.0
+offset_right = 60.0
+offset_bottom = 62.0
+texture = ExtResource("10_2vb7i")
+
+[node name="More" type="Label" parent="Menu/Control/MoreSettings"]
+layout_mode = 0
+offset_left = 83.0
+offset_top = 22.0
+offset_right = 162.0
+offset_bottom = 61.0
+theme_override_fonts/font = ExtResource("4_u1e2v")
+theme_override_font_sizes/font_size = 36
+text = "MORE SETTINGS"
+
+[node name="MoreButton" type="TextureButton" parent="Menu/Control/MoreSettings"]
+layout_mode = 0
+offset_left = 276.0
+offset_top = 22.0
+offset_right = 349.0
+offset_bottom = 55.0
+texture_normal = ExtResource("11_qvo15")
+
+[node name="Divider4" type="TextureRect" parent="Menu/Control"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -162.5
+offset_top = 299.0
+offset_right = 162.5
+offset_bottom = 301.0
+grow_horizontal = 2
+texture = ExtResource("5_l8srb")
+
+[node name="ShareSettings" type="Control" parent="Menu/Control"]
+anchors_preset = 0
+offset_top = 301.0
+offset_right = 363.0
+offset_bottom = 377.0
+
+[node name="ShareICO" type="TextureRect" parent="Menu/Control/ShareSettings"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 22.0
+offset_right = 60.0
+offset_bottom = 62.0
+texture = ExtResource("12_qvo15")
+
+[node name="Share" type="Label" parent="Menu/Control/ShareSettings"]
+layout_mode = 0
+offset_left = 83.0
+offset_top = 22.0
+offset_right = 162.0
+offset_bottom = 61.0
+theme_override_fonts/font = ExtResource("4_u1e2v")
+theme_override_font_sizes/font_size = 36
+text = "SHARE GAME"
+
+[node name="ShareButton" type="TextureButton" parent="Menu/Control/ShareSettings"]
+layout_mode = 0
+offset_left = 276.0
+offset_top = 22.0
+offset_right = 349.0
+offset_bottom = 55.0
+texture_normal = ExtResource("11_qvo15")
+
+[connection signal="pressed" from="Menu/CloseButton" to="." method="_on_close_button_pressed"]
+[connection signal="pressed" from="Menu/Control/SoundSettings/SoundButton" to="." method="_on_sound_button_pressed"]
+[connection signal="pressed" from="Menu/Control/MusicSettings/MusicButton" to="." method="_on_music_button_pressed"]
+[connection signal="pressed" from="Menu/Control/VibrationSettings/VibrationButton" to="." method="_on_vibration_button_pressed"]

@@ -1,0 +1,60 @@
+[gd_scene load_steps=12 format=3 uid="uid://be5ch704hpsna"]
+
+[ext_resource type="PackedScene" uid="uid://bftqiu3je1q6a" path="res://CORE/Scene/PieceScene/Piece.tscn" id="1_qwl3p"]
+[ext_resource type="Texture2D" uid="uid://dvvlaffd1ph40" path="res://CORE/Assets/Art/Game/Cubes/_PLUS/Yellow/Yellow_plus2.svg" id="2_x3l4g"]
+[ext_resource type="Texture2D" uid="uid://b3rg0wth2gvgj" path="res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_2.svg" id="3_gd4nr"]
+[ext_resource type="Texture2D" uid="uid://bofx1c115n685" path="res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_3.svg" id="4_k6ac6"]
+[ext_resource type="Texture2D" uid="uid://ces8sw8xbcq0b" path="res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_4.svg" id="5_6mocr"]
+[ext_resource type="Texture2D" uid="uid://dg6vbdxq3u6co" path="res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_5.svg" id="6_oixsv"]
+[ext_resource type="Texture2D" uid="uid://cutu2ryfyrxb5" path="res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_6.svg" id="7_1ohlc"]
+[ext_resource type="Texture2D" uid="uid://dkjdsbcrysdku" path="res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_7.svg" id="8_0ja8t"]
+
+[sub_resource type="Animation" id="Animation_73whw"]
+resource_name = "match"
+length = 0.3
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [ExtResource("2_x3l4g"), ExtResource("3_gd4nr"), ExtResource("4_k6ac6"), ExtResource("5_6mocr"), ExtResource("6_oixsv"), ExtResource("7_1ohlc"), ExtResource("8_0ja8t")]
+}
+
+[sub_resource type="Animation" id="Animation_b75w0"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [ExtResource("3_gd4nr")]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_ytsxq"]
+_data = {
+&"RESET": SubResource("Animation_b75w0"),
+&"match": SubResource("Animation_73whw")
+}
+
+[node name="yellow_plus2" instance=ExtResource("1_qwl3p")]
+color = "yellow"
+mooves = 2
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2_x3l4g")
+
+[node name="AnimationPlayer" parent="." index="1"]
+active = false
+libraries = {
+&"": SubResource("AnimationLibrary_ytsxq")
+}

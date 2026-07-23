@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://rnrl70mira1x"
+path="res://.godot/imported/cube crash music gameplay.wav-0f3b5f47155f187b9ddf1d7ee2bf79cf.sample"
+
+[deps]
+
+source_file="res://CORE/Assets/Music&Sound/cube crash music gameplay.wav"
+dest_files=["res://.godot/imported/cube crash music gameplay.wav-0f3b5f47155f187b9ddf1d7ee2bf79cf.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

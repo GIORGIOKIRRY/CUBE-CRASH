@@ -1,0 +1,125 @@
+[gd_scene load_steps=6 format=3 uid="uid://45sco3qeamed"]
+
+[ext_resource type="Script" uid="uid://dl7gqi3mabqjp" path="res://CORE/Script/game_over_screen.gd" id="1_jd77q"]
+[ext_resource type="FontFile" uid="uid://gq80lnfikflh" path="res://CORE/Assets/Font/Jersey10-Regular.ttf" id="1_niqud"]
+[ext_resource type="Texture2D" uid="uid://cky0c750p2yeh" path="res://CORE/Assets/Art/UI/GameOver/PlayAgain.svg" id="2_wndb3"]
+[ext_resource type="Texture2D" uid="uid://bcv7ji8qgrimx" path="res://CORE/Assets/Art/UI/Menu/Link.svg" id="3_wkf3q"]
+[ext_resource type="Texture2D" uid="uid://bmgjkyxbh4tq4" path="res://CORE/Assets/Art/UI/Menu/Close.svg" id="4_jd77q"]
+
+[node name="GameOverScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_jd77q")
+metadata/_edit_horizontal_guides_ = [174.0, 312.0, 353.0, 394.0, 529.0, 762.0, 62.0]
+metadata/_edit_vertical_guides_ = [56.0, 519.0, 248.0, 192.0, 214.0, 61.0]
+
+[node name="Items" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BG" type="ColorRect" parent="Items"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -268.0
+offset_top = -492.0
+offset_right = 268.0
+offset_bottom = 492.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08627451, 0.41568628, 0.59607846, 1)
+
+[node name="LinkButton" type="TextureButton" parent="Items/BG"]
+layout_mode = 0
+offset_left = 36.0
+offset_right = 98.0
+offset_bottom = 62.0
+texture_normal = ExtResource("3_wkf3q")
+
+[node name="CloseButton" type="TextureButton" parent="Items/BG"]
+layout_mode = 0
+offset_left = 478.0
+offset_right = 540.0
+offset_bottom = 62.0
+texture_normal = ExtResource("4_jd77q")
+
+[node name="L_GameOver" type="Label" parent="Items"]
+layout_mode = 0
+offset_left = -212.0
+offset_top = -318.0
+offset_right = 251.0
+offset_bottom = -180.0
+theme_override_fonts/font = ExtResource("1_niqud")
+theme_override_font_sizes/font_size = 127
+text = "GAME OVER"
+
+[node name="Score" type="Label" parent="Items"]
+layout_mode = 0
+offset_left = -20.0
+offset_top = -139.0
+offset_right = 59.0
+offset_bottom = -97.0
+theme_override_colors/font_color = Color(0.11764706, 0.14117648, 0.27450982, 1)
+theme_override_fonts/font = ExtResource("1_niqud")
+theme_override_font_sizes/font_size = 38
+text = "SCORE"
+horizontal_alignment = 1
+
+[node name="BestScore" type="Label" parent="Items"]
+layout_mode = 0
+offset_left = -54.0
+offset_top = 37.0
+offset_right = 95.0
+offset_bottom = 79.0
+theme_override_colors/font_color = Color(0.11764706, 0.14117648, 0.27450982, 1)
+theme_override_fonts/font = ExtResource("1_niqud")
+theme_override_font_sizes/font_size = 38
+text = "BEST SCORE"
+horizontal_alignment = 1
+
+[node name="L_ScoreNumber" type="Label" parent="Items"]
+layout_mode = 0
+offset_left = -76.0
+offset_top = -120.0
+offset_right = 114.0
+offset_bottom = 18.0
+theme_override_font_sizes/font_size = 127
+text = "0000"
+horizontal_alignment = 1
+
+[node name="L_BestScoreNumber" type="Label" parent="Items"]
+layout_mode = 0
+offset_left = -76.0
+offset_top = 48.0
+offset_right = 114.0
+offset_bottom = 186.0
+theme_override_colors/font_color = Color(0.98039216, 0.7882353, 0.09803922, 1)
+theme_override_font_sizes/font_size = 127
+text = "0000"
+horizontal_alignment = 1
+
+[node name="PlayAgainButton" type="TextureButton" parent="Items"]
+layout_mode = 0
+offset_left = -207.0
+offset_top = 270.0
+offset_right = 267.0
+offset_bottom = 390.0
+texture_normal = ExtResource("2_wndb3")
+
+[connection signal="pressed" from="Items/BG/CloseButton" to="." method="_on_close_button_pressed"]
+[connection signal="pressed" from="Items/PlayAgainButton" to="." method="_on_play_again_button_pressed"]

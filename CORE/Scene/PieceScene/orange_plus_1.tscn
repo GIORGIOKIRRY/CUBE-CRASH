@@ -1,0 +1,60 @@
+[gd_scene load_steps=12 format=3 uid="uid://c0o3ix7w0r7cw"]
+
+[ext_resource type="PackedScene" uid="uid://bftqiu3je1q6a" path="res://CORE/Scene/PieceScene/Piece.tscn" id="1_mgd3d"]
+[ext_resource type="Texture2D" uid="uid://cgkyp7557yyku" path="res://CORE/Assets/Art/Game/Cubes/_PLUS/Orange/Orange_plus1.svg" id="2_3pieu"]
+[ext_resource type="Texture2D" uid="uid://biuo1syqlld4r" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_2.svg" id="3_trhn5"]
+[ext_resource type="Texture2D" uid="uid://dg1fw20lvruvb" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_3.svg" id="4_onsd4"]
+[ext_resource type="Texture2D" uid="uid://dd7iomwu63jkx" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_4.svg" id="5_pi8tl"]
+[ext_resource type="Texture2D" uid="uid://bjm2cl72dlf24" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_5.svg" id="6_ag676"]
+[ext_resource type="Texture2D" uid="uid://dm6n037sl5rcw" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_6.svg" id="7_y2y01"]
+[ext_resource type="Texture2D" uid="uid://bgdkjrqv6j0l3" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_7.svg" id="8_x8qd7"]
+
+[sub_resource type="Animation" id="Animation_rqcmm"]
+resource_name = "match"
+length = 0.3
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [ExtResource("2_3pieu"), ExtResource("3_trhn5"), ExtResource("4_onsd4"), ExtResource("5_pi8tl"), ExtResource("6_ag676"), ExtResource("7_y2y01"), ExtResource("8_x8qd7")]
+}
+
+[sub_resource type="Animation" id="Animation_g4rr3"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [ExtResource("3_trhn5")]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_k0guv"]
+_data = {
+&"RESET": SubResource("Animation_g4rr3"),
+&"match": SubResource("Animation_rqcmm")
+}
+
+[node name="orange_plus1" instance=ExtResource("1_mgd3d")]
+color = "orange"
+mooves = 1
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2_3pieu")
+
+[node name="AnimationPlayer" parent="." index="1"]
+active = false
+libraries = {
+&"": SubResource("AnimationLibrary_k0guv")
+}

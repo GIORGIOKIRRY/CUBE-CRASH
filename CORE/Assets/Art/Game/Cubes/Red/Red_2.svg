@@ -1,0 +1,49 @@
+<svg width="112" height="112" viewBox="0 0 112 112" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_152_187)">
+<rect width="112" height="112" fill="#1E1E1E"/>
+<path d="M98.0625 98H91V105.062H98.0625V98Z" fill="#860000"/>
+<path d="M98.0625 98H91V105.062H98.0625V98Z" fill="#580404"/>
+<path d="M98.0625 56H91V63.0625H98.0625V56Z" fill="#FF8787"/>
+<path d="M91.0625 63H84V70.0625H91.0625V63Z" fill="#FF8787"/>
+<path d="M84.0625 70H77V77.0625H84.0625V70Z" fill="#FF8787"/>
+<path d="M49.0625 49H42V56.0625H49.0625V49Z" fill="#580404"/>
+<path d="M42.0625 49H35V56.0625H42.0625V49Z" fill="#C32D2F"/>
+<path d="M28 91H14V98H28V91Z" fill="#D9D9D9"/>
+<path d="M98 70H84V98H98V70Z" fill="#C32D2F"/>
+<path d="M98 70H91V63H98V70Z" fill="#C32D2F"/>
+<path d="M84 91H77V77H84V91Z" fill="#C32D2F"/>
+<path d="M35 98H14V105H35V98Z" fill="#C32D2F"/>
+<path d="M35 91H14V98H35V91Z" fill="#C32D2F"/>
+<path d="M105.062 21H98V28.0625H105.062V21Z" fill="#C32D2F"/>
+<rect x="35" y="14" width="14" height="35" fill="#C32D2F"/>
+<path d="M42.0625 56H35V63.0625H42.0625V56Z" fill="#580404"/>
+<path d="M77.0625 77H70V84.0625H77.0625V77Z" fill="#E55555"/>
+<path d="M98 21H84V28H98V21Z" fill="#860000"/>
+<path d="M105 28H98V35H105V28Z" fill="#580404"/>
+<path d="M105 0H84V7H105V0Z" fill="#FF8787"/>
+<path d="M112 7H105V28H112V7Z" fill="#580404"/>
+<path d="M84 7H77V28H84V7Z" fill="#E55555"/>
+<path d="M77.0625 84H70V91.0625H77.0625V84Z" fill="#E55555"/>
+<path d="M84.0625 91H77V98.0625H84.0625V91Z" fill="#860000"/>
+<path d="M105 56H98V98H105V56Z" fill="#580404"/>
+<path d="M91 98H77V105H91V98Z" fill="#860000"/>
+<path d="M35 105H14V112H35V105Z" fill="#860000"/>
+<path d="M14 91H7V105H14V91Z" fill="#E55555"/>
+<path d="M42 91H35V112H42V91Z" fill="#580404"/>
+<path d="M28 84H7V91H28V84Z" fill="#FF8787"/>
+<path d="M35 63H0V70H35V63Z" fill="#860000"/>
+<path d="M7 21H0V63H7V21Z" fill="#E55555"/>
+<path d="M14 14H7V21H14V14Z" fill="#FF8787"/>
+<path d="M49 7H14V14H49V7Z" fill="#FF8787"/>
+<path d="M49 14H56V49H49V14Z" fill="#580404"/>
+<path d="M35 91H28V98H35V91Z" fill="#580404"/>
+<rect x="7" y="21" width="28" height="42" fill="#C32D2F"/>
+<rect x="14" y="14" width="21" height="7" fill="#C32D2F"/>
+<rect x="84" y="7" width="21" height="14" fill="#C32D2F"/>
+</g>
+<defs>
+<clipPath id="clip0_152_187">
+<rect width="112" height="112" fill="white"/>
+</clipPath>
+</defs>
+</svg>

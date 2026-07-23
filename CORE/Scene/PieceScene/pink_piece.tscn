@@ -1,0 +1,59 @@
+[gd_scene load_steps=12 format=3 uid="uid://c0imkg7212no2"]
+
+[ext_resource type="PackedScene" uid="uid://bftqiu3je1q6a" path="res://CORE/Scene/PieceScene/Piece.tscn" id="1_eaoe7"]
+[ext_resource type="Texture2D" uid="uid://b5txufo8b57rf" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg" id="2_8bjgn"]
+[ext_resource type="Texture2D" uid="uid://g14nxtv0x6t0" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink_2.svg" id="3_1kn5k"]
+[ext_resource type="Texture2D" uid="uid://caxac85yftrxl" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink_3.svg" id="4_66mug"]
+[ext_resource type="Texture2D" uid="uid://b4dajlnd6h0n0" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink_4.svg" id="5_dpace"]
+[ext_resource type="Texture2D" uid="uid://bjjxpnmubfasx" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink_5.svg" id="6_e6fsp"]
+[ext_resource type="Texture2D" uid="uid://bswd20shpcqdm" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink_6.svg" id="7_k5xv3"]
+[ext_resource type="Texture2D" uid="uid://dtpdl0dg3ja2b" path="res://CORE/Assets/Art/Game/Cubes/Pink/Pink_7.svg" id="8_u2ehr"]
+
+[sub_resource type="Animation" id="Animation_pclu7"]
+resource_name = "match"
+length = 0.3
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [ExtResource("2_8bjgn"), ExtResource("3_1kn5k"), ExtResource("4_66mug"), ExtResource("5_dpace"), ExtResource("6_e6fsp"), ExtResource("7_k5xv3"), ExtResource("8_u2ehr")]
+}
+
+[sub_resource type="Animation" id="Animation_4fl1n"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [ExtResource("3_1kn5k")]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_27l6b"]
+_data = {
+&"RESET": SubResource("Animation_4fl1n"),
+&"match": SubResource("Animation_pclu7")
+}
+
+[node name="Pink_piece" instance=ExtResource("1_eaoe7")]
+color = "pink"
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2_8bjgn")
+
+[node name="AnimationPlayer" parent="." index="1"]
+active = false
+libraries = {
+&"": SubResource("AnimationLibrary_27l6b")
+}

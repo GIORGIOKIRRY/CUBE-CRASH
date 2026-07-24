@@ -35,6 +35,11 @@ var current_moves: int = 0
 var is_game_over: bool = false
 var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 
+# Revive: max 3 volte per partita
+var revive_count: int = 0
+const MAX_REVIVES := 3
+var _last_defeat_reason: String = "no_space"
+
 # ----- Scoring -----
 @export var points_per_piece: int = 10  # punti per ogni pezzo distrutto
 var score: int = 0                      # punteggio della PARTITA corrente
@@ -275,6 +280,9 @@ func destroy_matched() -> Array:
 
 	# 🔹 Applica bonus mosse se presente
 	if bonus_moves > 0:
+		# SFX: nuova mossa guadagnata (pezzo +1/+2/+3 distrutto)
+		settings.play_newmove()
+
 		var penalty_ratio: float = clamp(0.15 + difficulty_level * 0.08, 0.0, 0.85)
 		var penalized: int = int(round(bonus_moves * (1.0 - penalty_ratio)))
 
@@ -287,6 +295,10 @@ func destroy_matched() -> Array:
 
 	# Applica punteggio
 	if destroyed_count > 0:
+		# SFX + vibrazione: distruzione cubi (una volta per ondata, no overlap)
+		settings.play_destroy()
+		settings.vibrate(25)
+
 		var gained := destroyed_count * points_per_piece
 		score += gained
 		lifetime_score += gained
@@ -567,13 +579,13 @@ func check_game_over() -> void:
 	# 1) mosse finite + nessuna mossa possibile
 	if current_moves <= 0 and deadlock_swaps_only:
 		update_moves_label()
-		_trigger_game_over()
+		_trigger_game_over("no_moves")
 		return
 
 	# 2) griglia piena + nessuna mossa possibile
 	if full and deadlock_all:
 		update_moves_label()
-		_trigger_game_over()
+		_trigger_game_over("no_space")
 
 
 func _get_bottom_piece_under_mouse() -> Node:
@@ -767,7 +779,7 @@ func _any_valid_bottom_placement() -> bool:
 					return true
 	return false
 
-func _trigger_game_over() -> void:
+func _trigger_game_over(reason := "no_space") -> void:
 	is_game_over = true
 
 	# Aggiorna HighScore
@@ -782,8 +794,49 @@ func _trigger_game_over() -> void:
 	_update_high_score_labels_everywhere()
 	_update_gameover_current_score()
 
+	_last_defeat_reason = reason
+
+	# Flusso di sconfitta: strip motivo -> revive -> schermata finale
+	var flow = get_node_or_null("%DefeatFlow")
+	if flow:
+		if not flow.finished.is_connected(_on_defeat_finished):
+			flow.finished.connect(_on_defeat_finished)
+			flow.revive_requested.connect(_on_revive_requested)
+		# la schermata revive si può mostrare max 3 volte per partita
+		flow.start(reason, revive_count < MAX_REVIVES)
+	else:
+		_show_game_over_screen()
+
+func _on_defeat_finished() -> void:
 	_show_game_over_screen()
-	# get_tree().paused = true
+
+func _on_revive_requested() -> void:
+	revive_count += 1
+	revive(_last_defeat_reason)
+
+# Continua la partita dopo il REVIVE.
+func revive(reason: String) -> void:
+	is_game_over = false
+	is_resolving = false
+	if reason == "no_moves":
+		# non c'erano più mosse -> +10 mosse
+		current_moves += 10
+	else:
+		# non c'era più spazio -> rimuovi 5 celle casuali
+		_remove_random_cells(5)
+	update_moves_label()
+
+func _remove_random_cells(n: int) -> void:
+	var occupied: Array = []
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null:
+				occupied.append(Vector2i(i, j))
+	occupied.shuffle()
+	for k in mini(n, occupied.size()):
+		var c: Vector2i = occupied[k]
+		all_pieces[c.x][c.y].queue_free()
+		all_pieces[c.x][c.y] = null
 
 func _show_game_over_screen() -> void:
 	var screen = get_node_or_null("%GameOverScreen")

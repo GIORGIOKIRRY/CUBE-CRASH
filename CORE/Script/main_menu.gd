@@ -5,12 +5,20 @@ extends Control
 
 
 func _ready() -> void:
-	settings.register_music(music_player)
+	settings.play_music(music_player.stream)
 
 
 func _on_play_button_pressed() -> void:
+	settings.button_feedback()
 	get_tree().change_scene_to_file("res://CORE/Scene/game.tscn")
 
 
 func _on_settings_button_pressed() -> void:
+	settings.button_feedback()
 	%SettingsMenu.visible = true
+
+
+# Link in alto a sinistra: condividi il gioco (App Store)
+func _on_link_button_pressed() -> void:
+	settings.button_feedback()
+	OS.shell_open(settings.APPSTORE_URL)

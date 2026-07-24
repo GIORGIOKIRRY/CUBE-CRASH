@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://dybq1oauidg36"]
+[gd_scene load_steps=13 format=3 uid="uid://dybq1oauidg36"]
 
 [ext_resource type="Script" uid="uid://buqel5irtexms" path="res://CORE/Script/game.gd" id="1_6amic"]
 [ext_resource type="Script" uid="uid://vj6y1mo74g4s" path="res://CORE/Script/grid.gd" id="1_qj7w4"]
@@ -10,7 +10,8 @@
 [ext_resource type="FontFile" uid="uid://gq80lnfikflh" path="res://CORE/Assets/Font/Jersey10-Regular.ttf" id="6_pxjbb"]
 [ext_resource type="PackedScene" uid="uid://bebf65fodfnno" path="res://CORE/Scene/settings_menu.tscn" id="9_kdr7y"]
 [ext_resource type="PackedScene" uid="uid://45sco3qeamed" path="res://CORE/Scene/game_over_screen.tscn" id="10_h8mkk"]
-[ext_resource type="AudioStream" uid="uid://r8hqe8pa0sdk" path="res://CORE/Assets/Music&Sound/cube-crash-music-gameplay.mp3" id="11_qcf4v"]
+[ext_resource type="AudioStream" uid="uid://rnrl70mira1x" path="res://CORE/Assets/Music&Sound/cube crash music gameplay.wav" id="11_qcf4v"]
+[ext_resource type="PackedScene" uid="uid://c0cubecrashdefeat" path="res://CORE/Scene/DefeatFlow.tscn" id="12_defeat"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_6amic")
@@ -121,10 +122,6 @@ text = "0000"
 [node name="SettingsMenu" parent="." instance=ExtResource("9_kdr7y")]
 unique_name_in_owner = true
 visible = false
-offset_left = 286.0
-offset_top = 485.0
-offset_right = 286.0
-offset_bottom = 485.0
 
 [node name="DestroyTimer" type="Timer" parent="."]
 wait_time = 0.4
@@ -132,12 +129,11 @@ wait_time = 0.4
 [node name="GameOverScreen" parent="." instance=ExtResource("10_h8mkk")]
 unique_name_in_owner = true
 visible = false
-offset_left = 287.67
-offset_top = 512.26
-offset_right = 287.67
-offset_bottom = 512.26
 
-[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="."]
+[node name="DefeatFlow" parent="." instance=ExtResource("12_defeat")]
+unique_name_in_owner = true
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer" parent="."]
 unique_name_in_owner = true
 stream = ExtResource("11_qcf4v")
 

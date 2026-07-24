@@ -3,67 +3,242 @@ extends Control
 signal MenuClosed
 
 # ==========================
-# File di salvataggio
-# ==========================
-const SETTINGS_PATH := "user://settings.dat"
-
-# ==========================
-# Stato vibrazione
-# ==========================
-var vibration_enabled: bool = true
-
-# ==========================
 # Nodi
 # ==========================
 @onready var sound_button: TextureButton = %SoundButton
 @onready var music_button: TextureButton = %MusicButton
 @onready var vibration_button: TextureButton = %VibrationButton
+@onready var _menu: Control = $Menu
+@onready var _options: Control = $Menu/Control
+@onready var _title: Label = $Menu/Label
+@onready var _close_btn: TextureButton = $Menu/CloseButton
 
 # ==========================
-# Texture
+# Texture toggle
 # ==========================
 @export var sound_on_texture: Texture2D
 @export var sound_off_texture: Texture2D
-
 @export var music_on_texture: Texture2D
 @export var music_off_texture: Texture2D
-
 @export var vibration_on_texture: Texture2D
 @export var vibration_off_texture: Texture2D
+
+# ==========================
+# More settings / pagine
+# ==========================
+const MORE_FRAME := preload("res://CORE/Assets/Art/UI/Settings/more_frame.svg")
+const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back.svg")
+const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
+
+const CONTACT_EMAIL := "cubecrash.game@gmail.com"   # TODO: email reale
+const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non raccoglie dati personali."
+const TERMS_TEXT := "Usando Cube Crash accetti i termini di servizio del gioco."
+
+var _more_frame: TextureRect = null
+var _subpages: Dictionary = {}   # nome -> Control
 
 # ==========================
 # Ready
 # ==========================
 func _ready() -> void:
-	_load_vibration_setting()
 	_update_all_buttons()
+	_build_more_page()
+	_build_subpages()
 
 # ==========================
-# Pulsanti
+# Pulsanti audio/vibrazione
 # ==========================
-
 func _on_sound_button_pressed() -> void:
+	settings.button_feedback()
 	settings.set_sound_enabled(!settings.sound_enabled)
 	_update_sound_button()
 
 func _on_music_button_pressed() -> void:
+	settings.button_feedback()
 	settings.set_music_enabled(!settings.music_enabled)
 	_update_music_button()
 
 func _on_vibration_button_pressed() -> void:
-	vibration_enabled = !vibration_enabled
+	settings.play_tap()
+	settings.vibrate(15)
+	settings.set_vibration_enabled(!settings.vibration_enabled)
 	_update_vibration_button()
-	_save_vibration_setting()
+
+func _on_share_button_pressed() -> void:
+	settings.button_feedback()
+	OS.shell_open(settings.APPSTORE_URL)
 
 # ==========================
-# Close menu
+# More page (frame Group7 + 5 righe)
+# ==========================
+func _on_more_button_pressed() -> void:
+	settings.button_feedback()
+	_show_more(true)
+
+func _show_more(on: bool) -> void:
+	if _more_frame == null:
+		return
+	_more_frame.visible = on
+	_options.visible = not on
+	_title.visible = not on   # il frame More ha già il titolo disegnato
+
+func _build_more_page() -> void:
+	_more_frame = TextureRect.new()
+	_more_frame.texture = MORE_FRAME
+	_more_frame.position = Vector2(0, 0)
+	_more_frame.size = Vector2(395, 498)
+	_more_frame.visible = false
+	_menu.add_child(_more_frame)
+
+	# 5 righe cliccabili (bottoni invisibili)
+	var rows := [
+		{"y": 120.0, "cb": Callable(self, "_on_contact")},
+		{"y": 195.0, "cb": Callable(self, "_on_share_button_pressed")},
+		{"y": 270.0, "cb": Callable(self, "_open_terms")},
+		{"y": 345.0, "cb": Callable(self, "_open_privacy")},
+		{"y": 420.0, "cb": Callable(self, "_open_thanks")},
+	]
+	for r in rows:
+		_more_frame.add_child(_make_row_button(r["y"], r["cb"]))
+
+	# il tasto X (CloseButton) deve restare sopra al frame More
+	_menu.move_child(_close_btn, _menu.get_child_count() - 1)
+
+func _make_row_button(y: float, cb: Callable) -> Button:
+	var b := Button.new()
+	b.position = Vector2(10, y)
+	b.size = Vector2(375, 74)
+	var empty := StyleBoxEmpty.new()
+	b.add_theme_stylebox_override("normal", empty)
+	b.add_theme_stylebox_override("hover", empty)
+	b.add_theme_stylebox_override("pressed", empty)
+	b.add_theme_stylebox_override("focus", empty)
+	b.pressed.connect(cb)
+	return b
+
+# ==========================
+# Azioni righe
+# ==========================
+func _on_contact() -> void:
+	settings.button_feedback()
+	var subject := "Cube Crash"
+	var body := "Ciao team Cube Crash,"
+	OS.shell_open("mailto:%s?subject=%s&body=%s" % [
+		CONTACT_EMAIL, subject.uri_encode(), body.uri_encode()
+	])
+
+func _open_terms() -> void:
+	settings.button_feedback()
+	_show_subpage("terms")
+
+func _open_privacy() -> void:
+	settings.button_feedback()
+	_show_subpage("privacy")
+
+func _open_thanks() -> void:
+	settings.button_feedback()
+	_show_subpage("thanks")
+
+# ==========================
+# Sotto-pagine a schermo intero
+# ==========================
+func _build_subpages() -> void:
+	_subpages["terms"] = _make_subpage("TERMS OF SERVICE", _terms_content())
+	_subpages["privacy"] = _make_subpage("PRIVACY POLICY", _privacy_content())
+	_subpages["thanks"] = _make_subpage("THANKS", _thanks_content())
+
+func _show_subpage(name: String) -> void:
+	for k in _subpages:
+		_subpages[k].visible = (k == name)
+
+func _hide_subpages() -> void:
+	for k in _subpages:
+		_subpages[k].visible = false
+
+func _make_subpage(title: String, content: Control) -> Control:
+	var page := Control.new()
+	page.visible = false
+	page.z_index = 50
+	add_child(page)
+
+	# sfondo blu a tutto schermo
+	var bg := ColorRect.new()
+	bg.color = Color(0.08627451, 0.41568628, 0.59607846, 1)
+	bg.position = Vector2(-900, -900)
+	bg.size = Vector2(2400, 2800)
+	page.add_child(bg)
+
+	# tasto indietro
+	var back := TextureButton.new()
+	back.texture_normal = BACK_ICON
+	back.position = Vector2(36, 44)
+	back.pressed.connect(_on_subpage_back)
+	page.add_child(back)
+
+	# titolo
+	var lbl := Label.new()
+	lbl.text = title
+	lbl.position = Vector2(0, 150)
+	lbl.size = Vector2(576, 90)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_override("font", FONT)
+	lbl.add_theme_font_size_override("font_size", 52)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	page.add_child(lbl)
+
+	# contenuto
+	content.position = Vector2(40, 260)
+	content.size = Vector2(496, 640)
+	page.add_child(content)
+
+	return page
+
+func _on_subpage_back() -> void:
+	settings.button_feedback()
+	_hide_subpages()
+
+func _make_text(txt: String, color: Color, size: int) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_override("font", FONT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+func _terms_content() -> Control:
+	var c := _make_text(TERMS_TEXT, Color(1, 1, 1), 30)
+	c.custom_minimum_size = Vector2(496, 0)
+	return c
+
+func _privacy_content() -> Control:
+	var c := _make_text(PRIVACY_TEXT, Color(1, 1, 1), 30)
+	c.custom_minimum_size = Vector2(496, 0)
+	return c
+
+func _thanks_content() -> Control:
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	var og := _make_text("OG", Color(1, 0.85, 0.1), 34)
+	var names := _make_text("Giorgio Rossellini, Tu", Color(1, 1, 1), 30)
+	vb.add_child(og)
+	vb.add_child(names)
+	return vb
+
+# ==========================
+# Close (X): back se sei in More, altrimenti chiudi
 # ==========================
 func _on_close_button_pressed() -> void:
+	settings.button_feedback()
+	if _more_frame != null and _more_frame.visible:
+		_show_more(false)
+		return
 	visible = false
 	MenuClosed.emit()
 
 # ==========================
-# Aggiornamento UI
+# Aggiornamento UI toggle
 # ==========================
 func _update_all_buttons() -> void:
 	_update_sound_button()
@@ -85,24 +260,5 @@ func _update_music_button() -> void:
 func _update_vibration_button() -> void:
 	if vibration_button:
 		vibration_button.texture_normal = (
-			vibration_on_texture if vibration_enabled else vibration_off_texture
-		)
-
-# ==========================
-# Salvataggio
-# ==========================
-func _save_vibration_setting() -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(SETTINGS_PATH) # preserva altri dati
-	cfg.set_value("feedback", "vibration", vibration_enabled)
-	cfg.save(SETTINGS_PATH)
-
-# ==========================
-# Caricamento
-# ==========================
-func _load_vibration_setting() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(SETTINGS_PATH) == OK:
-		vibration_enabled = bool(
-			cfg.get_value("feedback", "vibration", true)
+			vibration_on_texture if settings.vibration_enabled else vibration_off_texture
 		)

@@ -53,19 +53,20 @@ texture_normal = ExtResource("4_jd77q")
 
 [node name="L_GameOver" type="Label" parent="Items"]
 layout_mode = 0
-offset_left = -212.0
+offset_left = -260.0
 offset_top = -318.0
-offset_right = 251.0
+offset_right = 300.0
 offset_bottom = -180.0
 theme_override_fonts/font = ExtResource("1_niqud")
 theme_override_font_sizes/font_size = 127
 text = "GAME OVER"
+horizontal_alignment = 1
 
 [node name="Score" type="Label" parent="Items"]
 layout_mode = 0
-offset_left = -20.0
+offset_left = -150.0
 offset_top = -139.0
-offset_right = 59.0
+offset_right = 190.0
 offset_bottom = -97.0
 theme_override_colors/font_color = Color(0.11764706, 0.14117648, 0.27450982, 1)
 theme_override_fonts/font = ExtResource("1_niqud")
@@ -75,9 +76,9 @@ horizontal_alignment = 1
 
 [node name="BestScore" type="Label" parent="Items"]
 layout_mode = 0
-offset_left = -54.0
+offset_left = -150.0
 offset_top = 37.0
-offset_right = 95.0
+offset_right = 190.0
 offset_bottom = 79.0
 theme_override_colors/font_color = Color(0.11764706, 0.14117648, 0.27450982, 1)
 theme_override_fonts/font = ExtResource("1_niqud")
@@ -87,9 +88,9 @@ horizontal_alignment = 1
 
 [node name="L_ScoreNumber" type="Label" parent="Items"]
 layout_mode = 0
-offset_left = -76.0
+offset_left = -240.0
 offset_top = -120.0
-offset_right = 114.0
+offset_right = 280.0
 offset_bottom = 18.0
 theme_override_font_sizes/font_size = 127
 text = "0000"
@@ -97,9 +98,9 @@ horizontal_alignment = 1
 
 [node name="L_BestScoreNumber" type="Label" parent="Items"]
 layout_mode = 0
-offset_left = -76.0
+offset_left = -240.0
 offset_top = 48.0
-offset_right = 114.0
+offset_right = 280.0
 offset_bottom = 186.0
 theme_override_colors/font_color = Color(0.98039216, 0.7882353, 0.09803922, 1)
 theme_override_font_sizes/font_size = 127
@@ -108,9 +109,9 @@ horizontal_alignment = 1
 
 [node name="PlayAgainButton" type="TextureButton" parent="Items"]
 layout_mode = 0
-offset_left = -207.0
+offset_left = -217.0
 offset_top = 270.0
-offset_right = 267.0
+offset_right = 257.0
 offset_bottom = 390.0
 texture_normal = ExtResource("2_wndb3")
 

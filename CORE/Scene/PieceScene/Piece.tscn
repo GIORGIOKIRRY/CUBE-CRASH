@@ -8,6 +8,6 @@ color = null
 mooves = null
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(0.7, 0.7)
+scale = Vector2(0.734694, 0.734694)
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]

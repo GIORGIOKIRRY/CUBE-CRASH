@@ -35,9 +35,9 @@ unique_name_in_owner = true
 script = ExtResource("1_qj7w4")
 width = 7
 height = 7
-x_start = 40
-y_start = 775
-offset = 83
+x_start = 41.142857
+y_start = 772.857143
+offset = 82.285714
 max_moves = 8
 
 [node name="Grid" type="TextureRect" parent="grid"]
@@ -75,9 +75,9 @@ texture_normal = ExtResource("5_pxjbb")
 
 [node name="PointLabel" type="Label" parent="UI"]
 layout_mode = 0
-offset_left = 169.0
+offset_left = 38.0
 offset_top = 44.0
-offset_right = 402.0
+offset_right = 538.0
 offset_bottom = 172.0
 theme_override_fonts/font = ExtResource("6_pxjbb")
 theme_override_font_sizes/font_size = 119
@@ -87,9 +87,9 @@ vertical_alignment = 1
 
 [node name="MOOVES" type="Label" parent="UI"]
 layout_mode = 0
-offset_left = 405.0
+offset_left = 27.0
 offset_top = 197.0
-offset_right = 477.0
+offset_right = 99.0
 offset_bottom = 227.0
 theme_override_font_sizes/font_size = 26
 text = "MOOVES:"
@@ -97,27 +97,20 @@ text = "MOOVES:"
 [node name="Counter" type="Label" parent="UI/MOOVES"]
 layout_mode = 0
 offset_left = 79.0
-offset_right = 119.0
+offset_right = 160.0
 offset_bottom = 28.0
 theme_override_font_sizes/font_size = 26
 text = "0000"
 
 [node name="HighScore" type="Label" parent="UI"]
 layout_mode = 0
-offset_left = 27.0
+offset_left = 300.0
 offset_top = 197.0
-offset_right = 123.0
+offset_right = 549.0
 offset_bottom = 227.0
 theme_override_font_sizes/font_size = 26
-text = "HighScore:"
-
-[node name="HS_Num" type="Label" parent="UI/HighScore"]
-layout_mode = 0
-offset_left = 102.0
-offset_right = 142.0
-offset_bottom = 28.0
-theme_override_font_sizes/font_size = 26
-text = "0000"
+text = "HighScore: 0"
+horizontal_alignment = 2
 
 [node name="SettingsMenu" parent="." instance=ExtResource("9_kdr7y")]
 unique_name_in_owner = true

@@ -3,13 +3,36 @@ extends Node2D
 # ----- Export Variables -----
 @export var width: int = 10
 @export var height: int = 10
-@export var x_start: int = 0
-@export var y_start: int = 0
-@export var offset: int = 64
+@export var x_start: float = 0.0
+@export var y_start: float = 0.0
+@export var offset: float = 64.0
 
 # Posizionamento BottomGrid (3 slot)
-@export var bottom_y_offset_pixels: int = 96 # quanto sotto alla griglia principale
-@export var bottom_spacing_px: int = 96      # distanza orizzontale tra i 3 slot
+@export var bottom_y_offset_pixels: int = 124 # quanto sotto alla griglia principale
+@export var bottom_spacing_px: int = 140      # distanza orizzontale tra i 3 slot
+
+# Scala dei 3 cubi trascinabili: in basso sono più grandi, quando li
+# prendi per trascinarli si rimpiccioliscono alla dimensione della griglia.
+const BOTTOM_PIECE_SCALE := 1.35
+const GRID_PIECE_SCALE := 1.0
+const CELL_SPRITE_SCALE := 0.734694   # scala sprite dei cubi = dimensione cella
+
+# Animazione esplosione (6 frame) alla distruzione di un cubo.
+const EXPLO_FRAMES := [
+	preload("res://CORE/Assets/Art/Game/Delete/delete_01.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_02.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_03.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_04.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_05.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_06.svg"),
+]
+const EXPLO_FPS := 20.0                # 6 frame ≈ 0.3s; il cubo dietro sparisce al 3° frame
+
+# Bilanciamento tavola: SOLO quando è quasi piena (pochissimi spazi vuoti) alcuni
+# blocchi casuali esplodono per ridare spazio al player. Non legato alle azioni.
+const BALANCE_FULLNESS_TRIGGER := 0.70  # scatta quando ≥70% piena
+const BALANCE_FULLNESS_TARGET := 0.55   # dopo la rimozione torna ~55%
+const BALANCE_MAX_REMOVE := 8           # max blocchi rimossi in un colpo
 @export var spawn_rows_above: int = 1       # quante "righe" sopra la griglia fanno partire la caduta
 @export var enable_empty_fall_fx: bool = true
 
@@ -105,6 +128,7 @@ var possible_plus_pieces = [
 
 # ----- Grid State -----
 var all_pieces: Array = []      # 2D [width][height] -> Node or null
+var cell_active: Array = []     # 2D bool: true = cella attiva (partecipa alla gravità), false = buco
 
 # ----- Touch/Swap -----
 var first_touch = Vector2i(0, 0)
@@ -116,6 +140,8 @@ var bottom_pieces: Array = [null, null, null]  # 3 slot
 var dragging_piece: Node = null
 var dragging_from_slot: int = -1
 var drag_start_pos: Vector2 = Vector2.ZERO
+var _placement_preview: Polygon2D = null   # fantasma della cella dove verrà piazzato
+var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosione
 
 # =========================================================
 # Helpers: Grid/Pixel
@@ -149,6 +175,7 @@ func _ready() -> void:
 	randomize()
 	current_moves = max_moves
 	all_pieces = make_2d_array()
+	cell_active = make_2d_array()
 	_spawn_checkerboard()
 	_spawn_bottom_pieces()
 	update_moves_label()
@@ -158,16 +185,28 @@ func _ready() -> void:
 	_update_point_label()
 	_update_high_score_labels_everywhere()
 
+	# SpriteFrames condiviso per l'animazione di esplosione
+	_explo_frames = SpriteFrames.new()
+	_explo_frames.add_animation("boom")
+	_explo_frames.set_animation_loop("boom", false)
+	_explo_frames.set_animation_speed("boom", EXPLO_FPS)
+	for tex in EXPLO_FRAMES:
+		_explo_frames.add_frame("boom", tex)
+
 # 1) Griglia iniziale a scacchiera: (pezzo, spazio vuoto) alternati
 func _spawn_checkerboard() -> void:
 	for i in width:
 		for j in height:
 			if ((i + j) % 2) == 0:
+				# celle "piene" iniziali = attive
+				cell_active[i][j] = true
 				var piece := _random_piece_instance_avoiding_match(i, j)
 				add_child(piece)
 				piece.position = grid_to_pixel(i, j)
 				all_pieces[i][j] = piece
 			else:
+				# buchi: vuoti e saltati dalla gravità finché il player non li riempie
+				cell_active[i][j] = false
 				all_pieces[i][j] = null
 
 # Evita match immediato sul posizionamento
@@ -200,6 +239,7 @@ func _spawn_bottom_pieces() -> void:
 			var piece = possible_pieces.pick_random().instantiate()
 			add_child(piece)
 			piece.position = _bottom_slot_pixel(s)
+			piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
 			# Etichetta per distinguere logica (non serve modificare lo script del pezzo)
 			piece.set_meta("origin", "bottom")
 			piece.set_meta("slot_idx", s)
@@ -210,6 +250,7 @@ func _replenish_bottom_slot(slot_idx: int) -> void:
 		var piece = possible_pieces.pick_random().instantiate()
 		add_child(piece)
 		piece.position = _bottom_slot_pixel(slot_idx)
+		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
 		piece.set_meta("origin", "bottom")
 		piece.set_meta("slot_idx", slot_idx)
 		bottom_pieces[slot_idx] = piece
@@ -290,6 +331,7 @@ func destroy_matched() -> Array:
 		var penalized: int = int(round(bonus_moves * (1.0 - penalty_ratio)))
 
 		current_moves += penalized
+		_show_move_gain_popup(penalized)
 		update_moves_label()
 
 		print("Bonus:", bonus_moves,
@@ -298,9 +340,9 @@ func destroy_matched() -> Array:
 
 	# Applica punteggio
 	if destroyed_count > 0:
-		# SFX + vibrazione: distruzione cubi (una volta per ondata, no overlap)
+		# SFX + vibrazione: distruzione cubi (più intensa, scala col numero distrutto)
 		settings.play_destroy()
-		settings.vibrate(25)
+		settings.vibrate(45 + min(destroyed_count, 6) * 8)
 
 		var gained := destroyed_count * points_per_piece
 		score += gained
@@ -326,25 +368,48 @@ func _apply_local_gravity(destroyed_positions: Array) -> void:
 
 	for x in affected_columns:
 		_collapse_column(x)
+		_refill_column_active(x)
 
 func _collapse_column(x: int) -> void:
-	var write_y := 0
-	for read_y in range(0, height):
-		var p = all_pieces[x][read_y]
-		if p != null:
-			if write_y != read_y:
-				all_pieces[x][write_y] = p
-				all_pieces[x][read_y] = null
-				var target_px := grid_to_pixel(x, write_y)
-				if p.has_method("move"):
-					p.move(target_px)
-				else:
-					var dist := float(abs(read_y - write_y))
-					_tween_to(p, target_px, 0.1 + 0.05 * dist)
-			write_y += 1
+	# Compatta verso il basso SOLO le celle attive. I buchi (celle non attive)
+	# vengono saltati: un cubo che cade non si ferma nel buco, ci passa oltre.
+	var cubes: Array = []
+	var active_rows: Array = []
+	for y in range(0, height):        # y=0 è la riga più in basso
+		if cell_active[x][y]:
+			active_rows.append(y)
+			if all_pieces[x][y] != null:
+				cubes.append(all_pieces[x][y])
+			all_pieces[x][y] = null
 
-	for y in range(write_y, height):
-		all_pieces[x][y] = null
+	# rimetti i cubi nelle celle attive più in basso, mantenendo l'ordine
+	for k in range(cubes.size()):
+		var ry: int = active_rows[k]
+		all_pieces[x][ry] = cubes[k]
+		var target_px := grid_to_pixel(x, ry)
+		if cubes[k].has_method("move"):
+			cubes[k].move(target_px)
+		else:
+			_tween_to(cubes[k], target_px, 0.15)
+
+# Riempie dall'alto le celle ATTIVE ancora vuote della colonna (dopo il collasso),
+# facendo scendere nuovi cubi che saltano i buchi. I buchi restano vuoti.
+func _refill_column_active(x: int) -> void:
+	var count := 0
+	for y in range(0, height):           # dal basso verso l'alto: le celle attive vuote sono in alto
+		if cell_active[x][y] and all_pieces[x][y] == null:
+			var pool = possible_plus_pieces if randf() < plus_piece_probability else possible_pieces
+			var piece = pool.pick_random().instantiate()
+			add_child(piece)
+			var spawn_row := height + spawn_rows_above + count
+			piece.position = grid_to_pixel(x, spawn_row)
+			all_pieces[x][y] = piece
+			var target_px := grid_to_pixel(x, y)
+			if piece.has_method("move"):
+				piece.move(target_px)
+			else:
+				_tween_to(piece, target_px, 0.2)
+			count += 1
 
 func _spawn_empty_drop(x: int, from_row: int, to_row: int) -> void:
 	if not enable_empty_fall_fx:
@@ -379,19 +444,18 @@ func _spawn_empty_drop(x: int, from_row: int, to_row: int) -> void:
 func _on_destroy_timer_timeout() -> void:
 	var destroyed_cells = destroy_matched()
 
-	# 1) collassa SOLO le colonne coinvolte
+	# 1) collassa e riempie SOLO le colonne coinvolte:
+	#    i cubi cadono e nuovi cubi scendono dall'alto nelle celle ATTIVE, saltando i buchi
 	_apply_local_gravity(destroyed_cells)
 
-	# 2) refill dall’alto su quelle colonne
-	_refill_destroyed_cells_random(destroyed_cells)
-
-	# 3) cascata
+	# 2) cascata
 	if find_matches():
 		return
 
 	# 4) fine cascata → sblocca input
 	is_resolving = false
 
+	_maybe_balance_board()
 	check_game_over()
 
 func _tween_to(node: Node2D, to_pos: Vector2, dur: float = 0.15) -> void:
@@ -465,10 +529,12 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 		other_piece.move(grid_to_pixel(nx, ny))
 
 func _cancel_drag() -> void:
+	_hide_placement_preview()
 	if dragging_piece != null:
 		# torna allo slot
 		if dragging_from_slot >= 0:
 			dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
+			_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
 		if dragging_piece is CanvasItem:
 			dragging_piece.z_index = 0
 		dragging_piece = null
@@ -525,10 +591,13 @@ func _input(event: InputEvent) -> void:
 				# porta sopra gli altri mentre trascini
 				if dragging_piece is CanvasItem:
 					dragging_piece.z_index = 999
+				# animazione fluida: rimpicciolisce alla dimensione della griglia
+				_tween_piece_scale(dragging_piece, GRID_PIECE_SCALE)
 		
 		# Durante drag
 		if dragging_piece != null and event is InputEventMouseMotion:
 			dragging_piece.global_position = get_global_mouse_position()
+			_update_placement_preview()
 
 		# Fine drag
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and dragging_piece != null:
@@ -539,8 +608,11 @@ func _input(event: InputEvent) -> void:
 			and current_moves > 0:
 				# Inserimento dalla BottomGrid: se spot vuoto, rimane anche senza match
 				dragging_piece.set_meta("origin", "grid")
+				dragging_piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 				dragging_piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 				all_pieces[target_grid.x][target_grid.y] = dragging_piece
+				# la cella (anche se era un buco) diventa attiva: da ora partecipa alla gravità
+				cell_active[target_grid.x][target_grid.y] = true
 
 				bottom_pieces[dragging_from_slot] = null
 				_replenish_bottom_slot(dragging_from_slot)
@@ -551,19 +623,22 @@ func _input(event: InputEvent) -> void:
 					current_moves = 0
 				update_moves_label() # 👈 aggiorna il testo del label
 				print("✅ Mossa usata! Mosse rimanenti:", current_moves)
-				
+
 				check_game_over()
 
-				# Verifica match dopo l’inserimento
-				find_matches()
+				# Verifica match dopo l’inserimento; se nessun match, valuta il bilanciamento
+				if not find_matches():
+					_maybe_balance_board()
 
 				# Controlla il game over
 				check_game_over()
 			else:
 				# Ritorna allo slot originale se non valido
 				dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
+				_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
 
 			# Reset parametri di drag
+			_hide_placement_preview()
 			if dragging_piece is CanvasItem:
 				dragging_piece.z_index = 0
 
@@ -603,8 +678,8 @@ func _get_bottom_piece_under_mouse() -> Node:
 		if p.has_node("Sprite2D"):
 			sprite = p.get_node("Sprite2D")
 		if sprite != null and sprite.texture != null:
-			# calcolo il rect globale in base a texture e scala
-			var tex_size: Vector2 = sprite.texture.get_size() * sprite.scale
+			# calcolo il rect globale in base a texture e scala (sprite * nodo pezzo)
+			var tex_size: Vector2 = sprite.texture.get_size() * sprite.scale * p.scale
 			# posizione del centro: uso la global_position del pezzo (non dello sprite)
 			# posizione del centro: uso la global_position del pezzo (non dello sprite)
 			var center: Vector2 = p.global_position
@@ -623,6 +698,7 @@ func update_moves_label() -> void:
 	var counter_label = $"../UI/MOOVES/Counter"
 	if counter_label:
 		counter_label.text = str(current_moves)
+		counter_label.add_theme_color_override("font_color", _moves_color(current_moves))
 
 func _get_piece_mooves(p: Object) -> int:
 	if p == null:
@@ -863,11 +939,9 @@ func _update_point_label() -> void:
 		lbl.text = str(score)
 
 func _update_high_score_labels_everywhere() -> void:
-	var hs := get_node_or_null("%HS_Num")
-	if hs == null:
-		hs = get_node_or_null("../UI/HighScore/HS_Num")
+	var hs := get_node_or_null("../UI/HighScore")
 	if hs and hs is Label:
-		hs.text = str(high_score)
+		hs.text = "HighScore: " + str(high_score)
 
 	var gos = get_node_or_null("%GameOverScreen")
 	if gos:
@@ -915,3 +989,140 @@ func _update_difficulty() -> void:
 	# 1) Aumenta vuoti al refill
 	var t := float(difficulty_level) / float(max_difficulty_level)
 	empty_refill_probability = lerp(0.63, max_empty_refill_probability, t)
+
+# =========================================================
+# Helper: scala pezzi (drag), colore mosse, popup "+N"
+# =========================================================
+func _tween_piece_scale(p: Node2D, s: float) -> void:
+	if p == null:
+		return
+	var tw := p.create_tween()
+	tw.tween_property(p, "scale", Vector2(s, s), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _moves_color(m: int) -> Color:
+	if m <= 1:
+		return Color(0.90, 0.16, 0.16)   # rosso: manca una mossa
+	elif m <= 3:
+		return Color(1.0, 0.55, 0.10)    # arancione
+	elif m <= 5:
+		return Color(1.0, 0.84, 0.10)    # giallo
+	return Color(1, 1, 1)                 # bianco (default)
+
+func _show_move_gain_popup(amount: int) -> void:
+	if amount <= 0:
+		return
+	var moves_label = get_node_or_null("../UI/MOOVES")
+	if moves_label == null:
+		return
+	var pop := Label.new()
+	pop.text = "+" + str(amount)
+	pop.add_theme_font_size_override("font_size", 24)
+	pop.add_theme_color_override("font_color", Color(0.30, 0.85, 0.35))
+	pop.position = Vector2(74, -26)
+	pop.z_index = 50
+	moves_label.add_child(pop)
+	var start_y: float = pop.position.y
+	var tw := pop.create_tween()
+	tw.tween_property(pop, "position:y", start_y - 22.0, 0.8).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var tw2 := pop.create_tween()
+	tw2.tween_property(pop, "modulate:a", 0.0, 0.8)
+	tw2.tween_callback(pop.queue_free)
+
+# =========================================================
+# Preview di posizionamento: cella evidenziata dove il cubo verrà piazzato
+# =========================================================
+func _ensure_placement_preview() -> void:
+	if _placement_preview != null:
+		return
+	var half := 41.14   # metà della cella (= metà passo griglia)
+	var poly := Polygon2D.new()
+	poly.polygon = PackedVector2Array([
+		Vector2(-half, -half), Vector2(half, -half),
+		Vector2(half, half), Vector2(-half, half)])
+	poly.color = Color(0, 0, 0, 0.14)   # nero molto leggero
+	poly.z_index = 1                     # sopra la griglia, sotto il pezzo trascinato
+	poly.visible = false
+	add_child(poly)
+	_placement_preview = poly
+
+func _update_placement_preview() -> void:
+	if dragging_piece == null:
+		_hide_placement_preview()
+		return
+	var g := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+	if is_in_grid(g) and all_pieces[g.x][g.y] == null and current_moves > 0:
+		_ensure_placement_preview()
+		_placement_preview.position = grid_to_pixel(g.x, g.y)
+		_placement_preview.visible = true
+	else:
+		_hide_placement_preview()
+
+func _hide_placement_preview() -> void:
+	if _placement_preview != null:
+		_placement_preview.visible = false
+
+# =========================================================
+# Esplosione cubo (6 frame) + bilanciamento tavola
+# =========================================================
+func _spawn_explosion(world_pos: Vector2, piece: Node) -> void:
+	var asp := AnimatedSprite2D.new()
+	asp.sprite_frames = _explo_frames
+	asp.animation = "boom"
+	asp.position = world_pos
+	asp.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
+	asp.z_index = 100
+	add_child(asp)
+	asp.play("boom")
+	# il cubo dietro sparisce al 3° frame (indice 2 → t = 2/fps). Timer one-shot: nessuna cattura ripetuta
+	get_tree().create_timer(2.0 / EXPLO_FPS).timeout.connect(func() -> void:
+		if is_instance_valid(piece):
+			piece.queue_free()
+	)
+	# libera l'overlay a fine animazione
+	asp.animation_finished.connect(asp.queue_free)
+
+func _count_occupied() -> int:
+	var c := 0
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null:
+				c += 1
+	return c
+
+# Ogni BALANCE_INTERVAL mosse, se la tavola è piena oltre soglia, esplodono
+# alcuni blocchi casuali (più è piena, più ne toglie) per dare respiro al player.
+func _maybe_balance_board() -> void:
+	if is_game_over or is_resolving:
+		return
+	var total := width * height
+	var occ := _count_occupied()
+	var fullness := float(occ) / float(total)
+	# scatta SOLO quando la tavola è quasi piena (pochissimi spazi vuoti)
+	if fullness < BALANCE_FULLNESS_TRIGGER:
+		return
+	# rimuovi abbastanza cubi casuali per riportarla a un livello giocabile
+	var target := int(round(total * BALANCE_FULLNESS_TARGET))
+	var n := clampi(occ - target, 1, BALANCE_MAX_REMOVE)
+	_remove_random_blocks_with_explosion(n)
+
+func _remove_random_blocks_with_explosion(n: int) -> void:
+	var occupied: Array = []
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null:
+				occupied.append(Vector2i(i, j))
+	if occupied.is_empty():
+		return
+	occupied.shuffle()
+	var removed := 0
+	for k in range(mini(n, occupied.size())):
+		var c: Vector2i = occupied[k]
+		var piece = all_pieces[c.x][c.y]
+		all_pieces[c.x][c.y] = null
+		# la cella esplosa torna un buco: spazio reale per il player (non si ri-riempie dall'alto)
+		cell_active[c.x][c.y] = false
+		_spawn_explosion(grid_to_pixel(c.x, c.y), piece)
+		removed += 1
+	if removed > 0:
+		settings.play_destroy()
+		settings.vibrate(45 + min(removed, 6) * 8)

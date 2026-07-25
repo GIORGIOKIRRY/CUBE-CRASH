@@ -16,6 +16,7 @@ extends Node2D
 const BOTTOM_PIECE_SCALE := 1.35
 const GRID_PIECE_SCALE := 1.0
 const CELL_SPRITE_SCALE := 0.734694   # scala sprite dei cubi = dimensione cella
+const POP_FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
 # Animazione esplosione (6 frame) alla distruzione di un cubo.
 const EXPLO_FRAMES := [
@@ -28,16 +29,22 @@ const EXPLO_FRAMES := [
 ]
 const EXPLO_FPS := 20.0                # 6 frame ≈ 0.3s; il cubo dietro sparisce al 3° frame
 
-# Bilanciamento tavola: SOLO quando è quasi piena (pochissimi spazi vuoti) alcuni
-# blocchi casuali esplodono per ridare spazio al player. Non legato alle azioni.
-const BALANCE_FULLNESS_TRIGGER := 0.70  # scatta quando ≥70% piena
-const BALANCE_FULLNESS_TARGET := 0.55   # dopo la rimozione torna ~55%
-const BALANCE_MAX_REMOVE := 8           # max blocchi rimossi in un colpo
+# Bilanciamento tavola (stile Block Blast: scacchiera quasi sempre piena).
+# Quando è ≥70% piena, esplode UN cubo casuale (2 se ≥80%, rarissimamente 3),
+# UNO ALLA VOLTA, con un cooldown: quanto basta a far proseguire senza svuotare.
+const BALANCE_FULLNESS_TRIGGER := 0.90  # rarissimo: solo quando è quasi del tutto piena
+const BALANCE_COOLDOWN := 3             # minimo mosse tra due bilanciamenti
+
+# Combo: la sparizione di cubi è RARA e "fortunata", legata alle catene lunghe.
+const COMBO_REWARD_MIN_CHAIN := 3      # servono almeno 3 combo di fila per avere spazio
+const COMBO_MAX_BONUS := 2             # max cubi bonus rimossi (raro)
+const IDLE_HINT_MS := 5000             # suggerimenti dopo 5s di inattività
+const HINT_REPEAT_MS := 5000           # intervallo tra suggerimenti ripetuti
 @export var spawn_rows_above: int = 1       # quante "righe" sopra la griglia fanno partire la caduta
 @export var enable_empty_fall_fx: bool = true
 
 # ----- Difficulty Progression -----
-@export var difficulty_step_score: int = 500   # ogni quanti punti sale la difficoltà
+@export var difficulty_step_score: int = 3000  # ogni quanti punti sale la difficoltà (ricalibrato col nuovo scoring)
 @export var max_difficulty_level: int = 10
 
 var difficulty_level: int = 0
@@ -51,7 +58,7 @@ var max_empty_refill_probability: float = 0.88  # limite massimo vuoti
 @export_range(0.0, 1.0, 0.01) var empty_refill_probability: float = 0.63
 
 @export_range(0.0, 1.0, 0.01)
-var plus_piece_probability: float = 0.14  # 10% di probabilità di generare un plus piece
+var plus_piece_probability: float = 0.18  # probabilità di generare un plus piece (mosse bonus)
 
 @export var max_moves: int = 30  # numero di mosse iniziali
 var current_moves: int = 0
@@ -64,7 +71,9 @@ const MAX_REVIVES := 3
 var _last_defeat_reason: String = "no_space"
 
 # ----- Scoring -----
-@export var points_per_piece: int = 10  # punti per ogni pezzo distrutto
+@export var points_per_piece: int = 10  # (legacy, non più usato per il punteggio base)
+@export var points_per_placement: int = 30   # punti per ogni blocco posizionato
+@export var points_per_match: int = 100       # punti base per un match (3 cubi); +30 per cubo extra
 var score: int = 0                      # punteggio della PARTITA corrente
 var high_score: int = 0                 # miglior punteggio di sempre
 var lifetime_score: int = 0             # punteggio cumulativo totale
@@ -142,6 +151,20 @@ var dragging_from_slot: int = -1
 var drag_start_pos: Vector2 = Vector2.ZERO
 var _placement_preview: Polygon2D = null   # fantasma della cella dove verrà piazzato
 var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosione
+var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
+var _last_shown_score: int = -1             # per l'animazione pop del punteggio
+var _score_pop_tween: Tween = null
+# Statistiche partita (per calibrare la durata)
+var _game_start_ms: int = 0
+var _stat_placements: int = 0
+var _last_session_stats: String = ""
+# Combo + suggerimenti
+var _combo_count: int = 0                    # match wave nella catena corrente
+var _color_to_scene: Dictionary = {}         # colore -> scena pezzo (per il refill combo)
+var _last_action_ms: int = 0                 # ultimo input del player (per i suggerimenti)
+var _hint_ghost: Node2D = null               # fantasma del suggerimento sulla griglia
+var _next_hint_ms: int = 0
+var _last_diff_update_ms: int = 0            # throttle aggiornamento difficoltà (tempo)
 
 # =========================================================
 # Helpers: Grid/Pixel
@@ -172,6 +195,7 @@ func make_2d_array() -> Array:
 # =========================================================
 func _ready() -> void:
 	can_move = true
+	_game_start_ms = Time.get_ticks_msec()
 	randomize()
 	current_moves = max_moves
 	all_pieces = make_2d_array()
@@ -192,6 +216,15 @@ func _ready() -> void:
 	_explo_frames.set_animation_speed("boom", EXPLO_FPS)
 	for tex in EXPLO_FRAMES:
 		_explo_frames.add_frame("boom", tex)
+
+	# mappa colore -> scena pezzo (per il refill che favorisce le combo)
+	for scene in possible_pieces:
+		var inst = scene.instantiate()
+		var col = inst.get("color")
+		if col != null:
+			_color_to_scene[str(col)] = scene
+		inst.free()
+	_last_action_ms = Time.get_ticks_msec()
 
 # 1) Griglia iniziale a scacchiera: (pezzo, spazio vuoto) alternati
 func _spawn_checkerboard() -> void:
@@ -340,13 +373,16 @@ func destroy_matched() -> Array:
 
 	# Applica punteggio
 	if destroyed_count > 0:
+		_combo_count += 1   # una wave di match = una combo nella catena
 		# SFX + vibrazione: distruzione cubi (più intensa, scala col numero distrutto)
 		settings.play_destroy()
 		settings.vibrate(45 + min(destroyed_count, 6) * 8)
 
-		var gained := destroyed_count * points_per_piece
+		# Match da 3 cubi = 100 punti base, +30 per ogni cubo oltre i 3
+		var gained := points_per_match + maxi(0, destroyed_count - 3) * 30
 		score += gained
 		lifetime_score += gained
+		_show_points_gain_popup(gained)
 
 		# High score live-update
 		if score > high_score:
@@ -398,8 +434,16 @@ func _refill_column_active(x: int) -> void:
 	var count := 0
 	for y in range(0, height):           # dal basso verso l'alto: le celle attive vuote sono in alto
 		if cell_active[x][y] and all_pieces[x][y] == null:
-			var pool = possible_plus_pieces if randf() < plus_piece_probability else possible_pieces
-			var piece = pool.pick_random().instantiate()
+			# con una certa probabilità (più alta all'inizio) scegli un colore che forma una combo
+			var piece
+			var combo_color := ""
+			if randf() < _combo_refill_bias():
+				combo_color = _match_color_at(x, y)
+			if combo_color != "" and _color_to_scene.has(combo_color):
+				piece = _color_to_scene[combo_color].instantiate()
+			else:
+				var pool = possible_plus_pieces if randf() < _effective_plus_prob() else possible_pieces
+				piece = pool.pick_random().instantiate()
 			add_child(piece)
 			var spawn_row := height + spawn_rows_above + count
 			piece.position = grid_to_pixel(x, spawn_row)
@@ -454,6 +498,14 @@ func _on_destroy_timer_timeout() -> void:
 
 	# 4) fine cascata → sblocca input
 	is_resolving = false
+
+	# ricompensa combo: RARA e legata alle catene lunghe (3+). Poco spazio, "fortuna".
+	if _combo_count >= COMBO_REWARD_MIN_CHAIN:
+		var bonus := 1
+		if _combo_count >= 5:
+			bonus = 2   # solo catene molto lunghe danno 2
+		_remove_random_blocks_staggered(mini(bonus, COMBO_MAX_BONUS))
+	_combo_count = 0
 
 	_maybe_balance_board()
 	check_game_over()
@@ -544,9 +596,28 @@ func _cancel_drag() -> void:
 # Input: swipe per swap nella griglia + drag&drop dei pezzi dal BottomGrid
 # =========================================================
 func _process(_delta: float) -> void:
-	if is_game_over or is_resolving:
+	if is_game_over:
+		return
+	# difficoltà basata sul tempo: aggiorna ~1 volta al secondo anche mentre si risolve
+	if Time.get_ticks_msec() - _last_diff_update_ms > 1000:
+		_last_diff_update_ms = Time.get_ticks_msec()
+		_update_difficulty()
+	if is_resolving:
 		return
 	_handle_grid_touch_swap()
+	_check_idle_hint()
+
+# Suggerimenti se il player resta fermo troppo a lungo
+func _check_idle_hint() -> void:
+	if dragging_piece != null:
+		return
+	var now := Time.get_ticks_msec()
+	if now - _last_action_ms < IDLE_HINT_MS:
+		return
+	if now < _next_hint_ms:
+		return
+	_next_hint_ms = now + HINT_REPEAT_MS
+	_show_hint()
 
 # Swipe per scambiare due pezzi adiacenti nella griglia
 func _handle_grid_touch_swap() -> void:
@@ -578,6 +649,10 @@ func _touch_difference(grid_1: Vector2i, grid_2: Vector2i) -> void:
 			swap_pieces(grid_1.x, grid_1.y, Vector2i(0, -1))
 
 func _input(event: InputEvent) -> void:
+	# qualsiasi input del player azzera il timer di inattività e toglie il suggerimento
+	if event is InputEventMouseButton or event is InputEventMouseMotion or event is InputEventScreenTouch or event is InputEventScreenDrag:
+		_last_action_ms = Time.get_ticks_msec()
+		_clear_hint()
 	if can_move == true:
 		if is_game_over or is_resolving:
 			return
@@ -623,10 +698,23 @@ func _input(event: InputEvent) -> void:
 					current_moves = 0
 				update_moves_label() # 👈 aggiorna il testo del label
 				print("✅ Mossa usata! Mosse rimanenti:", current_moves)
+				_moves_since_balance += 1
+				_stat_placements += 1
+
+				# Punteggio: posizionare un blocco dà 30 punti
+				score += points_per_placement
+				lifetime_score += points_per_placement
+				if score > high_score:
+					high_score = score
+				_show_points_gain_popup(points_per_placement)
+				_update_point_label()
+				_update_high_score_labels_everywhere()
+				_save_scores()
 
 				check_game_over()
 
 				# Verifica match dopo l’inserimento; se nessun match, valuta il bilanciamento
+				_combo_count = 0
 				if not find_matches():
 					_maybe_balance_board()
 
@@ -876,6 +964,11 @@ func _trigger_game_over(reason := "no_space") -> void:
 	_update_high_score_labels_everywhere()
 	_update_gameover_current_score()
 
+	# Statistiche partita (per calibrare la durata)
+	var dur_s: int = (Time.get_ticks_msec() - _game_start_ms) / 1000
+	_last_session_stats = "%d:%02d  ·  %d pose  ·  %d pt" % [dur_s / 60, dur_s % 60, _stat_placements, score]
+	print("SESSION STATS → durata=%ds pose=%d punteggio=%d" % [dur_s, _stat_placements, score])
+
 	_last_defeat_reason = reason
 
 	# Flusso di sconfitta: strip motivo -> revive -> schermata finale
@@ -923,6 +1016,8 @@ func _remove_random_cells(n: int) -> void:
 func _show_game_over_screen() -> void:
 	var screen = get_node_or_null("%GameOverScreen")
 	if screen:
+		if screen.has_method("set_session_stats"):
+			screen.set_session_stats(_last_session_stats)
 		if screen.has_method("show_result"):
 			screen.show_result(_is_new_record)
 		else:
@@ -936,7 +1031,21 @@ func _update_point_label() -> void:
 	if lbl == null:
 		lbl = get_node_or_null("../UI/PointLabel")
 	if lbl and lbl is Label:
+		var increased := _last_shown_score >= 0 and score > _last_shown_score
 		lbl.text = str(score)
+		_last_shown_score = score
+		if increased:
+			_pop_point_label(lbl)
+
+# Animazione di ingrandimento del numero centrale a ogni guadagno di punti
+func _pop_point_label(lbl: Control) -> void:
+	lbl.pivot_offset = lbl.size / 2.0
+	if _score_pop_tween != null and _score_pop_tween.is_valid():
+		_score_pop_tween.kill()
+	lbl.scale = Vector2.ONE
+	_score_pop_tween = lbl.create_tween()
+	_score_pop_tween.tween_property(lbl, "scale", Vector2(1.3, 1.3), 0.09).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_score_pop_tween.tween_property(lbl, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func _update_high_score_labels_everywhere() -> void:
 	var hs := get_node_or_null("../UI/HighScore")
@@ -977,18 +1086,22 @@ func _on_settings_menu_menu_closed() -> void:
 	can_move = true
 
 func _update_difficulty() -> void:
-	var new_level: int = score / difficulty_step_score
-	new_level = min(new_level, max_difficulty_level)
+	# Difficoltà = max(tempo, punteggio). Il TEMPO è la leva principale:
+	# +1 livello ogni 2 minuti → a 20 minuti si raggiunge il livello massimo (molto difficile).
+	var elapsed_min := float(Time.get_ticks_msec() - _game_start_ms) / 60000.0
+	var time_level := int(elapsed_min / 2.0)
+	var score_level := int(score / difficulty_step_score)
+	var new_level: int = min(maxi(time_level, score_level), max_difficulty_level)
 
 	if new_level == difficulty_level:
 		return
 
 	difficulty_level = new_level
-	print("DIFFICOLTÀ AUMENTATA → Livello", difficulty_level)
+	print("DIFFICOLTÀ → Livello", difficulty_level)
 
-	# 1) Aumenta vuoti al refill
+	# Più difficoltà = più vuoti al refill (tavola più ostica)
 	var t := float(difficulty_level) / float(max_difficulty_level)
-	empty_refill_probability = lerp(0.63, max_empty_refill_probability, t)
+	empty_refill_probability = lerpf(0.63, max_empty_refill_probability, t)
 
 # =========================================================
 # Helper: scala pezzi (drag), colore mosse, popup "+N"
@@ -1026,6 +1139,30 @@ func _show_move_gain_popup(amount: int) -> void:
 	tw.tween_property(pop, "position:y", start_y - 22.0, 0.8).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	var tw2 := pop.create_tween()
 	tw2.tween_property(pop, "modulate:a", 0.0, 0.8)
+	tw2.tween_callback(pop.queue_free)
+
+# Popup verde "+N" sopra il numero grande centrale, a ogni guadagno di punti
+func _show_points_gain_popup(amount: int) -> void:
+	if amount <= 0:
+		return
+	var ui = get_node_or_null("../UI")
+	if ui == null:
+		return
+	var pop := Label.new()
+	pop.text = "+" + str(amount)
+	pop.add_theme_font_override("font", POP_FONT)
+	pop.add_theme_font_size_override("font_size", 40)
+	pop.add_theme_color_override("font_color", Color(0.25, 0.85, 0.35))
+	pop.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pop.size = Vector2(240, 50)
+	pop.position = Vector2(288 - 120, 8)   # centrato, sopra il numero grande
+	pop.z_index = 60
+	ui.add_child(pop)
+	var start_y: float = pop.position.y
+	var tw := pop.create_tween()
+	tw.tween_property(pop, "position:y", start_y - 24.0, 0.9).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var tw2 := pop.create_tween()
+	tw2.tween_property(pop, "modulate:a", 0.0, 0.9)
 	tw2.tween_callback(pop.queue_free)
 
 # =========================================================
@@ -1094,18 +1231,30 @@ func _count_occupied() -> int:
 func _maybe_balance_board() -> void:
 	if is_game_over or is_resolving:
 		return
-	var total := width * height
-	var occ := _count_occupied()
-	var fullness := float(occ) / float(total)
-	# scatta SOLO quando la tavola è quasi piena (pochissimi spazi vuoti)
+	var fullness := float(_count_occupied()) / float(width * height)
 	if fullness < BALANCE_FULLNESS_TRIGGER:
 		return
-	# rimuovi abbastanza cubi casuali per riportarla a un livello giocabile
-	var target := int(round(total * BALANCE_FULLNESS_TARGET))
-	var n := clampi(occ - target, 1, BALANCE_MAX_REMOVE)
-	_remove_random_blocks_with_explosion(n)
+	# non a ogni mossa
+	if _moves_since_balance < BALANCE_COOLDOWN:
+		return
+	_moves_since_balance = 0
+	# quanti: 1 di base, 2 se ≥80%, rarissimamente 3 se ≥85%
+	var n := 1
+	if fullness >= 0.80:
+		n = 2
+	if fullness >= 0.85 and randf() < 0.12:
+		n = 3
+	_remove_random_blocks_staggered(n)
 
-func _remove_random_blocks_with_explosion(n: int) -> void:
+# Rimuove i cubi UNO ALLA VOLTA (non tutti insieme), con un piccolo ritardo tra loro.
+func _remove_random_blocks_staggered(n: int) -> void:
+	_remove_one_random_block()
+	for k in range(1, n):
+		get_tree().create_timer(0.45 * k).timeout.connect(_remove_one_random_block)
+
+func _remove_one_random_block() -> void:
+	if is_game_over:
+		return
 	var occupied: Array = []
 	for i in width:
 		for j in height:
@@ -1113,16 +1262,99 @@ func _remove_random_blocks_with_explosion(n: int) -> void:
 				occupied.append(Vector2i(i, j))
 	if occupied.is_empty():
 		return
-	occupied.shuffle()
-	var removed := 0
-	for k in range(mini(n, occupied.size())):
-		var c: Vector2i = occupied[k]
-		var piece = all_pieces[c.x][c.y]
-		all_pieces[c.x][c.y] = null
-		# la cella esplosa torna un buco: spazio reale per il player (non si ri-riempie dall'alto)
-		cell_active[c.x][c.y] = false
-		_spawn_explosion(grid_to_pixel(c.x, c.y), piece)
-		removed += 1
-	if removed > 0:
-		settings.play_destroy()
-		settings.vibrate(45 + min(removed, 6) * 8)
+	var c: Vector2i = occupied[randi() % occupied.size()]
+	var piece = all_pieces[c.x][c.y]
+	all_pieces[c.x][c.y] = null
+	# la cella esplosa torna un buco: spazio reale e duraturo per il player
+	cell_active[c.x][c.y] = false
+	_spawn_explosion(grid_to_pixel(c.x, c.y), piece)
+	settings.play_destroy()
+	settings.vibrate(45)
+
+# =========================================================
+# Combo: refill che favorisce le combo + suggerimenti al player fermo
+# =========================================================
+# Probabilità che un cubo in caduta scelga un colore che forma combo (più alta all'inizio)
+func _combo_refill_bias() -> float:
+	var t := float(difficulty_level) / float(max_difficulty_level)
+	return lerpf(0.18, 0.04, t)
+
+# Probabilità adattiva dei cubi +mosse: cadono di più quando il player è a corto
+# di mosse (aiuto quando serve), di meno quando ne ha tante; la difficoltà li riduce.
+func _effective_plus_prob() -> float:
+	var need := 1.0
+	if current_moves <= 5:
+		need = 2.4
+	elif current_moves <= 10:
+		need = 1.5
+	elif current_moves >= 20:
+		need = 0.5
+	var t := float(difficulty_level) / float(max_difficulty_level)
+	var diff_mult := lerpf(1.0, 0.55, t)   # a difficoltà alta i cubi-mossa aiutano meno
+	return clampf(plus_piece_probability * need * diff_mult, 0.02, 0.6)
+
+# Restituisce un colore che, messo in (x,y), forma un match; "" se nessuno
+func _match_color_at(x: int, y: int) -> String:
+	for color in _color_to_scene.keys():
+		if _would_form_match_at(x, y, color):
+			return color
+	return ""
+
+# Trova una mossa utile: {slot, cell} con cui uno dei 3 cubi forma un match
+func _find_useful_move() -> Dictionary:
+	for s in range(3):
+		var bp = bottom_pieces[s]
+		if bp == null:
+			continue
+		var v = bp.get("color")
+		var color: String = str(v) if v != null else ""
+		if color == "":
+			continue
+		for yy in range(height):
+			for xx in range(width):
+				if all_pieces[xx][yy] == null and _would_form_match_at(xx, yy, color):
+					return {"slot": s, "cell": Vector2i(xx, yy)}
+	return {}
+
+func _show_hint() -> void:
+	var move := _find_useful_move()
+	if move.is_empty():
+		return
+	_bounce_bottom_piece(int(move["slot"]))
+	_wiggle_hint_at(move["cell"], bottom_pieces[int(move["slot"])])
+
+# Uno dei 3 cubi in basso rimbalza (utile da posizionare)
+func _bounce_bottom_piece(slot: int) -> void:
+	var p = bottom_pieces[slot]
+	if p == null:
+		return
+	var base_y: float = _bottom_slot_pixel(slot).y
+	var tw: Tween = p.create_tween()
+	for i in 2:
+		tw.tween_property(p, "position:y", base_y - 22.0, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(p, "position:y", base_y, 0.24).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+
+# Fantasma che oscilla avanti e indietro nella cella suggerita (stile Candy Crush)
+func _wiggle_hint_at(cell: Vector2i, src: Node) -> void:
+	_clear_hint()
+	var ghost := Sprite2D.new()
+	if src != null and src.has_node("Sprite2D"):
+		ghost.texture = src.get_node("Sprite2D").texture
+	ghost.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
+	ghost.modulate = Color(1, 1, 1, 0.55)
+	ghost.z_index = 60
+	ghost.position = grid_to_pixel(cell.x, cell.y)
+	add_child(ghost)
+	_hint_ghost = ghost
+	# pulsazione di opacità (appare/scompare), NIENTE movimento laterale
+	var tw := ghost.create_tween().set_loops(4)
+	tw.tween_property(ghost, "modulate:a", 0.12, 0.45).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(ghost, "modulate:a", 0.7, 0.45).set_trans(Tween.TRANS_SINE)
+	var life := ghost.create_tween()
+	life.tween_interval(3.6)
+	life.tween_callback(ghost.queue_free)
+
+func _clear_hint() -> void:
+	if _hint_ghost != null and is_instance_valid(_hint_ghost):
+		_hint_ghost.queue_free()
+	_hint_ghost = null

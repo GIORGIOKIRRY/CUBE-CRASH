@@ -29,26 +29,28 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -268.0
-offset_top = -492.0
-offset_right = 268.0
-offset_bottom = 492.0
+offset_left = -900.0
+offset_top = -1300.0
+offset_right = 900.0
+offset_bottom = 1300.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.08627451, 0.41568628, 0.59607846, 1)
 
-[node name="LinkButton" type="TextureButton" parent="Items/BG"]
+[node name="LinkButton" type="TextureButton" parent="Items"]
 layout_mode = 0
-offset_left = 36.0
-offset_right = 98.0
-offset_bottom = 62.0
+offset_left = -232.0
+offset_top = -492.0
+offset_right = -170.0
+offset_bottom = -430.0
 texture_normal = ExtResource("3_wkf3q")
 
-[node name="CloseButton" type="TextureButton" parent="Items/BG"]
+[node name="CloseButton" type="TextureButton" parent="Items"]
 layout_mode = 0
-offset_left = 478.0
-offset_right = 540.0
-offset_bottom = 62.0
+offset_left = 210.0
+offset_top = -492.0
+offset_right = 272.0
+offset_bottom = -430.0
 texture_normal = ExtResource("4_jd77q")
 
 [node name="L_GameOver" type="Label" parent="Items"]
@@ -115,6 +117,6 @@ offset_right = 257.0
 offset_bottom = 390.0
 texture_normal = ExtResource("2_wndb3")
 
-[connection signal="pressed" from="Items/BG/CloseButton" to="." method="_on_close_button_pressed"]
-[connection signal="pressed" from="Items/BG/LinkButton" to="." method="_on_link_button_pressed"]
+[connection signal="pressed" from="Items/CloseButton" to="." method="_on_close_button_pressed"]
+[connection signal="pressed" from="Items/LinkButton" to="." method="_on_link_button_pressed"]
 [connection signal="pressed" from="Items/PlayAgainButton" to="." method="_on_play_again_button_pressed"]

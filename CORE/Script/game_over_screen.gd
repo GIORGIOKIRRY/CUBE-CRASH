@@ -5,6 +5,28 @@ const RECORD_PURPLE := Color(0.478431, 0.270588, 0.815686)  # sfondo viola
 const RECORD_YELLOW := Color(0.980392, 0.788235, 0.098039)  # "BEST SCORE!"
 const RECORD_LAVENDER := Color(0.850980, 0.619608, 1.0)     # etichetta "SCORE"
 const PLAY_AGAIN_GOLD := preload("res://CORE/Assets/Art/UI/GameOver/PlayAgainGold.svg")
+const LINK_PURPLE := preload("res://CORE/Assets/Art/UI/Menu/LinkPurple.svg")
+const CLOSE_PURPLE := preload("res://CORE/Assets/Art/UI/Menu/ClosePurple.svg")
+
+
+const STATS_FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
+
+# Riga statistiche partita (temporanea, per calibrare la durata)
+func set_session_stats(txt: String) -> void:
+	var lbl := get_node_or_null("Items/SessionStats") as Label
+	if lbl == null:
+		lbl = Label.new()
+		lbl.name = "SessionStats"
+		lbl.add_theme_font_override("font", STATS_FONT)
+		lbl.add_theme_font_size_override("font_size", 26)
+		lbl.add_theme_color_override("font_color", Color(1, 1, 1, 0.75))
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.offset_left = -240.0
+		lbl.offset_right = 280.0
+		lbl.offset_top = 418.0
+		lbl.offset_bottom = 452.0
+		$Items.add_child(lbl)
+	lbl.text = txt
 
 
 # Mostra la schermata di fine partita.
@@ -16,8 +38,12 @@ func show_result(is_new_record: bool) -> void:
 
 
 func _apply_new_record_layout() -> void:
-	# Sfondo viola
+	# Sfondo viola (il BG è grande abbastanza da coprire tutto lo schermo, anche l'overscan)
 	$Items/BG.color = RECORD_PURPLE
+
+	# Tastini share (link) e X in viola scuro invece del blu profondo
+	$Items/LinkButton.texture_normal = LINK_PURPLE
+	$Items/CloseButton.texture_normal = CLOSE_PURPLE
 
 	# Titolo -> "BEST SCORE!" giallo, centrato
 	var title: Label = $Items/L_GameOver

@@ -38,7 +38,7 @@ height = 7
 x_start = 41.142857
 y_start = 772.857143
 offset = 82.285714
-max_moves = 8
+max_moves = 15
 
 [node name="Grid" type="TextureRect" parent="grid"]
 offset_top = 238.0

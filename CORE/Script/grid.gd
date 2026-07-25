@@ -45,6 +45,8 @@ var _last_defeat_reason: String = "no_space"
 var score: int = 0                      # punteggio della PARTITA corrente
 var high_score: int = 0                 # miglior punteggio di sempre
 var lifetime_score: int = 0             # punteggio cumulativo totale
+var _prev_high_score: int = 0           # record PRIMA di questa partita (per rilevare nuovo record)
+var _is_new_record: bool = false        # true se la partita ha battuto il record precedente
 
 const SAVE_PATH := "user://save.cfg"
 
@@ -151,6 +153,7 @@ func _ready() -> void:
 	_spawn_bottom_pieces()
 	update_moves_label()
 	_load_scores()
+	_prev_high_score = high_score   # record da battere in questa partita
 	score = 0
 	_update_point_label()
 	_update_high_score_labels_everywhere()
@@ -782,6 +785,9 @@ func _any_valid_bottom_placement() -> bool:
 func _trigger_game_over(reason := "no_space") -> void:
 	is_game_over = true
 
+	# Nuovo record? (il record si batte se il punteggio supera quello di inizio partita)
+	_is_new_record = score > _prev_high_score and score > 0
+
 	# Aggiorna HighScore
 	if score > high_score:
 		high_score = score
@@ -841,7 +847,10 @@ func _remove_random_cells(n: int) -> void:
 func _show_game_over_screen() -> void:
 	var screen = get_node_or_null("%GameOverScreen")
 	if screen:
-		screen.visible = true
+		if screen.has_method("show_result"):
+			screen.show_result(_is_new_record)
+		else:
+			screen.visible = true
 		if screen is CanvasItem:
 			screen.z_index = 99999
 

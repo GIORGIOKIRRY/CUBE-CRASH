@@ -22,3 +22,9 @@ func _on_settings_button_pressed() -> void:
 func _on_link_button_pressed() -> void:
 	settings.button_feedback()
 	OS.shell_open(settings.APPSTORE_URL)
+
+
+# Pergamena in alto a destra: apre la sezione ringraziamenti
+func _on_terms_button_pressed() -> void:
+	settings.button_feedback()
+	%SettingsMenu.open_thanks_from_home()

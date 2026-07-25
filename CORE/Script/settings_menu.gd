@@ -26,15 +26,15 @@ signal MenuClosed
 # ==========================
 # More settings / pagine
 # ==========================
-const MORE_FRAME := preload("res://CORE/Assets/Art/UI/Settings/more_frame.svg")
 const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back.svg")
+const DIVIDER := preload("res://CORE/Assets/Art/UI/Settings/Divider.svg")
 const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
 const CONTACT_EMAIL := "cubecrash.game@gmail.com"   # TODO: email reale
 const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non raccoglie dati personali."
 const TERMS_TEXT := "Usando Cube Crash accetti i termini di servizio del gioco."
 
-var _more_frame: TextureRect = null
+var _more_root: Control = null
 var _subpages: Dictionary = {}   # nome -> Control
 
 # ==========================
@@ -76,38 +76,56 @@ func _on_more_button_pressed() -> void:
 	_show_more(true)
 
 func _show_more(on: bool) -> void:
-	if _more_frame == null:
+	if _more_root == null:
 		return
-	_more_frame.visible = on
+	# La box e il titolo "SETTINGS" restano gli stessi della schermata precedente:
+	# cambiano solo le righe elencate sotto (niente titolo "More Settings" separato).
+	_more_root.visible = on
 	_options.visible = not on
-	_title.visible = not on   # il frame More ha già il titolo disegnato
 
 func _build_more_page() -> void:
-	_more_frame = TextureRect.new()
-	_more_frame.texture = MORE_FRAME
-	_more_frame.position = Vector2(0, 0)
-	_more_frame.size = Vector2(395, 498)
-	_more_frame.visible = false
-	_menu.add_child(_more_frame)
+	# Stessa area interna delle righe delle impostazioni (dentro il box Menu),
+	# così la box è identica/alta come nella schermata precedente.
+	_more_root = Control.new()
+	_more_root.position = Vector2(16, 98)
+	_more_root.size = Vector2(363, 377)
+	_more_root.visible = false
+	_menu.add_child(_more_root)
 
-	# 5 righe cliccabili (bottoni invisibili)
-	var rows := [
-		{"y": 120.0, "cb": Callable(self, "_on_contact")},
-		{"y": 195.0, "cb": Callable(self, "_on_share_button_pressed")},
-		{"y": 270.0, "cb": Callable(self, "_open_terms")},
-		{"y": 345.0, "cb": Callable(self, "_open_privacy")},
-		{"y": 420.0, "cb": Callable(self, "_open_thanks")},
+	var entries := [
+		{"text": "CONTACT US", "cb": Callable(self, "_on_contact")},
+		{"text": "SHARE GAME", "cb": Callable(self, "_on_share_button_pressed")},
+		{"text": "TERMS OF SERVICE", "cb": Callable(self, "_open_terms")},
+		{"text": "PRIVACY POLICY", "cb": Callable(self, "_open_privacy")},
+		{"text": "THANKS", "cb": Callable(self, "_open_thanks")},
 	]
-	for r in rows:
-		_more_frame.add_child(_make_row_button(r["y"], r["cb"]))
+	var row_h := 75.0
+	for i in entries.size():
+		var y := i * row_h
 
-	# il tasto X (CloseButton) deve restare sopra al frame More
-	_menu.move_child(_close_btn, _menu.get_child_count() - 1)
+		var lbl := Label.new()
+		lbl.text = entries[i]["text"]
+		lbl.position = Vector2(24, y)
+		lbl.size = Vector2(315, row_h)
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_override("font", FONT)
+		lbl.add_theme_font_size_override("font_size", 30)
+		lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+		_more_root.add_child(lbl)
 
-func _make_row_button(y: float, cb: Callable) -> Button:
+		_more_root.add_child(_make_invisible_button(
+			Vector2(0, y), Vector2(363, row_h), entries[i]["cb"]))
+
+		if i < entries.size() - 1:
+			var d := TextureRect.new()
+			d.texture = DIVIDER
+			d.position = Vector2(19, y + row_h - 1.0)
+			_more_root.add_child(d)
+
+func _make_invisible_button(pos: Vector2, sz: Vector2, cb: Callable) -> Button:
 	var b := Button.new()
-	b.position = Vector2(10, y)
-	b.size = Vector2(375, 74)
+	b.position = pos
+	b.size = sz
 	var empty := StyleBoxEmpty.new()
 	b.add_theme_stylebox_override("normal", empty)
 	b.add_theme_stylebox_override("hover", empty)
@@ -151,6 +169,12 @@ func _show_subpage(name: String) -> void:
 	for k in _subpages:
 		_subpages[k].visible = (k == name)
 
+# Apertura diretta dei ringraziamenti dalla home (tastino pergamena in alto a destra)
+func open_thanks_from_home() -> void:
+	visible = true
+	_show_more(false)
+	_show_subpage("thanks")
+
 func _hide_subpages() -> void:
 	for k in _subpages:
 		_subpages[k].visible = false
@@ -168,10 +192,11 @@ func _make_subpage(title: String, content: Control) -> Control:
 	bg.size = Vector2(2400, 2800)
 	page.add_child(bg)
 
-	# tasto indietro
+	# tasto indietro: stessa posizione dell'icona Link nella home (36, 0), 62x62
 	var back := TextureButton.new()
 	back.texture_normal = BACK_ICON
-	back.position = Vector2(36, 44)
+	back.position = Vector2(36, 0)
+	back.size = Vector2(62, 62)
 	back.pressed.connect(_on_subpage_back)
 	page.add_child(back)
 
@@ -231,7 +256,7 @@ func _thanks_content() -> Control:
 # ==========================
 func _on_close_button_pressed() -> void:
 	settings.button_feedback()
-	if _more_frame != null and _more_frame.visible:
+	if _more_root != null and _more_root.visible:
 		_show_more(false)
 		return
 	visible = false

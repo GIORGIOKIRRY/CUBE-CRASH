@@ -1,5 +1,62 @@
 extends Control
 
+# Colori schermata "nuovo record"
+const RECORD_PURPLE := Color(0.478431, 0.270588, 0.815686)  # sfondo viola
+const RECORD_YELLOW := Color(0.980392, 0.788235, 0.098039)  # "BEST SCORE!"
+const RECORD_LAVENDER := Color(0.850980, 0.619608, 1.0)     # etichetta "SCORE"
+const PLAY_AGAIN_GOLD := preload("res://CORE/Assets/Art/UI/GameOver/PlayAgainGold.svg")
+
+
+# Mostra la schermata di fine partita.
+# Se is_new_record == true usa il layout viola "BEST SCORE!" (tutto centrato).
+func show_result(is_new_record: bool) -> void:
+	if is_new_record:
+		_apply_new_record_layout()
+	visible = true
+
+
+func _apply_new_record_layout() -> void:
+	# Sfondo viola
+	$Items/BG.color = RECORD_PURPLE
+
+	# Titolo -> "BEST SCORE!" giallo, centrato
+	var title: Label = $Items/L_GameOver
+	title.text = "BEST SCORE!"
+	title.add_theme_color_override("font_color", RECORD_YELLOW)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.offset_left = -290.0
+	title.offset_right = 330.0
+	# (verticale invariato: resta in alto come nel mockup)
+
+	# Etichetta "SCORE" -> lavanda, centrata, spostata al centro schermo
+	var score_lbl: Label = $Items/Score
+	score_lbl.add_theme_color_override("font_color", RECORD_LAVENDER)
+	score_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	score_lbl.offset_left = -130.0
+	score_lbl.offset_right = 170.0
+	score_lbl.offset_top = -45.0
+	score_lbl.offset_bottom = -3.0
+
+	# Numero punteggio -> bianco, centrato
+	var num: Label = $Items/L_ScoreNumber
+	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	num.offset_left = -240.0
+	num.offset_right = 280.0
+	num.offset_top = -33.0
+	num.offset_bottom = 105.0
+
+	# In modalità record mostriamo un solo punteggio: nascondi la riga "BEST SCORE"
+	$Items/BestScore.visible = false
+	$Items/L_BestScoreNumber.visible = false
+
+	# Play Again dorato (solo nel record) e centrato orizzontalmente (texture 474x120)
+	var play: TextureButton = $Items/PlayAgainButton
+	play.texture_normal = PLAY_AGAIN_GOLD
+	play.offset_left = -217.0
+	play.offset_right = 257.0
+	play.offset_top = 260.0
+	play.offset_bottom = 380.0
+
 
 func _on_close_button_pressed() -> void:
 	settings.button_feedback()

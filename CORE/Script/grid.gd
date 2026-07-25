@@ -150,6 +150,8 @@ var dragging_piece: Node = null
 var dragging_from_slot: int = -1
 var drag_start_pos: Vector2 = Vector2.ZERO
 var _placement_preview: Polygon2D = null   # fantasma della cella dove verrà piazzato
+var _preview_fade_tween: Tween = null       # dissolvenza della preview
+var _drag_scale_tween: Tween = null         # tween di scala del cubo trascinato
 var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosione
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
 var _last_shown_score: int = -1             # per l'animazione pop del punteggio
@@ -164,6 +166,9 @@ var _color_to_scene: Dictionary = {}         # colore -> scena pezzo (per il ref
 var _last_action_ms: int = 0                 # ultimo input del player (per i suggerimenti)
 var _hint_ghost: Node2D = null               # fantasma del suggerimento sulla griglia
 var _next_hint_ms: int = 0
+var _hint_swap_tweens: Array = []            # tween dell'animazione suggerimento swap
+var _hint_swap_pieces: Array = []            # cubi animati dallo swap hint
+var _hint_swap_base: Array = []              # posizioni originali da ripristinare
 var _last_diff_update_ms: int = 0            # throttle aggiornamento difficoltà (tempo)
 
 # =========================================================
@@ -355,21 +360,15 @@ func destroy_matched() -> Array:
 				all_pieces[i][j] = null
 				destroyed_positions.append(Vector2i(i, j))
 
-	# 🔹 Applica bonus mosse se presente
+	# 🔹 Applica bonus mosse: i cubi +1/+2/+3 danno SEMPRE il loro valore pieno.
+	# (La difficoltà nel tempo viene dalla minor frequenza dei cubi-mossa e dai
+	#  vuoti al refill, non dall'azzerare le mosse guadagnate.)
 	if bonus_moves > 0:
-		# SFX: nuova mossa guadagnata (pezzo +1/+2/+3 distrutto)
 		settings.play_newmove()
-
-		var penalty_ratio: float = clamp(0.15 + difficulty_level * 0.08, 0.0, 0.85)
-		var penalized: int = int(round(bonus_moves * (1.0 - penalty_ratio)))
-
-		current_moves += penalized
-		_show_move_gain_popup(penalized)
+		current_moves += bonus_moves
+		_show_move_gain_popup(bonus_moves)
 		update_moves_label()
-
-		print("Bonus:", bonus_moves,
-			" | penalty %:", penalty_ratio,
-			" | final:", penalized)
+		print("Bonus mosse:", bonus_moves, " -> mosse totali:", current_moves)
 
 	# Applica punteggio
 	if destroyed_count > 0:
@@ -683,6 +682,9 @@ func _input(event: InputEvent) -> void:
 			and current_moves > 0:
 				# Inserimento dalla BottomGrid: se spot vuoto, rimane anche senza match
 				dragging_piece.set_meta("origin", "grid")
+				# ferma il tween di scala del drag: altrimenti combatte con il pop di dim()
+				if _drag_scale_tween != null and _drag_scale_tween.is_valid():
+					_drag_scale_tween.kill()
 				dragging_piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 				dragging_piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 				all_pieces[target_grid.x][target_grid.y] = dragging_piece
@@ -724,6 +726,9 @@ func _input(event: InputEvent) -> void:
 				# Ritorna allo slot originale se non valido
 				dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
 				_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
+				# posto valido ma niente mosse -> scuoti "MOOVES" per farlo capire
+				if current_moves <= 0 and is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null:
+					_shake_moves_label()
 
 			# Reset parametri di drag
 			_hide_placement_preview()
@@ -1111,6 +1116,7 @@ func _tween_piece_scale(p: Node2D, s: float) -> void:
 		return
 	var tw := p.create_tween()
 	tw.tween_property(p, "scale", Vector2(s, s), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_drag_scale_tween = tw
 
 func _moves_color(m: int) -> Color:
 	if m <= 1:
@@ -1189,12 +1195,25 @@ func _update_placement_preview() -> void:
 	var g := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
 	if is_in_grid(g) and all_pieces[g.x][g.y] == null and current_moves > 0:
 		_ensure_placement_preview()
+		if _preview_fade_tween != null and _preview_fade_tween.is_valid():
+			_preview_fade_tween.kill()
 		_placement_preview.position = grid_to_pixel(g.x, g.y)
+		_placement_preview.modulate.a = 1.0
 		_placement_preview.visible = true
 	else:
 		_hide_placement_preview()
 
 func _hide_placement_preview() -> void:
+	if _placement_preview == null or not _placement_preview.visible:
+		return
+	# dissolvenza dolce dell'opacità fino a zero (non scompare di colpo)
+	if _preview_fade_tween != null and _preview_fade_tween.is_valid():
+		_preview_fade_tween.kill()
+	_preview_fade_tween = _placement_preview.create_tween()
+	_preview_fade_tween.tween_property(_placement_preview, "modulate:a", 0.0, 0.18).set_trans(Tween.TRANS_SINE)
+	_preview_fade_tween.tween_callback(_on_preview_faded)
+
+func _on_preview_faded() -> void:
 	if _placement_preview != null:
 		_placement_preview.visible = false
 
@@ -1268,7 +1287,7 @@ func _remove_one_random_block() -> void:
 	# la cella esplosa torna un buco: spazio reale e duraturo per il player
 	cell_active[c.x][c.y] = false
 	_spawn_explosion(grid_to_pixel(c.x, c.y), piece)
-	settings.play_destroy()
+	settings.play_explosion()
 	settings.vibrate(45)
 
 # =========================================================
@@ -1317,11 +1336,51 @@ func _find_useful_move() -> Dictionary:
 	return {}
 
 func _show_hint() -> void:
-	var move := _find_useful_move()
-	if move.is_empty():
+	# 1) se hai mosse e c'è un piazzamento utile dei 3 cubi in basso, suggerisci quello
+	if current_moves > 0:
+		var move := _find_useful_move()
+		if not move.is_empty():
+			_bounce_bottom_piece(int(move["slot"]))
+			_wiggle_hint_at(move["cell"], bottom_pieces[int(move["slot"])])
+			return
+	# 2) altrimenti (mosse finite o niente piazzamento utile): suggerisci uno swap nella griglia
+	var sw := _find_useful_swap()
+	if not sw.is_empty():
+		_show_swap_hint(sw["a"], sw["b"])
+
+# Trova uno scambio tra due cubi adiacenti che forma un match: {a, b} oppure {}
+func _find_useful_swap() -> Dictionary:
+	for y in range(height):
+		for x in range(width):
+			if x + 1 < width and _would_form_match_if_swap(x, y, x + 1, y):
+				return {"a": Vector2i(x, y), "b": Vector2i(x + 1, y)}
+			if y + 1 < height and _would_form_match_if_swap(x, y, x, y + 1):
+				return {"a": Vector2i(x, y), "b": Vector2i(x, y + 1)}
+	return {}
+
+# Mostra lo scambio suggerito: i due cubi si muovono l'uno verso l'altro e tornano
+func _show_swap_hint(a: Vector2i, b: Vector2i) -> void:
+	_clear_hint()
+	var pa = all_pieces[a.x][a.y]
+	var pb = all_pieces[b.x][b.y]
+	if pa == null or pb == null:
 		return
-	_bounce_bottom_piece(int(move["slot"]))
-	_wiggle_hint_at(move["cell"], bottom_pieces[int(move["slot"])])
+	var pa_pos: Vector2 = grid_to_pixel(a.x, a.y)
+	var pb_pos: Vector2 = grid_to_pixel(b.x, b.y)
+	_hint_swap_pieces = [pa, pb]
+	_hint_swap_base = [pa_pos, pb_pos]
+	if pa is CanvasItem: pa.z_index = 40
+	if pb is CanvasItem: pb.z_index = 40
+	# un tween per cubo (concorrenti): ognuno va verso l'altro e torna, 3 volte
+	var pa_to: Vector2 = pa_pos.lerp(pb_pos, 0.5)
+	var pb_to: Vector2 = pb_pos.lerp(pa_pos, 0.5)
+	var ta: Tween = pa.create_tween().set_loops(3)
+	ta.tween_property(pa, "position", pa_to, 0.3).set_trans(Tween.TRANS_SINE)
+	ta.tween_property(pa, "position", pa_pos, 0.3).set_trans(Tween.TRANS_SINE)
+	var tb: Tween = pb.create_tween().set_loops(3)
+	tb.tween_property(pb, "position", pb_to, 0.3).set_trans(Tween.TRANS_SINE)
+	tb.tween_property(pb, "position", pb_pos, 0.3).set_trans(Tween.TRANS_SINE)
+	_hint_swap_tweens = [ta, tb]
 
 # Uno dei 3 cubi in basso rimbalza (utile da posizionare)
 func _bounce_bottom_piece(slot: int) -> void:
@@ -1341,20 +1400,49 @@ func _wiggle_hint_at(cell: Vector2i, src: Node) -> void:
 	if src != null and src.has_node("Sprite2D"):
 		ghost.texture = src.get_node("Sprite2D").texture
 	ghost.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
-	ghost.modulate = Color(1, 1, 1, 0.55)
+	ghost.modulate = Color(1, 1, 1, 0.0)   # parte invisibile
 	ghost.z_index = 60
 	ghost.position = grid_to_pixel(cell.x, cell.y)
 	add_child(ghost)
 	_hint_ghost = ghost
-	# pulsazione di opacità (appare/scompare), NIENTE movimento laterale
-	var tw := ghost.create_tween().set_loops(4)
-	tw.tween_property(ghost, "modulate:a", 0.12, 0.45).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(ghost, "modulate:a", 0.7, 0.45).set_trans(Tween.TRANS_SINE)
+	# lampeggia 2 volte: 0 -> poca opacità -> 0 (niente movimento laterale)
+	var peak := 0.6
+	var tw := ghost.create_tween().set_loops(2)
+	tw.tween_property(ghost, "modulate:a", peak, 0.28).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(ghost, "modulate:a", 0.0, 0.28).set_trans(Tween.TRANS_SINE)
+	# dopo i 2 lampeggi la preview sparisce; ricompare al prossimo ciclo (HINT_REPEAT_MS)
 	var life := ghost.create_tween()
-	life.tween_interval(3.6)
+	life.tween_interval(2.0 * 0.56 + 0.15)
 	life.tween_callback(ghost.queue_free)
 
 func _clear_hint() -> void:
 	if _hint_ghost != null and is_instance_valid(_hint_ghost):
 		_hint_ghost.queue_free()
 	_hint_ghost = null
+	# ferma l'eventuale animazione di swap e ripristina le posizioni dei cubi
+	for t in _hint_swap_tweens:
+		if t != null and t.is_valid():
+			t.kill()
+	_hint_swap_tweens = []
+	for i in range(_hint_swap_pieces.size()):
+		var p = _hint_swap_pieces[i]
+		if p != null and is_instance_valid(p):
+			p.position = _hint_swap_base[i]
+			if p is CanvasItem:
+				p.z_index = 0
+	_hint_swap_pieces = []
+	_hint_swap_base = []
+
+# Scuote il testo "MOOVES" + numero (in alto a sinistra) quando si prova a
+# posizionare un cubo ma le mosse sono finite.
+func _shake_moves_label() -> void:
+	var m = get_node_or_null("../UI/MOOVES")
+	if m == null or not (m is Control):
+		return
+	settings.vibrate(35)
+	var base_x: float = m.position.x
+	var tw: Tween = m.create_tween()
+	for i in 4:
+		tw.tween_property(m, "position:x", base_x - 12.0, 0.05).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(m, "position:x", base_x + 12.0, 0.05).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(m, "position:x", base_x, 0.05)

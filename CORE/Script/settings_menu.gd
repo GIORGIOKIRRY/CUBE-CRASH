@@ -36,6 +36,7 @@ const TERMS_TEXT := "Usando Cube Crash accetti i termini di servizio del gioco."
 
 var _more_root: Control = null
 var _subpages: Dictionary = {}   # nome -> Control
+var _opened_from_home: bool = false   # thanks aperto direttamente dalla home
 
 # ==========================
 # Ready
@@ -73,6 +74,7 @@ func _on_share_button_pressed() -> void:
 # ==========================
 func _on_more_button_pressed() -> void:
 	settings.button_feedback()
+	_opened_from_home = false
 	_show_more(true)
 
 func _show_more(on: bool) -> void:
@@ -171,6 +173,7 @@ func _show_subpage(name: String) -> void:
 
 # Apertura diretta dei ringraziamenti dalla home (tastino pergamena in alto a destra)
 func open_thanks_from_home() -> void:
+	_opened_from_home = true
 	visible = true
 	_show_more(false)
 	_show_subpage("thanks")
@@ -222,6 +225,12 @@ func _make_subpage(title: String, content: Control) -> Control:
 func _on_subpage_back() -> void:
 	settings.button_feedback()
 	_hide_subpages()
+	# se la sotto-pagina era stata aperta direttamente dalla home, torna alla home
+	# (chiudi tutto il menu) invece di mostrare i settings
+	if _opened_from_home:
+		_opened_from_home = false
+		visible = false
+		MenuClosed.emit()
 
 func _make_text(txt: String, color: Color, size: int) -> Label:
 	var l := Label.new()

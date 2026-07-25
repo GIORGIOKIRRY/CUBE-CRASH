@@ -29,10 +29,12 @@ const SILENCE_DB := -60.0
 var _sfx_tap: AudioStreamPlayer
 var _sfx_destroy: AudioStreamPlayer
 var _sfx_newmove: AudioStreamPlayer
+var _sfx_explosion: AudioStreamPlayer
 
 const SFX_TAP_PATH := "res://CORE/Assets/Music&Sound/SFX/tap.mp3"
 const SFX_DESTROY_PATH := "res://CORE/Assets/Music&Sound/SFX/destroy.mp3"
 const SFX_NEWMOVE_PATH := "res://CORE/Assets/Music&Sound/SFX/newmove.mp3"
+const SFX_EXPLOSION_PATH := "res://CORE/Assets/Music&Sound/SFX/explosion.wav"
 
 func _ready() -> void:
 	_setup_music_players()
@@ -59,6 +61,7 @@ func _setup_sfx_players() -> void:
 	_sfx_tap = _make_sfx(SFX_TAP_PATH)
 	_sfx_destroy = _make_sfx(SFX_DESTROY_PATH)
 	_sfx_newmove = _make_sfx(SFX_NEWMOVE_PATH)
+	_sfx_explosion = _make_sfx(SFX_EXPLOSION_PATH)
 
 func _make_sfx(path: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
@@ -124,6 +127,9 @@ func play_destroy() -> void:
 
 func play_newmove() -> void:
 	_play_sfx(_sfx_newmove)
+
+func play_explosion() -> void:
+	_play_sfx(_sfx_explosion)
 
 func _play_sfx(p: AudioStreamPlayer) -> void:
 	if p == null or not sound_enabled:

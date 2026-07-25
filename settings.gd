@@ -30,11 +30,17 @@ var _sfx_tap: AudioStreamPlayer
 var _sfx_destroy: AudioStreamPlayer
 var _sfx_newmove: AudioStreamPlayer
 var _sfx_explosion: AudioStreamPlayer
+var _sfx_combo1: AudioStreamPlayer
+var _sfx_combo2: AudioStreamPlayer
+var _sfx_combo3: AudioStreamPlayer
 
 const SFX_TAP_PATH := "res://CORE/Assets/Music&Sound/SFX/tap.mp3"
 const SFX_DESTROY_PATH := "res://CORE/Assets/Music&Sound/SFX/destroy.mp3"
 const SFX_NEWMOVE_PATH := "res://CORE/Assets/Music&Sound/SFX/newmove.mp3"
 const SFX_EXPLOSION_PATH := "res://CORE/Assets/Music&Sound/SFX/explosion.wav"
+const SFX_COMBO1_PATH := "res://CORE/Assets/Music&Sound/SFX/combo1.mp3"
+const SFX_COMBO2_PATH := "res://CORE/Assets/Music&Sound/SFX/combo2.mp3"
+const SFX_COMBO3_PATH := "res://CORE/Assets/Music&Sound/SFX/combo3.mp3"
 
 func _ready() -> void:
 	_setup_music_players()
@@ -62,6 +68,9 @@ func _setup_sfx_players() -> void:
 	_sfx_destroy = _make_sfx(SFX_DESTROY_PATH)
 	_sfx_newmove = _make_sfx(SFX_NEWMOVE_PATH)
 	_sfx_explosion = _make_sfx(SFX_EXPLOSION_PATH)
+	_sfx_combo1 = _make_sfx(SFX_COMBO1_PATH)
+	_sfx_combo2 = _make_sfx(SFX_COMBO2_PATH)
+	_sfx_combo3 = _make_sfx(SFX_COMBO3_PATH)
 
 func _make_sfx(path: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
@@ -130,6 +139,18 @@ func play_newmove() -> void:
 
 func play_explosion() -> void:
 	_play_sfx(_sfx_explosion)
+
+func play_combo1() -> void:
+	_play_sfx(_sfx_combo1)
+
+# livello combo -> suono (1, 2, poi dalla 3 in poi sempre combo3)
+func play_combo(level: int) -> void:
+	if level <= 1:
+		_play_sfx(_sfx_combo1)
+	elif level == 2:
+		_play_sfx(_sfx_combo2)
+	else:
+		_play_sfx(_sfx_combo3)
 
 func _play_sfx(p: AudioStreamPlayer) -> void:
 	if p == null or not sound_enabled:

@@ -29,12 +29,62 @@ func set_session_stats(txt: String) -> void:
 	lbl.text = txt
 
 
+var _end_final := 0
+var _end_moves := 0
+var _end_per := 0
+
+# Bonus di fine partita: mosse rimaste -> punteggio (con animazione)
+func set_end_bonus(final_score: int, moves: int, per_move: int) -> void:
+	_end_final = final_score
+	_end_moves = moves
+	_end_per = per_move
+
+
 # Mostra la schermata di fine partita.
 # Se is_new_record == true usa il layout viola "BEST SCORE!" (tutto centrato).
 func show_result(is_new_record: bool) -> void:
 	if is_new_record:
 		_apply_new_record_layout()
 	visible = true
+	_play_end_bonus_anim()   # dopo il layout: anima le mosse rimaste in punteggio
+
+
+func _play_end_bonus_anim() -> void:
+	var num := get_node_or_null("Items/L_ScoreNumber") as Label
+	if num == null or _end_moves <= 0:
+		return
+	var base := _end_final - _end_moves * _end_per
+	num.text = str(base)
+	# popup verde: "+2700 (27 mosse)" sopra il numero, dove sta lo score in questo layout
+	var pop := Label.new()
+	pop.name = "EndBonus"
+	pop.add_theme_font_override("font", STATS_FONT)
+	pop.add_theme_font_size_override("font_size", 34)
+	pop.add_theme_color_override("font_color", Color(0.25, 0.85, 0.35))
+	pop.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pop.offset_left = -260.0
+	pop.offset_right = 300.0
+	pop.offset_top = num.offset_top - 46.0
+	pop.offset_bottom = num.offset_top - 8.0
+	$Items.add_child(pop)
+	pop.text = "+%d  (%d mosse)" % [_end_moves * _end_per, _end_moves]
+	pop.modulate.a = 0.0
+	# breve attesa, poi conta su lo score e fai salire/sfumare il popup
+	await get_tree().create_timer(0.55).timeout
+	settings.play_newmove()
+	var tw := create_tween()
+	tw.tween_method(_set_score_text, float(base), float(_end_final), 1.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var tp := create_tween()
+	tp.tween_property(pop, "modulate:a", 1.0, 0.2)
+	tp.tween_interval(0.9)
+	tp.parallel().tween_property(pop, "position:y", pop.position.y - 26.0, 0.5)
+	tp.parallel().tween_property(pop, "modulate:a", 0.0, 0.5)
+	tp.tween_callback(pop.queue_free)
+
+func _set_score_text(v: float) -> void:
+	var num := get_node_or_null("Items/L_ScoreNumber") as Label
+	if num:
+		num.text = str(int(round(v)))
 
 
 func _apply_new_record_layout() -> void:

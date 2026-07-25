@@ -28,6 +28,8 @@ const EXPLO_FRAMES := [
 	preload("res://CORE/Assets/Art/Game/Delete/delete_06.svg"),
 ]
 const EXPLO_FPS := 20.0                # 6 frame ≈ 0.3s; il cubo dietro sparisce al 3° frame
+const COMBO_EFFECT_SCALE := 0.85       # scala dell'animazione COMBO (frame nativi 500x302)
+const COMBO_SPEED := 2.0               # velocità di riproduzione (rapida ma un filo più lunga)
 
 # Bilanciamento tavola (stile Block Blast: scacchiera quasi sempre piena).
 # Quando è ≥70% piena, esplode UN cubo casuale (2 se ≥80%, rarissimamente 3),
@@ -74,6 +76,9 @@ var _last_defeat_reason: String = "no_space"
 @export var points_per_piece: int = 10  # (legacy, non più usato per il punteggio base)
 @export var points_per_placement: int = 30   # punti per ogni blocco posizionato
 @export var points_per_match: int = 100       # punti base per un match (3 cubi); +30 per cubo extra
+const END_MOVE_POINTS := 100                   # ogni mossa rimasta a fine partita vale 100 punti
+var _end_moves: int = 0
+var _end_bonus: int = 0
 var score: int = 0                      # punteggio della PARTITA corrente
 var high_score: int = 0                 # miglior punteggio di sempre
 var lifetime_score: int = 0             # punteggio cumulativo totale
@@ -153,6 +158,7 @@ var _placement_preview: Polygon2D = null   # fantasma della cella dove verrà pi
 var _preview_fade_tween: Tween = null       # dissolvenza della preview
 var _drag_scale_tween: Tween = null         # tween di scala del cubo trascinato
 var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosione
+var _combo_frames: Dictionary = {}          # livello -> SpriteFrames (COMBO 1..4)
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
 var _last_shown_score: int = -1             # per l'animazione pop del punteggio
 var _score_pop_tween: Tween = null
@@ -161,7 +167,8 @@ var _game_start_ms: int = 0
 var _stat_placements: int = 0
 var _last_session_stats: String = ""
 # Combo + suggerimenti
-var _combo_count: int = 0                    # match wave nella catena corrente
+var _combo_count: int = 0                    # match wave nella catena corrente (ricompensa)
+var _find_wave: int = 0                       # ondata di find_matches nella catena (per l'animazione combo)
 var _color_to_scene: Dictionary = {}         # colore -> scena pezzo (per il refill combo)
 var _last_action_ms: int = 0                 # ultimo input del player (per i suggerimenti)
 var _hint_ghost: Node2D = null               # fantasma del suggerimento sulla griglia
@@ -221,6 +228,10 @@ func _ready() -> void:
 	_explo_frames.set_animation_speed("boom", EXPLO_FPS)
 	for tex in EXPLO_FRAMES:
 		_explo_frames.add_frame("boom", tex)
+
+	# SpriteFrames delle animazioni COMBO 1..4 (frame ~33fps, sfondo trasparente)
+	for lvl in range(1, 5):
+		_combo_frames[lvl] = _build_combo_frames("combo%d" % lvl)
 
 	# mappa colore -> scena pezzo (per il refill che favorisce le combo)
 	for scene in possible_pieces:
@@ -336,6 +347,16 @@ func find_matches() -> bool:
 							all_pieces[i][j + 1].dim()
 							any_match = true
 	if any_match:
+		_find_wave += 1
+		# COMBO: dalla 2ª ondata (un match che ne genera un altro) mostra l'animazione
+		# SUBITO, appena i blocchi si allineano (non aspetta la distruzione).
+		if _find_wave >= 2:
+			var cells: Array = []
+			for i in width:
+				for j in height:
+					if all_pieces[i][j] != null and all_pieces[i][j].matched:
+						cells.append(Vector2i(i, j))
+			_show_combo_effect(_find_wave - 1, _combo_effect_pos(cells))
 		is_resolving = true
 		_cancel_drag()
 		get_parent().get_node("DestroyTimer").start()
@@ -372,13 +393,16 @@ func destroy_matched() -> Array:
 
 	# Applica punteggio
 	if destroyed_count > 0:
-		_combo_count += 1   # una wave di match = una combo nella catena
+		_combo_count += 1   # una wave di match = una combo nella catena (per la ricompensa)
 		# SFX + vibrazione: distruzione cubi (più intensa, scala col numero distrutto)
 		settings.play_destroy()
 		settings.vibrate(45 + min(destroyed_count, 6) * 8)
 
-		# Match da 3 cubi = 100 punti base, +30 per ogni cubo oltre i 3
-		var gained := points_per_match + maxi(0, destroyed_count - 3) * 30
+		# Match da 3 cubi = 100 punti base, +30 per ogni cubo oltre i 3,
+		# poi MOLTIPLICATORE combo: match normale x1, combo 1 x2, combo 2 x3, ...
+		var base_gain := points_per_match + maxi(0, destroyed_count - 3) * 30
+		var mult := maxi(1, _find_wave)
+		var gained := base_gain * mult
 		score += gained
 		lifetime_score += gained
 		_show_points_gain_popup(gained)
@@ -572,6 +596,8 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 	other_piece.move(grid_to_pixel(column, row))
 
 	# Verifica match
+	_combo_count = 0
+	_find_wave = 0
 	if not find_matches():
 		# nessun match -> annulla (revert)
 		all_pieces[column][row] = first_piece
@@ -717,6 +743,7 @@ func _input(event: InputEvent) -> void:
 
 				# Verifica match dopo l’inserimento; se nessun match, valuta il bilanciamento
 				_combo_count = 0
+				_find_wave = 0
 				if not find_matches():
 					_maybe_balance_board()
 
@@ -954,7 +981,13 @@ func _any_valid_bottom_placement() -> bool:
 func _trigger_game_over(reason := "no_space") -> void:
 	is_game_over = true
 
-	# Nuovo record? (il record si batte se il punteggio supera quello di inizio partita)
+	# Bonus di fine partita: le mosse rimaste diventano punteggio (100 pt l'una)
+	_end_moves = current_moves
+	_end_bonus = current_moves * END_MOVE_POINTS
+	score += _end_bonus
+	current_moves = 0
+
+	# Nuovo record? (sul punteggio finale, bonus incluso)
 	_is_new_record = score > _prev_high_score and score > 0
 
 	# Aggiorna HighScore
@@ -1023,6 +1056,8 @@ func _show_game_over_screen() -> void:
 	if screen:
 		if screen.has_method("set_session_stats"):
 			screen.set_session_stats(_last_session_stats)
+		if screen.has_method("set_end_bonus"):
+			screen.set_end_bonus(score, _end_moves, END_MOVE_POINTS)
 		if screen.has_method("show_result"):
 			screen.show_result(_is_new_record)
 		else:
@@ -1446,3 +1481,59 @@ func _shake_moves_label() -> void:
 		tw.tween_property(m, "position:x", base_x - 12.0, 0.05).set_trans(Tween.TRANS_SINE)
 		tw.tween_property(m, "position:x", base_x + 12.0, 0.05).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(m, "position:x", base_x, 0.05)
+
+# =========================================================
+# Animazione COMBO (sopra i cubi della combo, senza coprirli)
+# =========================================================
+func _combo_effect_pos(cells: Array) -> Vector2:
+	if cells.is_empty():
+		return Vector2(288, 500)
+	var sum_x := 0.0
+	var min_y := 1.0e9
+	for pos in cells:
+		var px := grid_to_pixel(pos.x, pos.y)
+		sum_x += px.x
+		min_y = min(min_y, px.y)
+	var cx: float = sum_x / float(cells.size())
+	var effect_w := 500.0 * COMBO_EFFECT_SCALE
+	var effect_h := 302.0 * COMBO_EFFECT_SCALE
+	# leggermente sopra i cubi della combo
+	var cy: float = min_y - offset * 0.4
+	# ANCORAGGIO: clampa così l'animazione (più grande) non esce mai dallo schermo
+	# design 576x1024: se la combo è a sinistra si sposta a destra (e viceversa), e resta sopra
+	cx = clampf(cx, effect_w * 0.5 + 6.0, 576.0 - effect_w * 0.5 - 6.0)
+	cy = clampf(cy, 235.0 + effect_h * 0.5, 900.0)
+	return Vector2(cx, cy)
+
+# Costruisce le SpriteFrames di una combo caricando i frame "prefix_001.png", ... finché esistono
+func _build_combo_frames(prefix: String) -> SpriteFrames:
+	var sf := SpriteFrames.new()
+	sf.add_animation("c")
+	sf.set_animation_loop("c", false)
+	sf.set_animation_speed("c", 33.0)
+	var i := 1
+	while i <= 200:
+		var path := "res://CORE/Assets/Art/Game/Combo/%s_%03d.png" % [prefix, i]
+		if not ResourceLoader.exists(path):
+			break
+		sf.add_frame("c", load(path))
+		i += 1
+	return sf
+
+func _show_combo_effect(level: int, world_pos: Vector2) -> void:
+	var anim_level: int = clampi(level, 1, 4)   # dalla 5ª combo in poi usa COMBO 4
+	if not _combo_frames.has(anim_level) or _combo_frames[anim_level].get_frame_count("c") == 0:
+		return
+	var asp := AnimatedSprite2D.new()
+	asp.sprite_frames = _combo_frames[anim_level]
+	asp.animation = "c"
+	asp.position = world_pos
+	asp.scale = Vector2(COMBO_EFFECT_SCALE, COMBO_EFFECT_SCALE)
+	asp.speed_scale = COMBO_SPEED
+	asp.z_index = 200
+	add_child(asp)
+	asp.animation_finished.connect(asp.queue_free)
+	asp.play("c")
+	settings.play_combo(level)
+	# vibrazione un po' più forte a ogni combo (cresce col livello)
+	settings.vibrate(48 + mini(level, 5) * 6)

@@ -72,6 +72,7 @@ texture_normal = ExtResource("7_3hh32")
 unique_name_in_owner = true
 visible = false
 layout_mode = 1
+z_index = 1000
 
 [node name="AudioStreamPlayer2D" type="AudioStreamPlayer" parent="."]
 unique_name_in_owner = true

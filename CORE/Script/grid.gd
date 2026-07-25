@@ -168,7 +168,9 @@ var _stat_placements: int = 0
 var _last_session_stats: String = ""
 # Combo + suggerimenti
 var _combo_count: int = 0                    # match wave nella catena corrente (ricompensa)
-var _find_wave: int = 0                       # ondata di find_matches nella catena (per l'animazione combo)
+var _find_wave: int = 0                       # ondata di find_matches nella catena
+var _combo_matches: int = 0                   # TOTALE gruppi di match nella catena (simultanei + cascata)
+var _last_combo_shown: int = 0                # ultimo livello combo mostrato (per non ripetere)
 var _color_to_scene: Dictionary = {}         # colore -> scena pezzo (per il refill combo)
 var _last_action_ms: int = 0                 # ultimo input del player (per i suggerimenti)
 var _hint_ghost: Node2D = null               # fantasma del suggerimento sulla griglia
@@ -348,15 +350,18 @@ func find_matches() -> bool:
 							any_match = true
 	if any_match:
 		_find_wave += 1
-		# COMBO: dalla 2ª ondata (un match che ne genera un altro) mostra l'animazione
-		# SUBITO, appena i blocchi si allineano (non aspetta la distruzione).
-		if _find_wave >= 2:
+		# COMBO = più di un match: sia SIMULTANEI (2+ linee in una mossa) sia in CASCATA.
+		# Conta i gruppi di match totali della catena; livello = gruppi - 1.
+		_combo_matches += _count_new_match_groups()
+		var level: int = _combo_matches - 1
+		if level >= 1 and level > _last_combo_shown:
+			_last_combo_shown = level
 			var cells: Array = []
 			for i in width:
 				for j in height:
 					if all_pieces[i][j] != null and all_pieces[i][j].matched:
 						cells.append(Vector2i(i, j))
-			_show_combo_effect(_find_wave - 1, _combo_effect_pos(cells))
+			_show_combo_effect(level, _combo_effect_pos(cells))
 		is_resolving = true
 		_cancel_drag()
 		get_parent().get_node("DestroyTimer").start()
@@ -401,7 +406,8 @@ func destroy_matched() -> Array:
 		# Match da 3 cubi = 100 punti base, +30 per ogni cubo oltre i 3,
 		# poi MOLTIPLICATORE combo: match normale x1, combo 1 x2, combo 2 x3, ...
 		var base_gain := points_per_match + maxi(0, destroyed_count - 3) * 30
-		var mult := maxi(1, _find_wave)
+		# moltiplicatore = numero di gruppi di match nella catena (match singolo x1, combo1 x2, ...)
+		var mult := maxi(1, _combo_matches)
 		var gained := base_gain * mult
 		score += gained
 		lifetime_score += gained
@@ -598,6 +604,8 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 	# Verifica match
 	_combo_count = 0
 	_find_wave = 0
+	_combo_matches = 0
+	_last_combo_shown = 0
 	if not find_matches():
 		# nessun match -> annulla (revert)
 		all_pieces[column][row] = first_piece
@@ -744,6 +752,8 @@ func _input(event: InputEvent) -> void:
 				# Verifica match dopo l’inserimento; se nessun match, valuta il bilanciamento
 				_combo_count = 0
 				_find_wave = 0
+				_combo_matches = 0
+				_last_combo_shown = 0
 				if not find_matches():
 					_maybe_balance_board()
 
@@ -1031,14 +1041,15 @@ func _on_revive_requested() -> void:
 func revive(reason: String) -> void:
 	is_game_over = false
 	is_resolving = false
-	if reason == "no_moves":
-		# non c'erano più mosse -> +10 mosse
-		current_moves += 10
-	else:
-		# non c'era più spazio -> rimuovi 5 celle casuali
-		_remove_random_cells(5)
+	# dopo un revive (reset) riparti sempre con almeno 10 mosse
+	current_moves = maxi(current_moves, 10)
+	# se non c'era più spazio, libera abbastanza celle per continuare a giocare
+	if reason == "no_space":
+		_remove_random_cells(10)
 	update_moves_label()
 
+# Rimuove n cubi casuali e trasforma quelle celle in BUCHI (spazio reale e duraturo),
+# con animazione di esplosione. Usato dal revive quando la tavola è piena.
 func _remove_random_cells(n: int) -> void:
 	var occupied: Array = []
 	for i in width:
@@ -1046,10 +1057,17 @@ func _remove_random_cells(n: int) -> void:
 			if all_pieces[i][j] != null:
 				occupied.append(Vector2i(i, j))
 	occupied.shuffle()
+	var removed := 0
 	for k in mini(n, occupied.size()):
 		var c: Vector2i = occupied[k]
-		all_pieces[c.x][c.y].queue_free()
+		var piece = all_pieces[c.x][c.y]
 		all_pieces[c.x][c.y] = null
+		cell_active[c.x][c.y] = false
+		_spawn_explosion(grid_to_pixel(c.x, c.y), piece)
+		removed += 1
+	if removed > 0:
+		settings.play_explosion()
+		settings.vibrate(50)
 
 func _show_game_over_screen() -> void:
 	var screen = get_node_or_null("%GameOverScreen")
@@ -1537,3 +1555,29 @@ func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	settings.play_combo(level)
 	# vibrazione un po' più forte a ogni combo (cresce col livello)
 	settings.vibrate(48 + mini(level, 5) * 6)
+
+# Conta i gruppi di match (componenti connesse per colore) attualmente marcati.
+# Due linee di colore diverso = 2 gruppi (anche se simultanee nella stessa mossa).
+func _count_new_match_groups() -> int:
+	var visited := {}
+	var groups := 0
+	for i in width:
+		for j in height:
+			var c0 := Vector2i(i, j)
+			var p = all_pieces[i][j]
+			if p != null and p.matched and not visited.has(c0):
+				groups += 1
+				var col = p.get("color")
+				var stack: Array = [c0]
+				while not stack.is_empty():
+					var c: Vector2i = stack.pop_back()
+					if visited.has(c):
+						continue
+					visited[c] = true
+					for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						var nb: Vector2i = c + d
+						if is_in_grid(nb) and not visited.has(nb):
+							var np = all_pieces[nb.x][nb.y]
+							if np != null and np.matched and np.get("color") == col:
+								stack.append(nb)
+	return groups

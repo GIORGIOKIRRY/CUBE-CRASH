@@ -43,7 +43,7 @@ offset_right = 1765.0
 offset_bottom = 1151.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0, 0, 0, 0.3647059)
+color = Color(0, 0, 0, 0.62)
 
 [node name="Menu" type="TextureRect" parent="."]
 layout_mode = 0

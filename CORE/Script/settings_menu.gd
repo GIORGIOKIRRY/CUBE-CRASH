@@ -30,8 +30,8 @@ const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back.svg")
 const DIVIDER := preload("res://CORE/Assets/Art/UI/Settings/Divider.svg")
 const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
-const CONTACT_EMAIL := "cubecrash.game@gmail.com"   # TODO: email reale
-const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non raccoglie dati personali."
+const CONTACT_EMAIL := "cubecrash.game@gmail.com"
+const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non richiede account e salva i progressi solo sul tuo dispositivo. L'app mostra pubblicità di terze parti (es. Google AdMob) che possono usare l'identificativo pubblicitario del dispositivo."
 const TERMS_TEXT := "Usando Cube Crash accetti i termini di servizio del gioco."
 
 var _more_root: Control = null

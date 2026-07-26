@@ -66,6 +66,12 @@ const INITIAL_PLUS_PROB := 0.10  # seed cubi-mossa sulla scacchiera iniziale (pi
 @export var max_moves: int = 30  # numero di mosse iniziali
 var current_moves: int = 0
 var is_game_over: bool = false
+
+# --- Modalità test A/B/C (impostata da settings.game_mode in _ready) ---
+var _mode: String = "classic"
+var _moves_enabled: bool = true      # false in mode_b (niente mosse)
+var _swap_costs_move: bool = false   # true in mode_a (swap che fa match costa una mossa)
+const MOVE_CUBE_POINTS := 120        # in mode_b i cubi +N danno punti invece di mosse
 var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 
 # Revive: max 3 volte per partita
@@ -219,8 +225,17 @@ func _ready() -> void:
 	can_move = true
 	_game_start_ms = Time.get_ticks_msec()
 	randomize()
+	# Modalità test scelta dal menu
+	_mode = settings.game_mode
+	_moves_enabled = _mode != "mode_b"
+	_swap_costs_move = _mode == "mode_a"
 	_build_plus_pools()
 	current_moves = max_moves
+	# mode_b: niente contatore mosse a schermo
+	if not _moves_enabled:
+		var mv = get_node_or_null("../UI/MOOVES")
+		if mv:
+			mv.visible = false
 	all_pieces = make_2d_array()
 	cell_active = make_2d_array()
 	_spawn_checkerboard()
@@ -398,11 +413,17 @@ func destroy_matched() -> Array:
 	#  vuoti al refill, non dall'azzerare le mosse guadagnate.)
 	if bonus_moves > 0:
 		settings.play_newmove()
-		current_moves += bonus_moves
-		_stat_moves_earned += bonus_moves
-		_show_move_gain_popup(bonus_moves)
-		update_moves_label()
-		print("Bonus mosse:", bonus_moves, " -> mosse totali:", current_moves)
+		if _moves_enabled:
+			current_moves += bonus_moves
+			_stat_moves_earned += bonus_moves
+			_show_move_gain_popup(bonus_moves)
+			update_moves_label()
+		else:
+			# mode_b: i cubi +N diventano punti bonus (restano speciali/soddisfacenti)
+			var mb := bonus_moves * MOVE_CUBE_POINTS
+			score += mb
+			lifetime_score += mb
+			_show_points_gain_popup(mb)
 
 	# Applica punteggio
 	if destroyed_count > 0:
@@ -613,11 +634,16 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 	_combo_matches = 0
 	_last_combo_shown = 0
 	if not find_matches():
-		# nessun match -> annulla (revert)
+		# nessun match -> annulla (revert): non costa nulla
 		all_pieces[column][row] = first_piece
 		all_pieces[nx][ny] = other_piece
 		first_piece.move(grid_to_pixel(column, row))
 		other_piece.move(grid_to_pixel(nx, ny))
+	elif _swap_costs_move and _moves_enabled and current_moves > 0:
+		# mode_a: lo swap che fa match è un'azione -> costa una mossa
+		current_moves -= 1
+		update_moves_label()
+		_show_move_cost_popup()
 
 func _cancel_drag() -> void:
 	_hide_placement_preview()
@@ -720,7 +746,7 @@ func _input(event: InputEvent) -> void:
 
 			if is_in_grid(target_grid) \
 			and all_pieces[target_grid.x][target_grid.y] == null \
-			and current_moves > 0:
+			and (not _moves_enabled or current_moves > 0):
 				# Inserimento dalla BottomGrid: se spot vuoto, rimane anche senza match
 				dragging_piece.set_meta("origin", "grid")
 				# ferma il tween di scala del drag: altrimenti combatte con il pop di dim()
@@ -736,13 +762,13 @@ func _input(event: InputEvent) -> void:
 				bottom_pieces[dragging_from_slot] = null
 				_replenish_bottom_slot(dragging_from_slot)
 
-				# Decrementa una mossa
-				current_moves -= 1
-				if current_moves < 0:
-					current_moves = 0
-				update_moves_label() # 👈 aggiorna il testo del label
-				_show_move_cost_popup()   # piccola animazione rossa "-1"
-				print("✅ Mossa usata! Mosse rimanenti:", current_moves)
+				# Decrementa una mossa (non in mode_b, dove le mosse non esistono)
+				if _moves_enabled:
+					current_moves -= 1
+					if current_moves < 0:
+						current_moves = 0
+					update_moves_label() # 👈 aggiorna il testo del label
+					_show_move_cost_popup()   # piccola animazione rossa "-1"
 				_moves_since_balance += 1
 				_stat_placements += 1
 
@@ -1003,13 +1029,14 @@ func _trigger_game_over(reason := "no_space") -> void:
 	# Telemetria economia mosse (per calibrare il bilanciamento):
 	# mosse spese = piazzamenti; guadagnate = cubi-mossa matchati; residue = fine partita.
 	var _dur_s := (Time.get_ticks_msec() - _game_start_ms) / 1000
-	print("STATS reason=%s dur=%ds score=%d placements=%d moves_earned=%d moves_left=%d net=%+d" % [
-		reason, _dur_s, score, _stat_placements, _stat_moves_earned,
-		current_moves, _stat_moves_earned - _stat_placements])
+	print("STATS mode=%s reason=%s dur=%ds score=%d placements=%d moves_earned=%d moves_left=%d net=%+d" % [
+		_mode, reason, _dur_s, score, _stat_placements, _stat_moves_earned,
+		(current_moves if _moves_enabled else 0), _stat_moves_earned - _stat_placements])
 
 	# Bonus di fine partita: le mosse rimaste diventano punteggio (100 pt l'una)
-	_end_moves = current_moves
-	_end_bonus = current_moves * END_MOVE_POINTS
+	# In mode_b non ci sono mosse -> nessun bonus finale.
+	_end_moves = current_moves if _moves_enabled else 0
+	_end_bonus = _end_moves * END_MOVE_POINTS
 	score += _end_bonus
 	current_moves = 0
 
@@ -1349,6 +1376,9 @@ func _count_occupied() -> int:
 # alcuni blocchi casuali (più è piena, più ne toglie) per dare respiro al player.
 func _maybe_balance_board() -> void:
 	if is_game_over or is_resolving:
+		return
+	# mode_b (block blast): niente auto-svuotamento, lo spazio è la vera minaccia
+	if _mode == "mode_b":
 		return
 	var fullness := float(_count_occupied()) / float(width * height)
 	if fullness < BALANCE_FULLNESS_TRIGGER:

@@ -12,6 +12,12 @@ var music_enabled: bool = true
 var sound_enabled: bool = true
 var vibration_enabled: bool = true
 
+# Modalità di gioco per il test A/B/C (scelta dai 3 tasti Play del menu):
+#  "classic" = sistema mosse attuale
+#  "mode_a"  = ogni azione (piazzamento + swap che fa match) costa una mossa
+#  "mode_b"  = niente mosse, stile Block Blast (si perde solo per spazio)
+var game_mode: String = "classic"
+
 const SETTINGS_PATH := "user://settings.dat"
 
 # Link condivisione (App Store). TODO: sostituire con l'ID reale a pubblicazione.

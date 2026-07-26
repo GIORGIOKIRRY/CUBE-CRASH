@@ -100,7 +100,7 @@ func _on_link_button_pressed() -> void:
 	OS.shell_open(settings.APPSTORE_URL)
 
 
-# Pergamena in alto a destra: apre la sezione ringraziamenti
+# Pergamena in alto a destra: apre le PATCH NOTES (novità della versione)
 func _on_terms_button_pressed() -> void:
 	settings.button_feedback()
-	%SettingsMenu.open_thanks_from_home()
+	%SettingsMenu.open_patchnotes_from_home()

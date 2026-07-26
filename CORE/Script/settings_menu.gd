@@ -30,6 +30,8 @@ const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back.svg")
 const DIVIDER := preload("res://CORE/Assets/Art/UI/Settings/Divider.svg")
 const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
+const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🎵 Nuova musica di gioco in loop continuo\n🔊 Tanti nuovi effetti sonori\n✨ Transizione fluida quando premi PLAY\n\n🧩 GAMEPLAY\n💥 Combo molto più frequenti (specie a inizio partita)\n➕ Cubi +1 / +2 / +3 sempre presenti\n🔴 Animazione \"-1\" a ogni mossa usata\n⚖️ Economia delle mosse ribilanciata\n\n🧪 3 MODALITÀ DA PROVARE\n🔵 CLASSIC — mosse come ora\n🟠 MOD A — ogni azione costa 1 mossa\n🟢 MOD B — niente mosse (stile Block Blast)\n\n💣 POWER-UP (solo MOD B)\n⬆️ +1 distrugge tutta la COLONNA\n➡️ +2 distrugge tutta la RIGA\n🧨 +3 BOMBA: area 4x4\n\n📱 Grazie per aver provato questa build!"
+
 const CONTACT_EMAIL := "cubecrash.game@gmail.com"
 const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non richiede account, non raccoglie dati personali e salva i progressi solo sul tuo dispositivo."
 const TERMS_TEXT := "Usando Cube Crash accetti i termini di servizio del gioco."
@@ -175,6 +177,7 @@ func _build_subpages() -> void:
 	_subpages["terms"] = _make_subpage("TERMS OF SERVICE", _terms_content())
 	_subpages["privacy"] = _make_subpage("PRIVACY POLICY", _privacy_content())
 	_subpages["thanks"] = _make_subpage("THANKS", _thanks_content())
+	_subpages["patchnotes"] = _make_subpage("NOVITÀ", _patchnotes_content())
 
 func _show_subpage(name: String) -> void:
 	for k in _subpages:
@@ -186,6 +189,37 @@ func open_thanks_from_home() -> void:
 	visible = true
 	_show_more(false)
 	_show_subpage("thanks")
+
+# Apertura diretta delle PATCH NOTES dalla home (tastino pergamena in alto a destra)
+func open_patchnotes_from_home() -> void:
+	_opened_from_home = true
+	visible = true
+	_show_more(false)
+	_show_subpage("patchnotes")
+
+# Font pixel (Jersey10) con fallback emoji di sistema, per le patch notes
+func _pixel_emoji_font() -> Font:
+	var emoji := SystemFont.new()
+	emoji.font_names = PackedStringArray(["Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"])
+	var f: FontFile = FONT.duplicate()
+	var fb: Array[Font] = f.fallbacks.duplicate()
+	fb.append(emoji)
+	f.fallbacks = fb
+	return f
+
+func _patchnotes_content() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size = Vector2(496, 640)
+	var lbl := Label.new()
+	lbl.text = PATCHNOTES_TEXT
+	lbl.add_theme_font_override("font", _pixel_emoji_font())
+	lbl.add_theme_font_size_override("font_size", 28)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.custom_minimum_size = Vector2(496, 0)
+	scroll.add_child(lbl)
+	return scroll
 
 func _hide_subpages() -> void:
 	for k in _subpages:

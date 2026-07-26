@@ -393,13 +393,18 @@ func destroy_matched() -> Array:
 	var destroyed_positions: Array = []
 	var bonus_moves := 0
 	var destroyed_count := 0
+	var ability_hits: Array = []   # mode_b: cubi +N matchati -> power-up
 
 	for i in width:
 		for j in height:
 			var piece = all_pieces[i][j]
 			if piece != null and piece.matched:
 				# Somma mooves solo se la proprietà esiste
-				bonus_moves += _get_piece_mooves(piece)
+				var mv := _get_piece_mooves(piece)
+				bonus_moves += mv
+				# mode_b: registra il power-up del cubo +N (colonna / riga / bomba)
+				if not _moves_enabled and mv > 0:
+					ability_hits.append({"pos": Vector2i(i, j), "val": mv})
 
 				# Punteggio: conta ogni pezzo distrutto
 				destroyed_count += 1
@@ -408,22 +413,19 @@ func destroy_matched() -> Array:
 				all_pieces[i][j] = null
 				destroyed_positions.append(Vector2i(i, j))
 
-	# 🔹 Applica bonus mosse: i cubi +1/+2/+3 danno SEMPRE il loro valore pieno.
-	# (La difficoltà nel tempo viene dalla minor frequenza dei cubi-mossa e dai
-	#  vuoti al refill, non dall'azzerare le mosse guadagnate.)
-	if bonus_moves > 0:
+	# mode_b: attiva i power-up (liberano spazio ed entrano nel conteggio/punteggio)
+	if not _moves_enabled:
+		for hit in ability_hits:
+			destroyed_count += _trigger_powerup(hit["pos"], hit["val"], destroyed_positions)
+
+	# 🔹 Bonus mosse (solo classic / mode_a): i cubi +1/+2/+3 danno il loro valore.
+	# In mode_b i cubi +N NON danno mosse: sono power-up (gestiti sopra).
+	if bonus_moves > 0 and _moves_enabled:
 		settings.play_newmove()
-		if _moves_enabled:
-			current_moves += bonus_moves
-			_stat_moves_earned += bonus_moves
-			_show_move_gain_popup(bonus_moves)
-			update_moves_label()
-		else:
-			# mode_b: i cubi +N diventano punti bonus (restano speciali/soddisfacenti)
-			var mb := bonus_moves * MOVE_CUBE_POINTS
-			score += mb
-			lifetime_score += mb
-			_show_points_gain_popup(mb)
+		current_moves += bonus_moves
+		_stat_moves_earned += bonus_moves
+		_show_move_gain_popup(bonus_moves)
+		update_moves_label()
 
 	# Applica punteggio
 	if destroyed_count > 0:
@@ -452,6 +454,40 @@ func destroy_matched() -> Array:
 		_save_scores()
 	_update_difficulty()
 	return destroyed_positions
+
+# mode_b: power-up del cubo +N matchato. Libera spazio distruggendo:
+#  +1 -> tutta la COLONNA verticale
+#  +2 -> tutta la RIGA orizzontale
+#  +3 -> BOMBA: area 4x4 attorno al cubo
+# I cubi colpiti NON riattivano altri power-up (niente catene infinite).
+func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) -> int:
+	var cells: Array = []
+	if val == 1:
+		for y in height:
+			cells.append(Vector2i(center.x, y))
+	elif val == 2:
+		for x in width:
+			cells.append(Vector2i(x, center.y))
+	else:
+		# +3: area 4x4 (da -1 a +2 su entrambi gli assi)
+		for dx in range(-1, 3):
+			for dy in range(-1, 3):
+				cells.append(Vector2i(center.x + dx, center.y + dy))
+
+	var cleared := 0
+	for c in cells:
+		if not is_in_grid(c):
+			continue
+		var p = all_pieces[c.x][c.y]
+		if p != null:
+			all_pieces[c.x][c.y] = null
+			_spawn_explosion(grid_to_pixel(c.x, c.y), p)
+			destroyed_positions.append(c)
+			cleared += 1
+	if cleared > 0:
+		settings.play_explosion()
+		settings.vibrate(60)
+	return cleared
 
 func _apply_local_gravity(destroyed_positions: Array) -> void:
 	# collassa solo le colonne toccate dal match

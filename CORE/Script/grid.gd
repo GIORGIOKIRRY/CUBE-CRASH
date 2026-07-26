@@ -60,7 +60,8 @@ var max_empty_refill_probability: float = 0.88  # limite massimo vuoti
 @export_range(0.0, 1.0, 0.01) var empty_refill_probability: float = 0.63
 
 @export_range(0.0, 1.0, 0.01)
-var plus_piece_probability: float = 0.18  # probabilità di generare un plus piece (mosse bonus)
+var plus_piece_probability: float = 0.18  # base cubi-mossa (poi modulata da _effective_plus_prob)
+const INITIAL_PLUS_PROB := 0.10  # seed cubi-mossa sulla scacchiera iniziale (più basso: meno surplus a inizio partita)
 
 @export var max_moves: int = 30  # numero di mosse iniziali
 var current_moves: int = 0
@@ -165,6 +166,7 @@ var _score_pop_tween: Tween = null
 # Statistiche partita (per calibrare la durata)
 var _game_start_ms: int = 0
 var _stat_placements: int = 0
+var _stat_moves_earned: int = 0   # mosse guadagnate nella partita (per calibrare l'economia)
 var _last_session_stats: String = ""
 # Combo + suggerimenti
 var _combo_count: int = 0                    # match wave nella catena corrente (ricompensa)
@@ -262,12 +264,12 @@ func _spawn_checkerboard() -> void:
 
 # Evita match immediato sul posizionamento
 func _random_piece_instance_avoiding_match(i: int, j: int) -> Node:
-	var pool = possible_plus_pieces if randf() < plus_piece_probability else possible_pieces
+	var pool = possible_plus_pieces if randf() < INITIAL_PLUS_PROB else possible_pieces
 	var piece = pool.pick_random().instantiate()
 	var loops := 0
 
 	while match_at(i, j, piece.color) and loops < 100:
-		pool = possible_plus_pieces if randf() < plus_piece_probability else possible_pieces
+		pool = possible_plus_pieces if randf() < INITIAL_PLUS_PROB else possible_pieces
 		piece = pool.pick_random().instantiate()
 		loops += 1
 
@@ -392,6 +394,7 @@ func destroy_matched() -> Array:
 	if bonus_moves > 0:
 		settings.play_newmove()
 		current_moves += bonus_moves
+		_stat_moves_earned += bonus_moves
 		_show_move_gain_popup(bonus_moves)
 		update_moves_label()
 		print("Bonus mosse:", bonus_moves, " -> mosse totali:", current_moves)
@@ -560,7 +563,7 @@ func _refill_destroyed_cells_random(destroyed_cells: Array) -> void:
 				var spawn_row := height + spawn_rows_above
 				# random: pezzo o vuoto
 				if randf() > empty_refill_probability:
-					var pool = possible_plus_pieces if randf() < plus_piece_probability else possible_pieces
+					var pool = possible_plus_pieces if randf() < _effective_plus_prob() else possible_pieces
 					var piece = pool.pick_random().instantiate()
 					add_child(piece)
 
@@ -993,6 +996,13 @@ func _any_valid_bottom_placement() -> bool:
 func _trigger_game_over(reason := "no_space") -> void:
 	is_game_over = true
 
+	# Telemetria economia mosse (per calibrare il bilanciamento):
+	# mosse spese = piazzamenti; guadagnate = cubi-mossa matchati; residue = fine partita.
+	var _dur_s := (Time.get_ticks_msec() - _game_start_ms) / 1000
+	print("STATS reason=%s dur=%ds score=%d placements=%d moves_earned=%d moves_left=%d net=%+d" % [
+		reason, _dur_s, score, _stat_placements, _stat_moves_earned,
+		current_moves, _stat_moves_earned - _stat_placements])
+
 	# Bonus di fine partita: le mosse rimaste diventano punteggio (100 pt l'una)
 	_end_moves = current_moves
 	_end_bonus = current_moves * END_MOVE_POINTS
@@ -1361,16 +1371,27 @@ func _combo_refill_bias() -> float:
 # Probabilità adattiva dei cubi +mosse: cadono di più quando il player è a corto
 # di mosse (aiuto quando serve), di meno quando ne ha tante; la difficoltà li riduce.
 func _effective_plus_prob() -> float:
+	# Rubber-band centrato sulla FASCIA OBIETTIVO (~20-30 mosse a fine partita).
+	# Le mosse guadagnate arrivano SOLO da questi cubi-mossa nel refill: se sopra la
+	# fascia il rubinetto quasi si chiude, la spesa (1/mossa piazzata) fa calare le
+	# mosse verso la fascia invece di accumularle. Sotto la fascia, aiuto forte.
+	# Così un giocatore forte (che cancella tanto) non accumula più centinaia di mosse.
 	var need := 1.0
 	if current_moves <= 5:
-		need = 2.4
+		need = 2.6          # emergenza: aiuto forte per non morire subito
 	elif current_moves <= 10:
-		need = 1.5
-	elif current_moves >= 20:
-		need = 0.5
+		need = 1.7
+	elif current_moves <= 16:
+		need = 1.0
+	elif current_moves <= 24:
+		need = 0.5          # dentro/appena sotto la fascia: ~pareggio
+	elif current_moves <= 32:
+		need = 0.20         # fascia alta: le mosse iniziano a calare
+	else:
+		need = 0.06         # surplus: rubinetto quasi chiuso -> drenaggio
 	var t := float(difficulty_level) / float(max_difficulty_level)
 	var diff_mult := lerpf(1.0, 0.55, t)   # a difficoltà alta i cubi-mossa aiutano meno
-	return clampf(plus_piece_probability * need * diff_mult, 0.02, 0.6)
+	return clampf(plus_piece_probability * need * diff_mult, 0.015, 0.6)
 
 # Restituisce un colore che, messo in (x,y), forma un match; "" se nessuno
 func _match_color_at(x: int, y: int) -> String:

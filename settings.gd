@@ -26,21 +26,21 @@ const MUSIC_VOL_DB := 0.0
 const SILENCE_DB := -60.0
 
 # --- SFX ---
-var _sfx_tap: AudioStreamPlayer
-var _sfx_destroy: AudioStreamPlayer
-var _sfx_newmove: AudioStreamPlayer
-var _sfx_explosion: AudioStreamPlayer
-var _sfx_combo1: AudioStreamPlayer
-var _sfx_combo2: AudioStreamPlayer
-var _sfx_combo3: AudioStreamPlayer
+var _sfx_uiclick: AudioStreamPlayer     # click generici UI
+var _sfx_destroy: AudioStreamPlayer     # distruzione blocchi nei match (suono precedente)
+var _sfx_extramove: AudioStreamPlayer   # mossa guadagnata
+var _sfx_disappear: AudioStreamPlayer   # cubo casuale che scompare
+var _sfx_pickup: AudioStreamPlayer      # prendi un cubo dalla scorta
+var _sfx_place: AudioStreamPlayer       # posizioni un cubo
+var _sfx_playbtn: AudioStreamPlayer     # bottone play
+var _sfx_toggle_on: AudioStreamPlayer
+var _sfx_toggle_off: AudioStreamPlayer
+var _sfx_error: AudioStreamPlayer       # motivo sconfitta (no space / no moves)
+var _sfx_gameover: AudioStreamPlayer    # sconfitta senza record
+var _sfx_highscore: AudioStreamPlayer   # record battuto
+var _sfx_combo: Array[AudioStreamPlayer] = []   # combo 1..5
 
-const SFX_TAP_PATH := "res://CORE/Assets/Music&Sound/SFX/tap.mp3"
-const SFX_DESTROY_PATH := "res://CORE/Assets/Music&Sound/SFX/destroy.mp3"
-const SFX_NEWMOVE_PATH := "res://CORE/Assets/Music&Sound/SFX/newmove.mp3"
-const SFX_EXPLOSION_PATH := "res://CORE/Assets/Music&Sound/SFX/explosion.wav"
-const SFX_COMBO1_PATH := "res://CORE/Assets/Music&Sound/SFX/combo1.mp3"
-const SFX_COMBO2_PATH := "res://CORE/Assets/Music&Sound/SFX/combo2.mp3"
-const SFX_COMBO3_PATH := "res://CORE/Assets/Music&Sound/SFX/combo3.mp3"
+const SFX_DIR := "res://CORE/Assets/Music&Sound/SFX/"
 
 func _ready() -> void:
 	_setup_music_players()
@@ -64,13 +64,20 @@ func _on_music_finished(p: AudioStreamPlayer) -> void:
 		p.play()
 
 func _setup_sfx_players() -> void:
-	_sfx_tap = _make_sfx(SFX_TAP_PATH)
-	_sfx_destroy = _make_sfx(SFX_DESTROY_PATH)
-	_sfx_newmove = _make_sfx(SFX_NEWMOVE_PATH)
-	_sfx_explosion = _make_sfx(SFX_EXPLOSION_PATH)
-	_sfx_combo1 = _make_sfx(SFX_COMBO1_PATH)
-	_sfx_combo2 = _make_sfx(SFX_COMBO2_PATH)
-	_sfx_combo3 = _make_sfx(SFX_COMBO3_PATH)
+	_sfx_uiclick = _make_sfx(SFX_DIR + "ui_click.mp3")
+	_sfx_destroy = _make_sfx(SFX_DIR + "cube_destruction.mp3")   # match normali
+	_sfx_extramove = _make_sfx(SFX_DIR + "extra_move.mp3")
+	_sfx_disappear = _make_sfx(SFX_DIR + "cube_disappear.mp3")   # cubi che esplodono casualmente
+	_sfx_pickup = _make_sfx(SFX_DIR + "pickup_cube.mp3")
+	_sfx_place = _make_sfx(SFX_DIR + "place_cube.mp3")
+	_sfx_playbtn = _make_sfx(SFX_DIR + "play_button.mp3")
+	_sfx_toggle_on = _make_sfx(SFX_DIR + "toggle_on.mp3")
+	_sfx_toggle_off = _make_sfx(SFX_DIR + "toggle_off.mp3")
+	_sfx_error = _make_sfx(SFX_DIR + "error.mp3")
+	_sfx_gameover = _make_sfx(SFX_DIR + "game_over.mp3")
+	_sfx_highscore = _make_sfx(SFX_DIR + "new_high_score.mp3")
+	for i in range(1, 6):
+		_sfx_combo.append(_make_sfx(SFX_DIR + "combo%d.mp3" % i))
 
 func _make_sfx(path: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
@@ -128,29 +135,48 @@ func _fade_out_stop(player: AudioStreamPlayer, dur: float) -> void:
 # ============================================================
 # SFX (play once, no overlap)
 # ============================================================
-func play_tap() -> void:
-	_play_sfx(_sfx_tap)
+func play_tap() -> void:            # click generici UI
+	_play_sfx(_sfx_uiclick)
 
-func play_destroy() -> void:
+func play_destroy() -> void:        # cubi distrutti in un match (suono precedente)
 	_play_sfx(_sfx_destroy)
 
-func play_newmove() -> void:
-	_play_sfx(_sfx_newmove)
+func play_newmove() -> void:        # mossa guadagnata
+	_play_sfx(_sfx_extramove)
 
-func play_explosion() -> void:
-	_play_sfx(_sfx_explosion)
+func play_explosion() -> void:      # cubo casuale che scompare
+	_play_sfx(_sfx_disappear)
+
+func play_pickup() -> void:         # prendi un cubo dalla scorta
+	_play_sfx(_sfx_pickup)
+
+func play_place() -> void:          # posizioni un cubo
+	_play_sfx(_sfx_place)
+
+func play_playbutton() -> void:     # bottone play
+	_play_sfx(_sfx_playbtn)
+
+func play_toggle(on: bool) -> void: # toggle impostazioni on/off
+	_play_sfx(_sfx_toggle_on if on else _sfx_toggle_off)
+
+func play_error() -> void:          # motivo sconfitta (no space / no moves)
+	_play_sfx(_sfx_error)
+
+func play_gameover() -> void:       # sconfitta senza record
+	_play_sfx(_sfx_gameover)
+
+func play_highscore() -> void:      # nuovo record
+	_play_sfx(_sfx_highscore)
 
 func play_combo1() -> void:
-	_play_sfx(_sfx_combo1)
+	play_combo(1)
 
-# livello combo -> suono (1, 2, poi dalla 3 in poi sempre combo3)
+# livello combo -> suono (1..5; dal 5 in poi usa combo 5)
 func play_combo(level: int) -> void:
-	if level <= 1:
-		_play_sfx(_sfx_combo1)
-	elif level == 2:
-		_play_sfx(_sfx_combo2)
-	else:
-		_play_sfx(_sfx_combo3)
+	if _sfx_combo.is_empty():
+		return
+	var i: int = clampi(level, 1, _sfx_combo.size()) - 1
+	_play_sfx(_sfx_combo[i])
 
 func _play_sfx(p: AudioStreamPlayer) -> void:
 	if p == null or not sound_enabled:
@@ -193,7 +219,10 @@ func set_sound_enabled(enabled: bool) -> void:
 		return
 	sound_enabled = enabled
 	if not sound_enabled:
-		for p in [_sfx_tap, _sfx_destroy, _sfx_newmove]:
+		var all_sfx := [_sfx_uiclick, _sfx_destroy, _sfx_extramove, _sfx_disappear, _sfx_pickup,
+			_sfx_place, _sfx_playbtn, _sfx_toggle_on, _sfx_toggle_off,
+			_sfx_error, _sfx_gameover, _sfx_highscore] + _sfx_combo
+		for p in all_sfx:
 			if p != null:
 				p.stop()
 	save_settings()

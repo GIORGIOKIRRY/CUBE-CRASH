@@ -50,19 +50,28 @@ func _ready() -> void:
 # Pulsanti audio/vibrazione
 # ==========================
 func _on_sound_button_pressed() -> void:
-	settings.button_feedback()
-	settings.set_sound_enabled(!settings.sound_enabled)
+	var new_state := not settings.sound_enabled
+	settings.vibrate(15)
+	if new_state:
+		settings.set_sound_enabled(true)
+		settings.play_toggle(true)
+	else:
+		settings.play_toggle(false)   # suona prima di disattivare l'audio
+		settings.set_sound_enabled(false)
 	_update_sound_button()
 
 func _on_music_button_pressed() -> void:
-	settings.button_feedback()
-	settings.set_music_enabled(!settings.music_enabled)
+	var new_state := not settings.music_enabled
+	settings.play_toggle(new_state)
+	settings.vibrate(15)
+	settings.set_music_enabled(new_state)
 	_update_music_button()
 
 func _on_vibration_button_pressed() -> void:
-	settings.play_tap()
+	var new_state := not settings.vibration_enabled
+	settings.play_toggle(new_state)
 	settings.vibrate(15)
-	settings.set_vibration_enabled(!settings.vibration_enabled)
+	settings.set_vibration_enabled(new_state)
 	_update_vibration_button()
 
 func _on_share_button_pressed() -> void:

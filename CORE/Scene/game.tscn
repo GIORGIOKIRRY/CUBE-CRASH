@@ -10,7 +10,7 @@
 [ext_resource type="FontFile" uid="uid://gq80lnfikflh" path="res://CORE/Assets/Font/Jersey10-Regular.ttf" id="6_pxjbb"]
 [ext_resource type="PackedScene" uid="uid://bebf65fodfnno" path="res://CORE/Scene/settings_menu.tscn" id="9_kdr7y"]
 [ext_resource type="PackedScene" uid="uid://45sco3qeamed" path="res://CORE/Scene/game_over_screen.tscn" id="10_h8mkk"]
-[ext_resource type="AudioStream" uid="uid://rnrl70mira1x" path="res://CORE/Assets/Music&Sound/cube crash music gameplay.wav" id="11_qcf4v"]
+[ext_resource type="AudioStream" uid="uid://ljjkmymvscf0" path="res://CORE/Assets/Music&Sound/gameplay_chill.mp3" id="11_qcf4v"]
 [ext_resource type="PackedScene" uid="uid://c0cubecrashdefeat" path="res://CORE/Scene/DefeatFlow.tscn" id="12_defeat"]
 
 [node name="Game" type="Node2D"]

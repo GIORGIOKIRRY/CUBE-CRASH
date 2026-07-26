@@ -89,6 +89,7 @@ func start(reason: String, allow_revive: bool = true) -> void:
 	_reason_label.text = "NO MOVES" if reason == "no_moves" else "NO SPACE"
 	_band.visible = true
 	_reason_label.visible = true
+	settings.play_error()   # suono che spiega il motivo (no space / no moves)
 	settings.vibrate(30)
 	await get_tree().create_timer(REASON_TIME).timeout
 	_band.visible = false

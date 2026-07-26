@@ -701,6 +701,7 @@ func _input(event: InputEvent) -> void:
 					dragging_piece.z_index = 999
 				# animazione fluida: rimpicciolisce alla dimensione della griglia
 				_tween_piece_scale(dragging_piece, GRID_PIECE_SCALE)
+				settings.play_pickup()
 		
 		# Durante drag
 		if dragging_piece != null and event is InputEventMouseMotion:
@@ -724,6 +725,7 @@ func _input(event: InputEvent) -> void:
 				all_pieces[target_grid.x][target_grid.y] = dragging_piece
 				# la cella (anche se era un buco) diventa attiva: da ora partecipa alla gravità
 				cell_active[target_grid.x][target_grid.y] = true
+				settings.play_place()
 
 				bottom_pieces[dragging_from_slot] = null
 				_replenish_bottom_slot(dragging_from_slot)
@@ -1070,6 +1072,11 @@ func _remove_random_cells(n: int) -> void:
 		settings.vibrate(50)
 
 func _show_game_over_screen() -> void:
+	# suono finale: record battuto -> New High Score, altrimenti Game Over
+	if _is_new_record:
+		settings.play_highscore()
+	else:
+		settings.play_gameover()
 	var screen = get_node_or_null("%GameOverScreen")
 	if screen:
 		if screen.has_method("set_session_stats"):

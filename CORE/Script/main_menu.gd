@@ -9,7 +9,8 @@ func _ready() -> void:
 
 
 func _on_play_button_pressed() -> void:
-	settings.button_feedback()
+	settings.play_playbutton()
+	settings.vibrate(15)
 	get_tree().change_scene_to_file("res://CORE/Scene/game.tscn")
 
 

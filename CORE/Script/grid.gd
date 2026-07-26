@@ -141,6 +141,12 @@ var possible_plus_pieces = [
 	preload("res://CORE/Scene/PieceScene/green_plus_3.tscn")
 ]
 
+# Cubi-mossa raggruppati per valore (+1/+2/+3). Costruito da possible_plus_pieces
+# in _ready (ordine per colore: +1,+2,+3). Serve a scegliere il VALORE in base
+# alle mosse: così i cubi-mossa sono SEMPRE presenti, ma quando ne hai tante escono
+# per lo più +1 (poco income), quando sei a corto escono più +2/+3 (aiuto vero).
+var _plus_pool := {1: [], 2: [], 3: []}
+
 # ----- Grid State -----
 var all_pieces: Array = []      # 2D [width][height] -> Node or null
 var cell_active: Array = []     # 2D bool: true = cella attiva (partecipa alla gravità), false = buco
@@ -213,6 +219,7 @@ func _ready() -> void:
 	can_move = true
 	_game_start_ms = Time.get_ticks_msec()
 	randomize()
+	_build_plus_pools()
 	current_moves = max_moves
 	all_pieces = make_2d_array()
 	cell_active = make_2d_array()
@@ -264,13 +271,11 @@ func _spawn_checkerboard() -> void:
 
 # Evita match immediato sul posizionamento
 func _random_piece_instance_avoiding_match(i: int, j: int) -> Node:
-	var pool = possible_plus_pieces if randf() < INITIAL_PLUS_PROB else possible_pieces
-	var piece = pool.pick_random().instantiate()
+	var piece = _spawn_plus_or_normal(INITIAL_PLUS_PROB).instantiate()
 	var loops := 0
 
 	while match_at(i, j, piece.color) and loops < 100:
-		pool = possible_plus_pieces if randf() < INITIAL_PLUS_PROB else possible_pieces
-		piece = pool.pick_random().instantiate()
+		piece = _spawn_plus_or_normal(INITIAL_PLUS_PROB).instantiate()
 		loops += 1
 
 	return piece
@@ -474,8 +479,7 @@ func _refill_column_active(x: int) -> void:
 			if combo_color != "" and _color_to_scene.has(combo_color):
 				piece = _color_to_scene[combo_color].instantiate()
 			else:
-				var pool = possible_plus_pieces if randf() < _effective_plus_prob() else possible_pieces
-				piece = pool.pick_random().instantiate()
+				piece = _spawn_plus_or_normal(_effective_plus_prob()).instantiate()
 			add_child(piece)
 			var spawn_row := height + spawn_rows_above + count
 			piece.position = grid_to_pixel(x, spawn_row)
@@ -563,8 +567,7 @@ func _refill_destroyed_cells_random(destroyed_cells: Array) -> void:
 				var spawn_row := height + spawn_rows_above
 				# random: pezzo o vuoto
 				if randf() > empty_refill_probability:
-					var pool = possible_plus_pieces if randf() < _effective_plus_prob() else possible_pieces
-					var piece = pool.pick_random().instantiate()
+					var piece = _spawn_plus_or_normal(_effective_plus_prob()).instantiate()
 					add_child(piece)
 
 					var spawn_px := grid_to_pixel(x, spawn_row)
@@ -738,6 +741,7 @@ func _input(event: InputEvent) -> void:
 				if current_moves < 0:
 					current_moves = 0
 				update_moves_label() # 👈 aggiorna il testo del label
+				_show_move_cost_popup()   # piccola animazione rossa "-1"
 				print("✅ Mossa usata! Mosse rimanenti:", current_moves)
 				_moves_since_balance += 1
 				_stat_placements += 1
@@ -1217,6 +1221,32 @@ func _show_move_gain_popup(amount: int) -> void:
 	tw2.tween_property(pop, "modulate:a", 0.0, 0.8)
 	tw2.tween_callback(pop.queue_free)
 
+# Popup rosso "-1" a OGNI mossa usata: rende tangibile il costo del piazzamento.
+func _show_move_cost_popup() -> void:
+	var moves_label = get_node_or_null("../UI/MOOVES")
+	if moves_label == null:
+		return
+	var pop := Label.new()
+	pop.text = "-1"
+	pop.add_theme_font_size_override("font_size", 24)
+	pop.add_theme_color_override("font_color", Color(0.95, 0.25, 0.22))
+	pop.position = Vector2(74, 6)
+	pop.z_index = 50
+	pop.pivot_offset = Vector2(10, 14)
+	moves_label.add_child(pop)
+	var start_y: float = pop.position.y
+	# piccolo pop di scala + scende e sfuma
+	pop.scale = Vector2(0.4, 0.4)
+	var tws := pop.create_tween()
+	tws.tween_property(pop, "scale", Vector2(1.15, 1.15), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tws.tween_property(pop, "scale", Vector2(1.0, 1.0), 0.08)
+	var tw := pop.create_tween()
+	tw.tween_property(pop, "position:y", start_y + 20.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var tw2 := pop.create_tween()
+	tw2.tween_interval(0.18)
+	tw2.tween_property(pop, "modulate:a", 0.0, 0.4)
+	tw2.tween_callback(pop.queue_free)
+
 # Popup verde "+N" sopra il numero grande centrale, a ogni guadagno di punti
 func _show_points_gain_popup(amount: int) -> void:
 	if amount <= 0:
@@ -1365,33 +1395,72 @@ func _remove_one_random_block() -> void:
 # =========================================================
 # Probabilità che un cubo in caduta scelga un colore che forma combo (più alta all'inizio)
 func _combo_refill_bias() -> float:
+	# Le combo sono il cuore del gioco (dopamina): molto presenti all'inizio,
+	# ancora ben presenti a difficoltà alta.
 	var t := float(difficulty_level) / float(max_difficulty_level)
-	return lerpf(0.18, 0.04, t)
+	return lerpf(0.46, 0.16, t)
 
 # Probabilità adattiva dei cubi +mosse: cadono di più quando il player è a corto
 # di mosse (aiuto quando serve), di meno quando ne ha tante; la difficoltà li riduce.
+# Raggruppa i cubi-mossa per valore (l'array è ordinato per colore: +1,+2,+3).
+func _build_plus_pools() -> void:
+	_plus_pool = {1: [], 2: [], 3: []}
+	for i in possible_plus_pieces.size():
+		var v := (i % 3) + 1
+		_plus_pool[v].append(possible_plus_pieces[i])
+
+# Sceglie un cubo-mossa con VALORE pesato dalle mosse correnti:
+#  - tante mosse  -> per lo più +1 (presenti ma income basso, così non si accumula)
+#  - a corto      -> più +2/+3 (aiuto reale)
+func _pick_plus_scene() -> PackedScene:
+	if _plus_pool[1].is_empty():
+		_build_plus_pools()
+	var w1: float
+	var w2: float
+	if current_moves <= 12:
+		w1 = 0.30; w2 = 0.40      # media ~2.0 (+3 = 0.30)
+	elif current_moves <= 25:
+		w1 = 0.50; w2 = 0.35      # media ~1.65 (+3 = 0.15)
+	else:
+		w1 = 0.72; w2 = 0.23      # media ~1.33 (+3 = 0.05) — ricco: presenti ma poco income
+	var r := randf()
+	var v := 3
+	if r < w1:
+		v = 1
+	elif r < w1 + w2:
+		v = 2
+	return _plus_pool[v].pick_random()
+
+# Con probabilità 'prob' restituisce un cubo-mossa (valore pesato dalle mosse),
+# altrimenti un cubo normale. Usato da tutti i punti di spawn.
+func _spawn_plus_or_normal(prob: float) -> PackedScene:
+	if randf() < prob:
+		return _pick_plus_scene()
+	return possible_pieces.pick_random()
+
 func _effective_plus_prob() -> float:
 	# Rubber-band centrato sulla FASCIA OBIETTIVO (~20-30 mosse a fine partita).
 	# Le mosse guadagnate arrivano SOLO da questi cubi-mossa nel refill: se sopra la
 	# fascia il rubinetto quasi si chiude, la spesa (1/mossa piazzata) fa calare le
 	# mosse verso la fascia invece di accumularle. Sotto la fascia, aiuto forte.
 	# Così un giocatore forte (che cancella tanto) non accumula più centinaia di mosse.
+	# I cubi-mossa restano SEMPRE ben presenti (floor alto): il bilanciamento
+	# dell'income lo fa soprattutto il VALORE (_pick_plus_scene). Qui moduliamo
+	# solo la quantità: un po' di più quando sei a corto, un po' meno quando ricco.
 	var need := 1.0
-	if current_moves <= 5:
-		need = 2.6          # emergenza: aiuto forte per non morire subito
-	elif current_moves <= 10:
-		need = 1.7
-	elif current_moves <= 16:
+	if current_moves <= 6:
+		need = 1.9          # a corto: più cubi-mossa (e con valore più alto)
+	elif current_moves <= 14:
+		need = 1.4
+	elif current_moves <= 26:
 		need = 1.0
-	elif current_moves <= 24:
-		need = 0.5          # dentro/appena sotto la fascia: ~pareggio
-	elif current_moves <= 32:
-		need = 0.20         # fascia alta: le mosse iniziano a calare
+	elif current_moves <= 40:
+		need = 0.8
 	else:
-		need = 0.06         # surplus: rubinetto quasi chiuso -> drenaggio
+		need = 0.6          # surplus estremo: freno morbido, ma restano presenti
 	var t := float(difficulty_level) / float(max_difficulty_level)
-	var diff_mult := lerpf(1.0, 0.55, t)   # a difficoltà alta i cubi-mossa aiutano meno
-	return clampf(plus_piece_probability * need * diff_mult, 0.015, 0.6)
+	var diff_mult := lerpf(1.0, 0.7, t)   # a difficoltà alta un filo meno
+	return clampf(plus_piece_probability * need * diff_mult, 0.11, 0.6)
 
 # Restituisce un colore che, messo in (x,y), forma un match; "" se nessuno
 func _match_color_at(x: int, y: int) -> String:

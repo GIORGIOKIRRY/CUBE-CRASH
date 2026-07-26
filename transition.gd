@@ -22,9 +22,9 @@ func _ready() -> void:
 func _build() -> void:
 	_sprite = AnimatedSprite2D.new()
 	_sprite.centered = true
-	_sprite.position = Vector2(288, 512)   # centro viewport base 576x1024
-	_sprite.scale = Vector2(0.75, 0.75)    # 800x1400 * .75 = 600x1050, copre tutto lo schermo
 	_sprite.visible = false
+	# scala/posizione calcolate a runtime in _fit_to_screen() così copre
+	# sempre tutto lo schermo su qualsiasi dispositivo (stretch "expand").
 
 	var frames := SpriteFrames.new()
 	if frames.has_animation("default"):
@@ -49,11 +49,23 @@ func _build() -> void:
 	_sprite.sprite_frames = frames
 	add_child(_sprite)
 
+# Adatta lo sprite al rettangolo visibile reale del viewport, con margine,
+# così copre SEMPRE tutto lo schermo (alto, basso e lati) su ogni dispositivo.
+func _fit_to_screen() -> void:
+	var vr := get_viewport().get_visible_rect()
+	var tex := _sprite.sprite_frames.get_frame_texture("cover", 0)
+	var ts := tex.get_size()   # 800 x 1400
+	# scala per COPRIRE (max sui due assi) + margine di sicurezza
+	var sc: float = maxf(vr.size.x / ts.x, vr.size.y / ts.y) * 1.25
+	_sprite.scale = Vector2(sc, sc)
+	_sprite.position = vr.position + vr.size * 0.5
+
 # Cambia scena con transizione fluida: copri -> cambia -> scopri.
 func change_scene(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	_fit_to_screen()
 	_sprite.visible = true
 	_sprite.play("cover")
 	await _sprite.animation_finished

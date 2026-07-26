@@ -1,8 +1,6 @@
-[gd_scene load_steps=9 format=3 uid="uid://ctbwedt6pm08s"]
+[gd_scene load_steps=7 format=3 uid="uid://ctbwedt6pm08s"]
 
 [ext_resource type="Script" uid="uid://cjaf3as2iyaop" path="res://CORE/Script/main_menu.gd" id="1_7cisg"]
-[ext_resource type="Texture2D" uid="uid://8xr2p1qvkhi0" path="res://CORE/Assets/Art/UI/LogoFinale.svg" id="2_logo"]
-[ext_resource type="Texture2D" uid="uid://c3mbpdbiyauqi" path="res://CORE/Assets/Art/UI/Menu/Play.svg" id="3_061xs"]
 [ext_resource type="Texture2D" uid="uid://bcv7ji8qgrimx" path="res://CORE/Assets/Art/UI/Menu/Link.svg" id="4_ivbl6"]
 [ext_resource type="Texture2D" uid="uid://ogbtgcl6552n" path="res://CORE/Assets/Art/UI/Menu/Settings.svg" id="6_oines"]
 [ext_resource type="Texture2D" uid="uid://cynr1v65k85vm" path="res://CORE/Assets/Art/UI/Menu/Terms.svg" id="7_3hh32"]
@@ -21,28 +19,23 @@ script = ExtResource("1_7cisg")
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(288, 512)
 
-[node name="BG" type="ColorRect" parent="."]
+[node name="SkyBG" type="ColorRect" parent="."]
+z_index = -6
 layout_mode = 0
-offset_left = -700.0
-offset_top = -700.0
-offset_right = 1300.0
-offset_bottom = 1800.0
-color = Color(0.08627451, 0.41568628, 0.59607846, 1)
+offset_left = -900.0
+offset_top = -900.0
+offset_right = 1500.0
+offset_bottom = 2000.0
+color = Color(0.31764707, 0.44705883, 0.5921569, 1)
 
-[node name="Logo" type="Sprite2D" parent="."]
-position = Vector2(288, 440)
-scale = Vector2(0.58, 0.58)
-texture = ExtResource("2_logo")
-
-[node name="PlayButton" type="TextureButton" parent="."]
+[node name="FloorBG" type="ColorRect" parent="."]
+z_index = -5
 layout_mode = 0
-offset_left = 143.0
-offset_top = 705.0
-offset_right = 433.0
-offset_bottom = 845.0
-texture_normal = ExtResource("3_061xs")
-ignore_texture_size = true
-stretch_mode = 5
+offset_left = -900.0
+offset_top = 1080.0
+offset_right = 1500.0
+offset_bottom = 2000.0
+color = Color(0.28235295, 0.4627451, 0.62352943, 1)
 
 [node name="LinkButton" type="TextureButton" parent="."]
 layout_mode = 0
@@ -78,7 +71,6 @@ z_index = 1000
 unique_name_in_owner = true
 stream = ExtResource("10_xphv5")
 
-[connection signal="pressed" from="PlayButton" to="." method="_on_play_button_pressed"]
 [connection signal="pressed" from="SettingsButton" to="." method="_on_settings_button_pressed"]
 [connection signal="pressed" from="LinkButton" to="." method="_on_link_button_pressed"]
 [connection signal="pressed" from="TermsButton" to="." method="_on_terms_button_pressed"]

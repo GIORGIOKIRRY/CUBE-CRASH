@@ -136,12 +136,12 @@ func _apply_new_record_layout() -> void:
 
 func _on_close_button_pressed() -> void:
 	settings.button_feedback()
-	get_tree().change_scene_to_file("res://CORE/Scene/MainMenu.tscn")
+	transition.change_scene("res://CORE/Scene/MainMenu.tscn")
 
 
 func _on_play_again_button_pressed() -> void:
 	settings.button_feedback()
-	get_tree().change_scene_to_file("res://CORE/Scene/game.tscn")
+	transition.change_scene("res://CORE/Scene/game.tscn")
 
 
 # Pulsante in alto a sinistra: cattura uno screenshot del punteggio e lo condivide.

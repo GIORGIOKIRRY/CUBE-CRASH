@@ -24,6 +24,7 @@ config/icon="uid://o7mxndnfjij4"
 [autoload]
 
 settings="*res://settings.gd"
+transition="*res://transition.gd"
 
 [display]
 

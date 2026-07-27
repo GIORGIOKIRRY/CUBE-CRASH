@@ -202,7 +202,7 @@ var _last_session_stats: String = ""
 var _combo_count: int = 0                    # match wave nella catena corrente (ricompensa)
 var _find_wave: int = 0                       # ondata di find_matches nella catena
 var _combo_matches: int = 0                   # TOTALE gruppi di match nella catena (simultanei + cascata)
-var _last_combo_shown: int = 0                # ultimo livello combo mostrato (per non ripetere)
+var _last_combo_shown: int = 0                # combo mostrate finora nella catena (sequenziale 1,2,3...); reset a fine catena
 var _color_to_scene: Dictionary = {}         # colore -> scena pezzo (per il refill combo)
 var _last_action_ms: int = 0                 # ultimo input del player (per i suggerimenti)
 var _hint_ghost: Node2D = null               # fantasma del suggerimento sulla griglia
@@ -291,8 +291,8 @@ func _ready() -> void:
 	for tex in EXPLO_FRAMES:
 		_explo_frames.add_frame("boom", tex)
 
-	# SpriteFrames delle animazioni COMBO 1..4 (frame ~33fps, sfondo trasparente)
-	for lvl in range(1, 5):
+	# SpriteFrames delle animazioni COMBO 1..11 (frame ~33fps, sfondo trasparente)
+	for lvl in range(1, 12):
 		_combo_frames[lvl] = _build_combo_frames("combo%d" % lvl)
 
 	_last_action_ms = Time.get_ticks_msec()
@@ -455,18 +455,18 @@ func find_matches() -> bool:
 							any_match = true
 	if any_match:
 		_find_wave += 1
-		# COMBO = più di un match: sia SIMULTANEI (2+ linee in una mossa) sia in CASCATA.
-		# Conta i gruppi di match totali della catena; livello = gruppi - 1.
+		# COMBO = più di un match (simultanei o in cascata). L'animazione è SEQUENZIALE:
+		# la prima combo della catena è COMBO 1, poi 2, poi 3... una per wave, MAI a salti
+		# (anche se una wave azzera più linee insieme). Reset a fine catena → riparte da 1.
 		_combo_matches += _count_new_match_groups()
-		var level: int = _combo_matches - 1
-		if level >= 1 and level > _last_combo_shown:
-			_last_combo_shown = level
+		if _combo_matches >= 2:
+			_last_combo_shown += 1
 			var cells: Array = []
 			for i in width:
 				for j in height:
 					if all_pieces[i][j] != null and all_pieces[i][j].matched:
 						cells.append(Vector2i(i, j))
-			_show_combo_effect(level, _combo_effect_pos(cells))
+			_show_combo_effect(_last_combo_shown, _combo_effect_pos(cells))
 		is_resolving = true
 		_cancel_drag()
 		get_parent().get_node("DestroyTimer").start()
@@ -572,8 +572,12 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		var p = all_pieces[c.x][c.y]
 		if p != null:
 			all_pieces[c.x][c.y] = null
-			# power-up: esplosione visibile su OGNI cella così si vede la colonna/riga/3x3 saltare
-			_spawn_explosion(grid_to_pixel(c.x, c.y), p)
+			# V/O (colonna/riga) in mode_c: stessa animazione del MATCH (pop), NON l'esplosione
+			# bianca. La bianca resta SOLO per la bomba (val 3) e per mode_b.
+			if _is_mode_c and val != 3:
+				_destroy_piece_single(p)
+			else:
+				_spawn_explosion(grid_to_pixel(c.x, c.y), p)
 			cleared += 1
 			# cratere: NON entra nella gravità/refill -> il vuoto resta
 			if not crater:
@@ -581,7 +585,10 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		if crater:
 			cell_active[c.x][c.y] = false   # buco: spazio vuoto e duraturo da riempire
 	if cleared > 0:
-		settings.play_explosion()
+		if _is_mode_c and val != 3:
+			settings.play_destroy()    # V/O: suono del match
+		else:
+			settings.play_explosion()  # bomba / mode_b
 		settings.vibrate(60)
 	return cleared
 
@@ -705,9 +712,9 @@ func _on_destroy_timer_timeout() -> void:
 
 	# mode_c: conta la combo (catena con 2+ gruppi di match) nel contatore in alto a sx.
 	# Conta UNA volta per catena, poi azzera così i tick residui non ri-contano.
-	if _is_mode_c and _combo_matches >= 2:
-		# accumula il LIVELLO della combo raggiunta nella catena: COMBO 1 = +1 ... COMBO 4 = +4
-		_total_combos += _combo_matches - 1
+	if _is_mode_c and _last_combo_shown >= 1:
+		# accumula la combo PIÙ ALTA mostrata nella catena: COMBO 1 = +1 ... COMBO 4 = +4
+		_total_combos += _last_combo_shown
 		_update_combo_counter()
 	_combo_matches = 0
 	_find_wave = 0
@@ -1610,8 +1617,8 @@ func _combo_refill_bias() -> float:
 		# combo presenti ma non regalate (più rare di prima): il player le costruisce
 		var b := lerpf(0.50, 0.34, t)
 		# ...ma le combo ALTE devono restare un traguardo: la 2 e la 3 sono comuni, la 4+ rara.
-		# _combo_matches>=4 = catena già a combo 3: prolungarla ancora (→4+) è poco probabile.
-		if _combo_matches >= 4:
+		# già a combo 3 (_last_combo_shown>=3): prolungare ancora (→4+) è poco probabile.
+		if _last_combo_shown >= 3:
 			b *= 0.4
 		return b
 	return lerpf(0.46, 0.16, t)
@@ -1901,7 +1908,7 @@ func _build_combo_frames(prefix: String) -> SpriteFrames:
 	return sf
 
 func _show_combo_effect(level: int, world_pos: Vector2) -> void:
-	var anim_level: int = clampi(level, 1, 4)   # dalla 5ª combo in poi usa COMBO 4
+	var anim_level: int = clampi(level, 1, 11)   # dalla 12ª combo in poi usa COMBO 11
 	if not _combo_frames.has(anim_level) or _combo_frames[anim_level].get_frame_count("c") == 0:
 		return
 	var asp := AnimatedSprite2D.new()

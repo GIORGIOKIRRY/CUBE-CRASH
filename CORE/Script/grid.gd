@@ -62,6 +62,7 @@ var max_empty_refill_probability: float = 0.88  # limite massimo vuoti
 @export_range(0.0, 1.0, 0.01)
 var plus_piece_probability: float = 0.18  # base cubi-mossa (poi modulata da _effective_plus_prob)
 const INITIAL_PLUS_PROB := 0.10  # seed cubi-mossa sulla scacchiera iniziale (più basso: meno surplus a inizio partita)
+const BOTTOM_SPECIAL_PROB := 0.05  # Mode C: prob. che un blocco del tray in basso sia uno speciale (V/O/BOMBA) — molto raro, è il "vantaggio"
 
 @export var max_moves: int = 30  # numero di mosse iniziali
 var current_moves: int = 0
@@ -69,10 +70,25 @@ var is_game_over: bool = false
 
 # --- Modalità test A/B/C (impostata da settings.game_mode in _ready) ---
 var _mode: String = "classic"
-var _moves_enabled: bool = true      # false in mode_b (niente mosse)
+var _moves_enabled: bool = true      # false in mode_b e mode_c (niente mosse)
 var _swap_costs_move: bool = false   # true in mode_a (swap che fa match costa una mossa)
 const MOVE_CUBE_POINTS := 120        # in mode_b i cubi +N danno punti invece di mosse
 var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
+
+# --- MODE C (fusione Classic+B): niente mosse, game over solo per spazio, ---
+# colori progressivi (parte da 5), combo frequenti, bonus rivisti:
+#  +1 = colonna intera (+ gravità/refill)   +2 = riga intera (+ gravità)
+#  +3 = bomba 5x5 che lascia un CRATERE vuoto (buchi da riempire, niente refill)
+var _is_mode_c: bool = false
+const MODE_C_COLOR_ORDER := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
+const MODE_C_START_COLORS := 5           # colori a inizio partita (facili le combo)
+const MODE_C_COLORS_PER_STEP := 3        # +1 colore ogni N livelli di difficoltà
+# ordine dei cubi-bonus in possible_plus_pieces (3 per colore: +1,+2,+3)
+const MODE_C_PLUS_COLOR_ORDER := ["blue", "red", "pink", "purple", "yellow", "orange", "green"]
+var _mc_active_count: int = MODE_C_START_COLORS
+var _mc_normal_scenes: Array = []             # scene normali ordinate per MODE_C_COLOR_ORDER
+var _mc_plus_by_color: Dictionary = {}        # color -> {1:scene, 2:scene, 3:scene}
+var _total_combos: int = 0                    # combo totali della partita (contatore in alto a sx)
 
 # Revive: max 3 volte per partita
 var revive_count: int = 0
@@ -86,6 +102,8 @@ var _last_defeat_reason: String = "no_space"
 const END_MOVE_POINTS := 100                   # ogni mossa rimasta a fine partita vale 100 punti
 var _end_moves: int = 0
 var _end_bonus: int = 0
+const COMBO_END_POINTS := 100                   # mode_c: ogni combo accumulata vale 100 punti a fine partita
+var _combo_bonus: int = 0
 var score: int = 0                      # punteggio della PARTITA corrente
 var high_score: int = 0                 # miglior punteggio di sempre
 var lifetime_score: int = 0             # punteggio cumulativo totale
@@ -227,18 +245,36 @@ func _ready() -> void:
 	randomize()
 	# Modalità test scelta dal menu
 	_mode = settings.game_mode
-	_moves_enabled = _mode != "mode_b"
+	_is_mode_c = _mode == "mode_c"
+	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
 	_build_plus_pools()
 	current_moves = max_moves
-	# mode_b: niente contatore mosse a schermo
+	# mode_b: niente contatore mosse a schermo.
+	# mode_c: riusa quel contatore per le COMBO totali fatte.
 	if not _moves_enabled:
 		var mv = get_node_or_null("../UI/MOOVES")
 		if mv:
-			mv.visible = false
+			if _is_mode_c:
+				mv.text = "COMBO:"
+				_update_combo_counter()
+			else:
+				mv.visible = false
 	all_pieces = make_2d_array()
 	cell_active = make_2d_array()
-	_spawn_checkerboard()
+	# mappa colore -> scena pezzo (serve al refill combo E ai pool Mode C):
+	# va costruita PRIMA di generare la scacchiera iniziale.
+	for scene in possible_pieces:
+		var inst = scene.instantiate()
+		var col = inst.get("color")
+		if col != null:
+			_color_to_scene[str(col)] = scene
+		inst.free()
+	if _is_mode_c:
+		_build_mode_c_pools()
+		_spawn_mode_c_start()      # griglia iniziale casuale/varia (non scacchiera)
+	else:
+		_spawn_checkerboard()
 	_spawn_bottom_pieces()
 	update_moves_label()
 	_load_scores()
@@ -259,13 +295,6 @@ func _ready() -> void:
 	for lvl in range(1, 5):
 		_combo_frames[lvl] = _build_combo_frames("combo%d" % lvl)
 
-	# mappa colore -> scena pezzo (per il refill che favorisce le combo)
-	for scene in possible_pieces:
-		var inst = scene.instantiate()
-		var col = inst.get("color")
-		if col != null:
-			_color_to_scene[str(col)] = scene
-		inst.free()
 	_last_action_ms = Time.get_ticks_msec()
 
 # 1) Griglia iniziale a scacchiera: (pezzo, spazio vuoto) alternati
@@ -283,6 +312,53 @@ func _spawn_checkerboard() -> void:
 				# buchi: vuoti e saltati dalla gravità finché il player non li riempie
 				cell_active[i][j] = false
 				all_pieces[i][j] = null
+
+# MODE C: griglia iniziale CASUALE e diversa ogni partita (ammassi/forme varie),
+# non la solita scacchiera. Le celle piene = attive con un cubo; le vuote = buchi.
+func _spawn_mode_c_start() -> void:
+	var filled := _mode_c_fill_pattern()
+	for i in width:
+		for j in height:
+			if filled[i][j]:
+				cell_active[i][j] = true
+				var piece := _random_piece_instance_avoiding_match(i, j)
+				add_child(piece)
+				piece.position = grid_to_pixel(i, j)
+				all_pieces[i][j] = piece
+			else:
+				cell_active[i][j] = false
+				all_pieces[i][j] = null
+
+# Genera un pattern booleano pieno/vuoto. Tavola piena con i BUCHI DISTRIBUITI IN MODO
+# OMOGENEO su tutta la griglia (mai spazi vuoti concentrati su un lato/in cima/a bande).
+# Varia densità e "texture" così ogni partita è diversa, ma la rottura resta uniforme.
+func _mode_c_fill_pattern() -> Array:
+	var filled: Array = []
+	for i in width:
+		filled.append([])
+		for j in height:
+			filled[i].append(false)
+
+	var kind := randi() % 3
+	if kind == 0:
+		# scatter uniforme: buchi sparsi su tutta la tavola
+		var p := randf_range(0.76, 0.88)
+		for i in width:
+			for j in height:
+				filled[i][j] = randf() < p
+	elif kind == 1:
+		# scacchiera + rumore: densità alta e uniforme, texture regolare
+		var extra := randf_range(0.55, 0.80)
+		for i in width:
+			for j in height:
+				filled[i][j] = ((i + j) % 2 == 0) or (randf() < extra)
+	else:
+		# quasi piena, con pochi buchi sparsi in modo omogeneo
+		var holes := randf_range(0.12, 0.24)
+		for i in width:
+			for j in height:
+				filled[i][j] = randf() >= holes
+	return filled
 
 # Evita match immediato sul posizionamento
 func _random_piece_instance_avoiding_match(i: int, j: int) -> Node:
@@ -306,10 +382,17 @@ func _bottom_slot_pixel(slot_idx: int) -> Vector2:
 	var start_x = grid_center_x - bottom_spacing_px
 	return Vector2(start_x + slot_idx * bottom_spacing_px, y_start + bottom_y_offset_pixels)
 
+# Sceglie il blocco per uno slot del tray in basso. Mode C: raramente uno speciale
+# (V/O/BOMBA) così piazzarlo e matcharlo dà un vantaggio (colonna/riga/3x3).
+func _pick_bottom_piece() -> PackedScene:
+	if _is_mode_c and randf() < BOTTOM_SPECIAL_PROB:
+		return _pick_plus_scene()
+	return _pick_normal_piece()
+
 func _spawn_bottom_pieces() -> void:
 	for s in range(3):
 		if bottom_pieces[s] == null:
-			var piece = possible_pieces.pick_random().instantiate()
+			var piece = _pick_bottom_piece().instantiate()
 			add_child(piece)
 			piece.position = _bottom_slot_pixel(s)
 			piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
@@ -320,7 +403,7 @@ func _spawn_bottom_pieces() -> void:
 
 func _replenish_bottom_slot(slot_idx: int) -> void:
 	if bottom_pieces[slot_idx] == null:
-		var piece = possible_pieces.pick_random().instantiate()
+		var piece = _pick_bottom_piece().instantiate()
 		add_child(piece)
 		piece.position = _bottom_slot_pixel(slot_idx)
 		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
@@ -455,21 +538,29 @@ func destroy_matched() -> Array:
 	_update_difficulty()
 	return destroyed_positions
 
-# mode_b: power-up del cubo +N matchato. Libera spazio distruggendo:
-#  +1 -> tutta la COLONNA verticale
-#  +2 -> tutta la RIGA orizzontale
-#  +3 -> BOMBA: area 4x4 attorno al cubo
+# Power-up del cubo +N matchato (mode_b e mode_c). Libera spazio distruggendo:
+#  +1 -> tutta la COLONNA verticale (poi gravità + refill)
+#  +2 -> tutta la RIGA orizzontale (poi gravità)
+#  +3 -> mode_b: BOMBA 4x4 (si riempie) | mode_c: BOMBA 5x5 che lascia un CRATERE
+#        vuoto (le celle diventano buchi: niente refill, li riempie il giocatore).
 # I cubi colpiti NON riattivano altri power-up (niente catene infinite).
 func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) -> int:
 	var cells: Array = []
+	var crater := false      # mode_c +3: lascia il vuoto (buchi) senza refill
 	if val == 1:
 		for y in height:
 			cells.append(Vector2i(center.x, y))
 	elif val == 2:
 		for x in width:
 			cells.append(Vector2i(x, center.y))
+	elif _is_mode_c:
+		# mode_c +3: bomba 3x3 (da -1 a +1), lascia un cratere vuoto e duraturo
+		crater = true
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				cells.append(Vector2i(center.x + dx, center.y + dy))
 	else:
-		# +3: area 4x4 (da -1 a +2 su entrambi gli assi)
+		# mode_b +3: area 4x4 (da -1 a +2 su entrambi gli assi)
 		for dx in range(-1, 3):
 			for dy in range(-1, 3):
 				cells.append(Vector2i(center.x + dx, center.y + dy))
@@ -481,13 +572,27 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		var p = all_pieces[c.x][c.y]
 		if p != null:
 			all_pieces[c.x][c.y] = null
+			# power-up: esplosione visibile su OGNI cella così si vede la colonna/riga/3x3 saltare
 			_spawn_explosion(grid_to_pixel(c.x, c.y), p)
-			destroyed_positions.append(c)
 			cleared += 1
+			# cratere: NON entra nella gravità/refill -> il vuoto resta
+			if not crater:
+				destroyed_positions.append(c)
+		if crater:
+			cell_active[c.x][c.y] = false   # buco: spazio vuoto e duraturo da riempire
 	if cleared > 0:
 		settings.play_explosion()
 		settings.vibrate(60)
 	return cleared
+
+# Distrugge un blocco con l'animazione SINGOLA del match (pop), non l'esplosione bianca.
+func _destroy_piece_single(p: Node) -> void:
+	if p.has_method("dim"):
+		p.dim()
+	get_tree().create_timer(0.32).timeout.connect(func() -> void:
+		if is_instance_valid(p):
+			p.queue_free()
+	)
 
 func _apply_local_gravity(destroyed_positions: Array) -> void:
 	# collassa solo le colonne toccate dal match
@@ -592,8 +697,25 @@ func _on_destroy_timer_timeout() -> void:
 	# 4) fine cascata → sblocca input
 	is_resolving = false
 
+	# Il DestroyTimer NON è one-shot: a fine catena va fermato, altrimenti continua a
+	# scattare ogni 0.4s (ri-conterebbe la combo all'infinito). Riparte al match dopo.
+	var _dt = get_parent().get_node_or_null("DestroyTimer")
+	if _dt:
+		_dt.stop()
+
+	# mode_c: conta la combo (catena con 2+ gruppi di match) nel contatore in alto a sx.
+	# Conta UNA volta per catena, poi azzera così i tick residui non ri-contano.
+	if _is_mode_c and _combo_matches >= 2:
+		# accumula il LIVELLO della combo raggiunta nella catena: COMBO 1 = +1 ... COMBO 4 = +4
+		_total_combos += _combo_matches - 1
+		_update_combo_counter()
+	_combo_matches = 0
+	_find_wave = 0
+	_last_combo_shown = 0
+
 	# ricompensa combo: RARA e legata alle catene lunghe (3+). Poco spazio, "fortuna".
-	if _combo_count >= COMBO_REWARD_MIN_CHAIN:
+	# mode_c: NIENTE blocchi che esplodono a caso (lo spazio lo creano solo match e bombe).
+	if not _is_mode_c and _combo_count >= COMBO_REWARD_MIN_CHAIN:
 		var bonus := 1
 		if _combo_count >= 5:
 			bonus = 2   # solo catene molto lunghe danno 2
@@ -896,10 +1018,20 @@ func _get_bottom_piece_under_mouse() -> Node:
 	return null
 
 func update_moves_label() -> void:
+	# mode_c: il contatore mostra le COMBO totali, non le mosse
+	if _is_mode_c:
+		_update_combo_counter()
+		return
 	var counter_label = $"../UI/MOOVES/Counter"
 	if counter_label:
 		counter_label.text = str(current_moves)
 		counter_label.add_theme_color_override("font_color", _moves_color(current_moves))
+
+func _update_combo_counter() -> void:
+	var counter_label = get_node_or_null("../UI/MOOVES/Counter")
+	if counter_label:
+		counter_label.text = str(_total_combos)
+		counter_label.add_theme_color_override("font_color", Color(1, 0.84, 0.10))  # giallo
 
 func _get_piece_mooves(p: Object) -> int:
 	if p == null:
@@ -1076,6 +1208,10 @@ func _trigger_game_over(reason := "no_space") -> void:
 	score += _end_bonus
 	current_moves = 0
 
+	# mode_c: le combo accumulate durante la partita diventano punteggio (100 pt ciascuna)
+	_combo_bonus = _total_combos * COMBO_END_POINTS if _is_mode_c else 0
+	score += _combo_bonus
+
 	# Nuovo record? (sul punteggio finale, bonus incluso)
 	_is_new_record = score > _prev_high_score and score > 0
 
@@ -1228,10 +1364,11 @@ func _on_settings_menu_menu_closed() -> void:
 	can_move = true
 
 func _update_difficulty() -> void:
-	# Difficoltà = max(tempo, punteggio). Il TEMPO è la leva principale:
-	# +1 livello ogni 2 minuti → a 20 minuti si raggiunge il livello massimo (molto difficile).
+	# Difficoltà GRADUALE = max(tempo, punteggio). Il TEMPO è la leva principale:
+	# +1 livello ogni ~6 minuti → il livello massimo (durissimo) arriva verso i 60 minuti.
+	# Così: principiante ~5 min, medio ~20 min, esperto 1 ora+ (il punteggio accelera i più bravi).
 	var elapsed_min := float(Time.get_ticks_msec() - _game_start_ms) / 60000.0
-	var time_level := int(elapsed_min / 2.0)
+	var time_level := int(elapsed_min / 6.0)
 	var score_level := int(score / difficulty_step_score)
 	var new_level: int = min(maxi(time_level, score_level), max_difficulty_level)
 
@@ -1240,6 +1377,10 @@ func _update_difficulty() -> void:
 
 	difficulty_level = new_level
 	print("DIFFICOLTÀ → Livello", difficulty_level)
+
+	# Mode C: la difficoltà introduce gradualmente nuovi colori (parte da 5).
+	if _is_mode_c:
+		_mc_active_count = _mode_c_active_count()
 
 	# Più difficoltà = più vuoti al refill (tavola più ostica)
 	var t := float(difficulty_level) / float(max_difficulty_level)
@@ -1413,8 +1554,8 @@ func _count_occupied() -> int:
 func _maybe_balance_board() -> void:
 	if is_game_over or is_resolving:
 		return
-	# mode_b (block blast): niente auto-svuotamento, lo spazio è la vera minaccia
-	if _mode == "mode_b":
+	# mode_b / mode_c (block blast): niente auto-svuotamento, lo spazio è la minaccia
+	if _mode == "mode_b" or _is_mode_c:
 		return
 	var fullness := float(_count_occupied()) / float(width * height)
 	if fullness < BALANCE_FULLNESS_TRIGGER:
@@ -1464,6 +1605,15 @@ func _combo_refill_bias() -> float:
 	# Le combo sono il cuore del gioco (dopamina): molto presenti all'inizio,
 	# ancora ben presenti a difficoltà alta.
 	var t := float(difficulty_level) / float(max_difficulty_level)
+	# Mode C: combo ancora più frequenti (obiettivo: una combo ogni 1-2 azioni).
+	if _is_mode_c:
+		# combo presenti ma non regalate (più rare di prima): il player le costruisce
+		var b := lerpf(0.50, 0.34, t)
+		# ...ma le combo ALTE devono restare un traguardo: la 2 e la 3 sono comuni, la 4+ rara.
+		# _combo_matches>=4 = catena già a combo 3: prolungarla ancora (→4+) è poco probabile.
+		if _combo_matches >= 4:
+			b *= 0.4
+		return b
 	return lerpf(0.46, 0.16, t)
 
 # Probabilità adattiva dei cubi +mosse: cadono di più quando il player è a corto
@@ -1475,6 +1625,32 @@ func _build_plus_pools() -> void:
 		var v := (i % 3) + 1
 		_plus_pool[v].append(possible_plus_pieces[i])
 
+# MODE C: costruisce le liste colore (normali + bonus) ordinate, per la progressione.
+func _build_mode_c_pools() -> void:
+	_mc_normal_scenes.clear()
+	for c in MODE_C_COLOR_ORDER:
+		if _color_to_scene.has(c):
+			_mc_normal_scenes.append(_color_to_scene[c])
+	_mc_plus_by_color.clear()
+	for i in possible_plus_pieces.size():
+		var color: String = MODE_C_PLUS_COLOR_ORDER[i / 3]
+		var v := (i % 3) + 1
+		if not _mc_plus_by_color.has(color):
+			_mc_plus_by_color[color] = {}
+		_mc_plus_by_color[color][v] = possible_plus_pieces[i]
+
+# Numero di colori attivi in Mode C: parte da 5, +1 ogni MODE_C_COLORS_PER_STEP livelli.
+func _mode_c_active_count() -> int:
+	return clampi(MODE_C_START_COLORS + difficulty_level / MODE_C_COLORS_PER_STEP,
+		MODE_C_START_COLORS, MODE_C_COLOR_ORDER.size())
+
+# Sceglie un cubo NORMALE. In Mode C solo tra i colori attivi (progressione).
+func _pick_normal_piece() -> PackedScene:
+	if _is_mode_c and not _mc_normal_scenes.is_empty():
+		var n: int = mini(_mc_active_count, _mc_normal_scenes.size())
+		return _mc_normal_scenes[randi() % n]
+	return possible_pieces.pick_random()
+
 # Sceglie un cubo-mossa con VALORE pesato dalle mosse correnti:
 #  - tante mosse  -> per lo più +1 (presenti ma income basso, così non si accumula)
 #  - a corto      -> più +2/+3 (aiuto reale)
@@ -1483,7 +1659,19 @@ func _pick_plus_scene() -> PackedScene:
 		_build_plus_pools()
 	var w1: float
 	var w2: float
-	if current_moves <= 12:
+	if _is_mode_c:
+		# Mode C: i +N sono power-up (non mosse). La bomba 3x3 è ESCLUSIVA (rarissima), così
+		# la board resta piena e si può perdere; anche +1/+2 un po' più rare di prima.
+		# +1 colonna 58%, +2 riga 40%, +3 bomba 3x3 2% (esclusiva).
+		w1 = 0.58; w2 = 0.40
+		# quando la tavola è quasi piena la bomba diventa un filo più probabile (respiro):
+		# a tavola completamente piena +3 sale ~2% -> ~12% (a scapito di +1/+2).
+		var fullness := float(_count_occupied()) / float(width * height)
+		if fullness >= 0.82:
+			var extra := lerpf(0.0, 0.10, clampf((fullness - 0.82) / 0.18, 0.0, 1.0))
+			w1 -= extra * 0.6
+			w2 -= extra * 0.4
+	elif current_moves <= 12:
 		w1 = 0.30; w2 = 0.40      # media ~2.0 (+3 = 0.30)
 	elif current_moves <= 25:
 		w1 = 0.50; w2 = 0.35      # media ~1.65 (+3 = 0.15)
@@ -1495,6 +1683,12 @@ func _pick_plus_scene() -> PackedScene:
 		v = 1
 	elif r < w1 + w2:
 		v = 2
+	# Mode C: il cubo-bonus deve avere un colore ATTIVO (così matcha con i normali).
+	if _is_mode_c and not _mc_plus_by_color.is_empty():
+		var n: int = mini(_mc_active_count, MODE_C_COLOR_ORDER.size())
+		var color: String = MODE_C_COLOR_ORDER[randi() % n]
+		if _mc_plus_by_color.has(color) and _mc_plus_by_color[color].has(v):
+			return _mc_plus_by_color[color][v]
 	return _plus_pool[v].pick_random()
 
 # Con probabilità 'prob' restituisce un cubo-mossa (valore pesato dalle mosse),
@@ -1502,9 +1696,14 @@ func _pick_plus_scene() -> PackedScene:
 func _spawn_plus_or_normal(prob: float) -> PackedScene:
 	if randf() < prob:
 		return _pick_plus_scene()
-	return possible_pieces.pick_random()
+	return _pick_normal_piece()
 
 func _effective_plus_prob() -> float:
+	# Mode C: frequenza fissa dei cubi-bonus (leggermente ridotta a difficoltà alta).
+	if _is_mode_c:
+		# power-up più rari (prima ce n'erano troppi): la board tende a riempirsi -> si può perdere
+		var tc := float(difficulty_level) / float(max_difficulty_level)
+		return clampf(lerpf(0.10, 0.07, tc), 0.06, 0.12)
 	# Rubber-band centrato sulla FASCIA OBIETTIVO (~20-30 mosse a fine partita).
 	# Le mosse guadagnate arrivano SOLO da questi cubi-mossa nel refill: se sopra la
 	# fascia il rubinetto quasi si chiude, la spesa (1/mossa piazzata) fa calare le

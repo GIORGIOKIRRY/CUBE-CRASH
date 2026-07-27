@@ -28,6 +28,7 @@ const MODES := [
 	{"mode": "classic", "label": "CLASSIC",  "sub": "mosse attuali",         "color": Color(0.20, 0.55, 0.80)},
 	{"mode": "mode_a",  "label": "MOD A",     "sub": "ogni azione = 1 mossa",  "color": Color(0.90, 0.55, 0.15)},
 	{"mode": "mode_b",  "label": "MOD B",     "sub": "no mosse (block blast)", "color": Color(0.25, 0.70, 0.35)},
+	{"mode": "mode_c",  "label": "MOD C",     "sub": "fusione + combo + bombe", "color": Color(0.70, 0.30, 0.80)},
 ]
 
 var _background: Sprite2D

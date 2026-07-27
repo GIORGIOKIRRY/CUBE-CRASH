@@ -13,22 +13,36 @@ const BOTTOM_MARGIN := 0.0
 
 # Animazione cabinato (riflesso sul marquee): 12 frame, poi fermo 15s, poi riparte.
 const CAB_FPS := 12.0
-const CAB_HOLD := 15.0
+const CAB_HOLD := 6.0    # 1s di animazione + 6s di pausa = ripete ~ogni 7s
 
 # Tasto PLAY sul deck (coord canvas 800x1400). Asset BASE 272x96, PREMUTO 272x88.
 # Dimensionato per LARGHEZZA (altezza dall'aspect dell'asset), ancorato per il BASSO.
 const PLAY_TEX_BASE := Vector2(272.0, 96.0)
 const PLAY_TEX_PRESSED := Vector2(272.0, 88.0)
-const PLAY_WIDTH_ART := 216.0                # larghezza voluta nel canvas
-const PLAY_CENTER_ART := Vector2(399.0, 687.0) # centro dello SCHERMO del cabinato
+const PLAY_WIDTH_ART := 260.0                # larghezza voluta nel canvas
+const PLAY_CENTER_ART := Vector2(399.0, 887.0) # centro dello SCHERMO del cabinato (abbassato)
 const SPARKLE_OFFSET_Y := 0.0                # scintille al centro del tasto
+
+# Frecce cambia-modalità ai lati dello schermo del cabinato (asset 88x136, punta a DESTRA).
+# La sinistra è la stessa freccia specchiata (flip_h).
+const ARROW_TEX := Vector2(88.0, 136.0)
+const ARROW_WIDTH_ART := 90.0
+const ARROW_L_CENTER_ART := Vector2(146.0, 664.0)
+const ARROW_R_CENTER_ART := Vector2(652.0, 664.0)
+# Centro dello SCHERMO del cabinato: qui compare la modalità selezionata
+const SCREEN_CENTER_ART := Vector2(399.0, 690.0)
+# Animazione a schermo (dietro il cabinato, incastrata nel buco 367x271 centro (399,688))
+const SCREEN_ANIM_TEX := Vector2(768.0, 576.0)
+const SCREEN_ANIM_CENTER_ART := Vector2(399.0, 688.0)
+const SCREEN_ANIM_WIDTH_ART := 372.0        # copre il buco; il bordo si infila sotto il cabinato
+const SCREEN_ANIM_FPS := 10.0
 
 # Test A/B/C: 3 modalità (nel sottomenu). Poi ne resterà una.
 const MODES := [
-	{"mode": "classic", "label": "CLASSIC",  "sub": "mosse attuali",         "color": Color(0.20, 0.55, 0.80)},
-	{"mode": "mode_a",  "label": "MOD A",     "sub": "ogni azione = 1 mossa",  "color": Color(0.90, 0.55, 0.15)},
-	{"mode": "mode_b",  "label": "MOD B",     "sub": "no mosse (block blast)", "color": Color(0.25, 0.70, 0.35)},
-	{"mode": "mode_c",  "label": "MOD C",     "sub": "fusione + combo + bombe", "color": Color(0.70, 0.30, 0.80)},
+	{"mode": "mode_c",  "label": "CLASSIC",     "sub": "combo + bombe",          "color": Color(0.70, 0.30, 0.80)},
+	{"mode": "classic", "label": "MODE 1 BETA", "sub": "classica (beta)",        "color": Color(0.20, 0.55, 0.80)},
+	{"mode": "mode_a",  "label": "MOD A",       "sub": "ogni azione = 1 mossa",  "color": Color(0.90, 0.55, 0.15)},
+	{"mode": "mode_b",  "label": "MOD B",       "sub": "no mosse (block blast)", "color": Color(0.25, 0.70, 0.35)},
 ]
 
 var _background: Sprite2D
@@ -45,6 +59,27 @@ var _play_pressing := false
 var _sparkles: CPUParticles2D
 var _mode_menu: Control
 
+# Frecce laterali + display modalità sullo schermo
+var _arrow_l_base: Sprite2D
+var _arrow_l_pressed: Sprite2D
+var _arrow_r_base: Sprite2D
+var _arrow_r_pressed: Sprite2D
+var _arrow_l_center := Vector2.ZERO
+var _arrow_r_center := Vector2.ZERO
+var _arrow_hit_size := Vector2.ZERO
+var _arrow_l_pressing := false
+var _arrow_r_pressing := false
+var _arrow_l_sparkles: CPUParticles2D
+var _arrow_r_sparkles: CPUParticles2D
+var _mode_index := 0
+var _mode_screen: Node2D
+var _mode_screen_label: Label
+var _mode_screen_sub: Label
+var _screen_anim: AnimatedSprite2D
+var _mode_anims := {}                       # mode -> SpriteFrames (animazione a schermo)
+var _screen_title: Sprite2D                 # scritta (es. CLASSIC) sopra l'animazione
+var _mode_titles := {}                      # mode -> Texture2D (scritta a schermo)
+
 var _art_pos := CAMERA_CENTER
 
 
@@ -52,6 +87,9 @@ func _ready() -> void:
 	settings.play_music(music_player.stream)
 	_build_scene()
 	_build_play_button()
+	_build_screen_anim()
+	_build_mode_screen()
+	_build_arrows()
 	_build_mode_menu()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
@@ -73,6 +111,15 @@ func _layout() -> void:
 			s.scale = Vector2(ART_SCALE, ART_SCALE)
 
 	_position_play_button()
+	_position_arrows()
+	if _mode_screen:
+		_mode_screen.position = _art_to_world(SCREEN_CENTER_ART)
+		_mode_screen.scale = Vector2(ART_SCALE, ART_SCALE)
+	if _screen_anim:
+		_screen_anim.position = _art_to_world(SCREEN_ANIM_CENTER_ART)
+		var sc := (SCREEN_ANIM_WIDTH_ART / SCREEN_ANIM_TEX.x) * ART_SCALE
+		_screen_anim.scale = Vector2(sc, sc)
+	_position_screen_title()
 
 
 # --- Sfondo + cabinato animato -------------------------------------------------
@@ -117,27 +164,8 @@ func _replay_cabinet() -> void:
 
 # --- Tasto PLAY + scintille ----------------------------------------------------
 func _build_play_button() -> void:
-	# Scintille bianche "sbrilluccicose" dal centro del tasto, dietro di esso.
-	_sparkles = CPUParticles2D.new()
-	_sparkles.texture = _make_pixel_texture()
-	_sparkles.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_sparkles.z_index = -1                       # dietro al tasto (z=0), davanti al cabinato (z=-2)
-	_sparkles.amount = 46
-	_sparkles.lifetime = 1.0
-	_sparkles.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
-	_sparkles.emission_sphere_radius = 26.0      # nascono al centro, dietro il tasto
-	_sparkles.direction = Vector2(0, -1)
-	_sparkles.spread = 180.0                     # in tutte le direzioni -> attorno al tasto
-	_sparkles.gravity = Vector2.ZERO
-	_sparkles.initial_velocity_min = 45.0
-	_sparkles.initial_velocity_max = 105.0
-	_sparkles.scale_amount_min = 2.5
-	_sparkles.scale_amount_max = 4.5
-	var grad := Gradient.new()
-	grad.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
-	grad.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
-	_sparkles.color_ramp = grad
-	add_child(_sparkles)
+	# Scintille bianche "sbrilluccicose" dietro il tasto.
+	_sparkles = _make_sparkles(26.0, 46, 45.0, 105.0, 2.5, 4.5)
 
 	# Tasto: due Sprite2D (base + premuto, allineati in basso). Input a mano in _input().
 	_play_base = Sprite2D.new()
@@ -158,6 +186,31 @@ func _make_pixel_texture() -> ImageTexture:
 	var img := Image.create(2, 2, false, Image.FORMAT_RGBA8)
 	img.fill(Color(1, 1, 1, 1))
 	return ImageTexture.create_from_image(img)
+
+
+# Emettitore di scintille bianche a pixel (nascono al centro, sparano in tutte le direzioni).
+func _make_sparkles(radius: float, amount: int, vmin: float, vmax: float, smin: float, smax: float) -> CPUParticles2D:
+	var sp := CPUParticles2D.new()
+	sp.texture = _make_pixel_texture()
+	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sp.z_index = -1                       # dietro all'elemento (z=0), davanti al cabinato (z=-2)
+	sp.amount = amount
+	sp.lifetime = 1.0
+	sp.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+	sp.emission_sphere_radius = radius
+	sp.direction = Vector2(0, -1)
+	sp.spread = 180.0
+	sp.gravity = Vector2.ZERO
+	sp.initial_velocity_min = vmin
+	sp.initial_velocity_max = vmax
+	sp.scale_amount_min = smin
+	sp.scale_amount_max = smax
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	grad.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	sp.color_ramp = grad
+	add_child(sp)
+	return sp
 
 
 # Posiziona/scala il tasto (Sprite2D) e le scintille secondo l'ancoraggio corrente.
@@ -185,6 +238,159 @@ func _position_play_button() -> void:
 	_sparkles.scale = Vector2(ART_SCALE, ART_SCALE)
 
 
+# --- Frecce laterali cambia-modalità -------------------------------------------
+func _make_arrow_sprite(path: String, flip: bool) -> Sprite2D:
+	var sp := Sprite2D.new()
+	sp.texture = load(path)
+	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	sp.flip_h = flip
+	sp.z_index = 0
+	add_child(sp)
+	return sp
+
+
+func _build_arrows() -> void:
+	# scintille dietro ogni freccia (come il tasto PLAY, un filo più piccole)
+	_arrow_l_sparkles = _make_sparkles(17.0, 24, 30.0, 72.0, 2.0, 3.6)
+	_arrow_r_sparkles = _make_sparkles(17.0, 24, 30.0, 72.0, 2.0, 3.6)
+	# destra = asset così com'è (punta a destra); sinistra = specchiata
+	_arrow_r_base = _make_arrow_sprite("res://CORE/Assets/Art/Home/arrow_normal.svg", false)
+	_arrow_r_pressed = _make_arrow_sprite("res://CORE/Assets/Art/Home/arrow_pressed.svg", false)
+	_arrow_r_pressed.visible = false
+	_arrow_l_base = _make_arrow_sprite("res://CORE/Assets/Art/Home/arrow_normal.svg", true)
+	_arrow_l_pressed = _make_arrow_sprite("res://CORE/Assets/Art/Home/arrow_pressed.svg", true)
+	_arrow_l_pressed.visible = false
+
+
+func _position_arrows() -> void:
+	if not _arrow_r_base:
+		return
+	var s := (ARROW_WIDTH_ART / ARROW_TEX.x) * ART_SCALE
+	_arrow_r_center = _art_to_world(ARROW_R_CENTER_ART)
+	_arrow_l_center = _art_to_world(ARROW_L_CENTER_ART)
+	_arrow_hit_size = ARROW_TEX * s
+	for sp: Sprite2D in [_arrow_r_base, _arrow_r_pressed]:
+		sp.position = _arrow_r_center
+		sp.scale = Vector2(s, s)
+	for sp: Sprite2D in [_arrow_l_base, _arrow_l_pressed]:
+		sp.position = _arrow_l_center
+		sp.scale = Vector2(s, s)
+	_arrow_l_sparkles.position = _arrow_l_center
+	_arrow_l_sparkles.scale = Vector2(ART_SCALE, ART_SCALE)
+	_arrow_r_sparkles.position = _arrow_r_center
+	_arrow_r_sparkles.scale = Vector2(ART_SCALE, ART_SCALE)
+
+
+func _arrow_down(base: Sprite2D, pressed: Sprite2D, spk: CPUParticles2D) -> void:
+	settings.button_feedback()
+	base.visible = false
+	pressed.visible = true
+	spk.emitting = false
+
+
+func _arrow_up(base: Sprite2D, pressed: Sprite2D, spk: CPUParticles2D) -> void:
+	base.visible = true
+	pressed.visible = false
+	spk.emitting = true
+
+
+# --- Animazione a schermo (dietro il cabinato) ---------------------------------
+func _build_screen_anim() -> void:
+	_screen_anim = AnimatedSprite2D.new()
+	_screen_anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_screen_anim.z_index = -3            # dietro il cabinato (z=-2), davanti allo sfondo (z=-4)
+	_screen_anim.centered = true
+	add_child(_screen_anim)
+
+	# scritta SOPRA l'animazione (stesso z, aggiunta dopo -> disegnata sopra)
+	_screen_title = Sprite2D.new()
+	_screen_title.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_screen_title.z_index = -3
+	_screen_title.centered = true
+	add_child(_screen_title)
+
+	# "CLASSIC" (che avvia la gameplay mode_c) ha animazione + scritta; le altre mostrano il testo
+	var classic := SpriteFrames.new()
+	classic.add_animation("a")
+	classic.set_animation_loop("a", true)
+	classic.set_animation_speed("a", SCREEN_ANIM_FPS)
+	for i in range(1, 11):
+		classic.add_frame("a", load("res://CORE/Assets/Art/Home/Screen/classic_%02d.png" % i))
+	_mode_anims["mode_c"] = classic
+	_mode_titles["mode_c"] = load("res://CORE/Assets/Art/Home/screen_title_classic.svg")
+
+
+# Posiziona la scritta esattamente sopra l'animazione (stesso centro/larghezza).
+func _position_screen_title() -> void:
+	if _screen_title and _screen_title.texture:
+		_screen_title.position = _art_to_world(SCREEN_ANIM_CENTER_ART)
+		var st := (SCREEN_ANIM_WIDTH_ART / float(_screen_title.texture.get_width())) * ART_SCALE
+		_screen_title.scale = Vector2(st, st)
+
+
+# --- Display modalità sullo schermo del cabinato -------------------------------
+func _build_mode_screen() -> void:
+	# Node2D (segue il Camera2D come gli sprite); i Label sono figli in coord "art".
+	_mode_screen = Node2D.new()
+	_mode_screen.z_index = -1     # sullo schermo, davanti al cabinato (z=-2)
+	add_child(_mode_screen)
+
+	_mode_screen_label = Label.new()
+	_mode_screen_label.add_theme_font_override("font", MODE_FONT)
+	_mode_screen_label.add_theme_font_size_override("font_size", 64)
+	_mode_screen_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mode_screen_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_mode_screen_label.size = Vector2(340, 90)
+	_mode_screen_label.position = Vector2(-170, -66)
+	_mode_screen.add_child(_mode_screen_label)
+
+	_mode_screen_sub = Label.new()
+	_mode_screen_sub.add_theme_font_override("font", MODE_FONT)
+	_mode_screen_sub.add_theme_font_size_override("font_size", 26)
+	_mode_screen_sub.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	_mode_screen_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mode_screen_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_mode_screen_sub.size = Vector2(300, 60)
+	_mode_screen_sub.position = Vector2(-150, 20)
+	_mode_screen.add_child(_mode_screen_sub)
+
+	_update_mode_screen()
+
+
+func _update_mode_screen() -> void:
+	var m: Dictionary = MODES[_mode_index]
+	var mode: String = m["mode"]
+	# se la modalità ha un'animazione a schermo la mostro (dietro il cabinato) e nascondo il testo
+	if _screen_anim and _mode_anims.has(mode):
+		_screen_anim.sprite_frames = _mode_anims[mode]
+		_screen_anim.play("a")
+		_screen_anim.visible = true
+		# scritta sopra l'animazione (se presente per questa modalità)
+		if _mode_titles.has(mode):
+			_screen_title.texture = _mode_titles[mode]
+			_screen_title.visible = true
+			_position_screen_title()
+		else:
+			_screen_title.visible = false
+		_mode_screen_label.visible = false
+		_mode_screen_sub.visible = false
+	else:
+		if _screen_anim:
+			_screen_anim.visible = false
+		if _screen_title:
+			_screen_title.visible = false
+		_mode_screen_label.visible = true
+		_mode_screen_sub.visible = true
+		_mode_screen_label.text = m["label"]
+		_mode_screen_label.add_theme_color_override("font_color", m["color"])
+		_mode_screen_sub.text = m["sub"]
+
+
+func _cycle_mode(dir: int) -> void:
+	_mode_index = (_mode_index + dir + MODES.size()) % MODES.size()
+	_update_mode_screen()
+
+
 # Input a mano: press/release testati sul rettangolo-mondo del tasto (mouse + touch).
 func _input(event: InputEvent) -> void:
 	if _mode_menu == null or _mode_menu.visible:
@@ -192,17 +398,35 @@ func _input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton or event is InputEventScreenTouch):
 		return
 	var world: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * event.position
-	var rect := Rect2(_play_world_center - _play_world_size * 0.5, _play_world_size)
-	var inside := rect.has_point(world)
+	var play_rect := Rect2(_play_world_center - _play_world_size * 0.5, _play_world_size)
+	var l_rect := Rect2(_arrow_l_center - _arrow_hit_size * 0.5, _arrow_hit_size)
+	var r_rect := Rect2(_arrow_r_center - _arrow_hit_size * 0.5, _arrow_hit_size)
 	if event.pressed:
-		if inside:
+		if play_rect.has_point(world):
 			_play_pressing = true
 			_on_play_down()
-	elif _play_pressing:
-		_play_pressing = false
-		_on_play_up()
-		if inside:
-			_on_play_pressed()
+		elif l_rect.has_point(world):
+			_arrow_l_pressing = true
+			_arrow_down(_arrow_l_base, _arrow_l_pressed, _arrow_l_sparkles)
+		elif r_rect.has_point(world):
+			_arrow_r_pressing = true
+			_arrow_down(_arrow_r_base, _arrow_r_pressed, _arrow_r_sparkles)
+	else:
+		if _play_pressing:
+			_play_pressing = false
+			_on_play_up()
+			if play_rect.has_point(world):
+				_on_play_pressed()
+		if _arrow_l_pressing:
+			_arrow_l_pressing = false
+			_arrow_up(_arrow_l_base, _arrow_l_pressed, _arrow_l_sparkles)
+			if l_rect.has_point(world):
+				_cycle_mode(-1)
+		if _arrow_r_pressing:
+			_arrow_r_pressing = false
+			_arrow_up(_arrow_r_base, _arrow_r_pressed, _arrow_r_sparkles)
+			if r_rect.has_point(world):
+				_cycle_mode(1)
 
 
 func _on_play_down() -> void:
@@ -220,7 +444,8 @@ func _on_play_up() -> void:
 
 
 func _on_play_pressed() -> void:
-	_open_mode_menu()
+	# la modalità si sceglie con le frecce (mostrata sullo schermo): PLAY la avvia
+	_start_mode(MODES[_mode_index]["mode"])
 
 
 # --- Sottomenu scelta modalità -------------------------------------------------

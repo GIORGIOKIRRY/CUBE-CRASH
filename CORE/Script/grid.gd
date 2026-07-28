@@ -80,6 +80,12 @@ var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 #  +1 = colonna intera (+ gravità/refill)   +2 = riga intera (+ gravità)
 #  +3 = bomba 5x5 che lascia un CRATERE vuoto (buchi da riempire, niente refill)
 var _is_mode_c: bool = false
+var _is_speedrun: bool = false               # gameplay mode_c + timer 5 min + input libero durante le cascate
+var _speedrun_time_left: float = 300.0       # 5 minuti
+var _timer_label: Label = null
+var _speedrun_best: int = 0                   # record dedicato alla modalità speedrun
+var _prev_speedrun_best: int = 0             # record speedrun PRIMA di questa partita
+var _speedrun_started: bool = false          # il timer parte solo dopo il countdown 3-2-1-GO
 const MODE_C_COLOR_ORDER := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
 const MODE_C_START_COLORS := 5           # colori a inizio partita (facili le combo)
 const MODE_C_COLORS_PER_STEP := 3        # +1 colore ogni N livelli di difficoltà
@@ -120,14 +126,17 @@ func _load_scores() -> void:
 	if err == OK:
 		high_score     = int(cfg.get_value("scores", "high_score", 0))
 		lifetime_score = int(cfg.get_value("scores", "lifetime_score", 0))
+		_speedrun_best = int(cfg.get_value("scores", "speedrun_best", 0))
 	else:
 		high_score = 0
 		lifetime_score = 0
+		_speedrun_best = 0
 
 func _save_scores() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("scores", "high_score", high_score)
 	cfg.set_value("scores", "lifetime_score", lifetime_score)
+	cfg.set_value("scores", "speedrun_best", _speedrun_best)
 	cfg.save(SAVE_PATH)
 
 # ----- Piece Scenes -----
@@ -245,7 +254,8 @@ func _ready() -> void:
 	randomize()
 	# Modalità test scelta dal menu
 	_mode = settings.game_mode
-	_is_mode_c = _mode == "mode_c"
+	_is_speedrun = _mode == "speedrun"
+	_is_mode_c = _mode == "mode_c" or _is_speedrun   # speedrun = gameplay CLASSIC/mode_c
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
 	_build_plus_pools()
@@ -260,6 +270,8 @@ func _ready() -> void:
 				_update_combo_counter()
 			else:
 				mv.visible = false
+	if _is_speedrun:
+		_setup_speedrun_ui()
 	all_pieces = make_2d_array()
 	cell_active = make_2d_array()
 	# mappa colore -> scena pezzo (serve al refill combo E ai pool Mode C):
@@ -279,6 +291,7 @@ func _ready() -> void:
 	update_moves_label()
 	_load_scores()
 	_prev_high_score = high_score   # record da battere in questa partita
+	_prev_speedrun_best = _speedrun_best
 	score = 0
 	_update_point_label()
 	_update_high_score_labels_everywhere()
@@ -296,6 +309,80 @@ func _ready() -> void:
 		_combo_frames[lvl] = _build_combo_frames("combo%d" % lvl)
 
 	_last_action_ms = Time.get_ticks_msec()
+
+	# speedrun: prima di far partire il timer, countdown 3-2-1-GO! (input bloccato)
+	if _is_speedrun:
+		_speedrun_countdown()
+
+# --- Speedrun: countdown iniziale 3-2-1-GO! -----------------------------------
+func _speedrun_countdown() -> void:
+	can_move = false
+	_speedrun_started = false
+	var dim := _make_countdown_dim()
+	for t in ["3", "2", "1", "GO!"]:
+		_show_countdown_text(t)
+		if t == "GO!":
+			settings.play_playbutton()
+			settings.vibrate(90)
+		else:
+			settings.play_tap()
+			settings.vibrate(45)
+		await get_tree().create_timer(0.7).timeout
+		if not is_inside_tree():
+			return
+	_speedrun_started = true
+	can_move = true
+	if is_instance_valid(dim):
+		var tw := create_tween()
+		tw.tween_property(dim, "modulate:a", 0.0, 0.35)
+		tw.tween_callback(dim.queue_free)
+
+func _make_countdown_dim() -> ColorRect:
+	var ui := get_node_or_null("../UI")
+	if ui == null:
+		return null
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.offset_left = -400.0
+	dim.offset_top = -400.0
+	dim.offset_right = 1000.0
+	dim.offset_bottom = 1600.0
+	dim.z_index = 799   # dietro i numeri (z=800)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	ui.add_child(dim)
+	return dim
+
+func _show_countdown_text(txt: String) -> void:
+	var ui := get_node_or_null("../UI")
+	if ui == null:
+		return
+	var lbl := Label.new()
+	lbl.text = txt
+	var pl = ui.get_node_or_null("PointLabel")
+	if pl:
+		var pf = pl.get_theme_font("font")
+		if pf:
+			lbl.add_theme_font_override("font", pf)
+	lbl.add_theme_font_size_override("font_size", 190)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.offset_left = 38.0
+	lbl.offset_right = 538.0
+	lbl.offset_top = 380.0
+	lbl.offset_bottom = 640.0
+	lbl.pivot_offset = Vector2(250.0, 130.0)
+	lbl.z_index = 800
+	lbl.scale = Vector2(0.4, 0.4)
+	lbl.modulate.a = 0.0
+	ui.add_child(lbl)
+	var tw := create_tween()
+	tw.tween_property(lbl, "scale", Vector2(1.15, 1.15), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(lbl, "modulate:a", 1.0, 0.12)
+	tw.tween_interval(0.30)
+	tw.tween_property(lbl, "modulate:a", 0.0, 0.22)
+	tw.parallel().tween_property(lbl, "scale", Vector2(1.5, 1.5), 0.22)
+	tw.tween_callback(lbl.queue_free)
 
 # 1) Griglia iniziale a scacchiera: (pezzo, spazio vuoto) alternati
 func _spawn_checkerboard() -> void:
@@ -477,6 +564,7 @@ func destroy_matched() -> Array:
 	var bonus_moves := 0
 	var destroyed_count := 0
 	var ability_hits: Array = []   # mode_b: cubi +N matchati -> power-up
+	var break_tally := {}          # missioni: conteggio cubi rotti per colore
 
 	for i in width:
 		for j in height:
@@ -492,6 +580,12 @@ func destroy_matched() -> Array:
 				# Punteggio: conta ogni pezzo distrutto
 				destroyed_count += 1
 
+				# missioni: conta il colore del cubo rotto
+				var pcol = piece.get("color")
+				if pcol != null:
+					var cs := str(pcol)
+					break_tally[cs] = int(break_tally.get(cs, 0)) + 1
+
 				piece.queue_free()
 				all_pieces[i][j] = null
 				destroyed_positions.append(Vector2i(i, j))
@@ -500,6 +594,10 @@ func destroy_matched() -> Array:
 	if not _moves_enabled:
 		for hit in ability_hits:
 			destroyed_count += _trigger_powerup(hit["pos"], hit["val"], destroyed_positions)
+
+	# missioni: cubi rotti per colore (dai match)
+	for c in break_tally:
+		missions.report_break(str(c), int(break_tally[c]))
 
 	# 🔹 Bonus mosse (solo classic / mode_a): i cubi +1/+2/+3 danno il loro valore.
 	# In mode_b i cubi +N NON danno mosse: sono power-up (gestiti sopra).
@@ -828,6 +926,16 @@ func _cancel_drag() -> void:
 func _process(_delta: float) -> void:
 	if is_game_over:
 		return
+	# speedrun: il timer 5 min parte solo dopo il countdown 3-2-1-GO; a 0 finisce la partita
+	if _is_speedrun:
+		if _speedrun_started:
+			_speedrun_time_left -= _delta
+			if _speedrun_time_left <= 0.0:
+				_speedrun_time_left = 0.0
+				_update_timer_label()
+				_trigger_game_over("time")
+				return
+		_update_timer_label()
 	# difficoltà basata sul tempo: aggiorna ~1 volta al secondo anche mentre si risolve
 	if Time.get_ticks_msec() - _last_diff_update_ms > 1000:
 		_last_diff_update_ms = Time.get_ticks_msec()
@@ -884,7 +992,8 @@ func _input(event: InputEvent) -> void:
 		_last_action_ms = Time.get_ticks_msec()
 		_clear_hint()
 	if can_move == true:
-		if is_game_over or is_resolving:
+		# speedrun: input consentito anche durante le cascate (più mosse in contemporanea)
+		if is_game_over or (is_resolving and not _is_speedrun):
 			return
 		# Inizio drag: mouse down su un pezzo della BottomGrid
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
@@ -977,6 +1086,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func check_game_over() -> void:
+	if _is_speedrun:
+		return   # speedrun: si perde SOLO a tempo, mai per spazio
 	if is_game_over or is_resolving:
 		return
 
@@ -1219,8 +1330,17 @@ func _trigger_game_over(reason := "no_space") -> void:
 	_combo_bonus = _total_combos * COMBO_END_POINTS if _is_mode_c else 0
 	score += _combo_bonus
 
+	# missioni: punteggio raggiunto in questa partita + una partita giocata
+	missions.report_score(score)
+	missions.report_play()
+
 	# Nuovo record? (sul punteggio finale, bonus incluso)
-	_is_new_record = score > _prev_high_score and score > 0
+	if _is_speedrun:
+		_is_new_record = score > _prev_speedrun_best and score > 0
+		if score > _speedrun_best:
+			_speedrun_best = score
+	else:
+		_is_new_record = score > _prev_high_score and score > 0
 
 	# Aggiorna HighScore
 	if score > high_score:
@@ -1243,7 +1363,7 @@ func _trigger_game_over(reason := "no_space") -> void:
 
 	# Flusso di sconfitta: strip motivo -> revive -> schermata finale
 	var flow = get_node_or_null("%DefeatFlow")
-	if flow:
+	if flow and not _is_speedrun:   # speedrun: niente revive, si va diritti alla schermata finale
 		if not flow.finished.is_connected(_on_defeat_finished):
 			flow.finished.connect(_on_defeat_finished)
 			flow.revive_requested.connect(_on_revive_requested)
@@ -1303,12 +1423,59 @@ func _show_game_over_screen() -> void:
 			screen.set_session_stats(_last_session_stats)
 		if screen.has_method("set_end_bonus"):
 			screen.set_end_bonus(score, _end_moves, END_MOVE_POINTS)
+		# speedrun: niente layout viola "record"; titolo "SPEEDRUN" + record dedicato
+		var rec: bool = _is_new_record and not _is_speedrun
 		if screen.has_method("show_result"):
-			screen.show_result(_is_new_record)
+			screen.show_result(rec)
 		else:
 			screen.visible = true
+		if _is_speedrun and screen.has_method("set_speedrun_mode"):
+			screen.set_speedrun_mode(_speedrun_best, _is_new_record)
 		if screen is CanvasItem:
 			screen.z_index = 99999
+
+
+# Speedrun: punteggio più piccolo in alto + TIMER grande sotto; nasconde COMBO/HighScore.
+func _setup_speedrun_ui() -> void:
+	var ui := get_node_or_null("../UI")
+	if ui == null:
+		return
+	var pfont: Font = null
+	var pl = ui.get_node_or_null("PointLabel")
+	if pl:
+		pfont = pl.get_theme_font("font")
+		pl.add_theme_font_size_override("font_size", 50)
+		pl.offset_top = 4
+		pl.offset_bottom = 58
+	_timer_label = Label.new()
+	if pfont:
+		_timer_label.add_theme_font_override("font", pfont)
+	_timer_label.add_theme_font_size_override("font_size", 100)
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_timer_label.offset_left = 38
+	_timer_label.offset_right = 538
+	_timer_label.offset_top = 66
+	_timer_label.offset_bottom = 196
+	ui.add_child(_timer_label)
+	var mv = ui.get_node_or_null("MOOVES")
+	if mv:
+		mv.visible = false
+	var hs = ui.get_node_or_null("HighScore")
+	if hs:
+		hs.visible = false
+	_update_timer_label()
+
+
+func _update_timer_label() -> void:
+	if _timer_label == null:
+		return
+	var s := int(ceil(_speedrun_time_left))
+	_timer_label.text = "%d:%02d" % [s / 60, s % 60]
+	if _speedrun_time_left <= 30.0:
+		_timer_label.add_theme_color_override("font_color", Color(0.95, 0.25, 0.25))  # rosso: ultimi 30s
+	else:
+		_timer_label.add_theme_color_override("font_color", Color(1, 1, 1))
 
 
 func _update_point_label() -> void:
@@ -1922,6 +2089,7 @@ func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	asp.animation_finished.connect(asp.queue_free)
 	asp.play("c")
 	settings.play_combo(level)
+	missions.report_combo(level)   # missioni: "fai una COMBO N"
 	# vibrazione un po' più forte a ogni combo (cresce col livello)
 	settings.vibrate(48 + mini(level, 5) * 6)
 

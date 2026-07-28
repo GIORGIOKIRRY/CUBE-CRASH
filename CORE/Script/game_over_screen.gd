@@ -40,6 +40,21 @@ func set_end_bonus(final_score: int, moves: int, per_move: int) -> void:
 	_end_per = per_move
 
 
+# Speedrun: titolo "SPEEDRUN" e riga record dedicato (RECORD / NUOVO RECORD!)
+func set_speedrun_mode(record: int, is_record: bool) -> void:
+	var title := get_node_or_null("Items/L_GameOver") as Label
+	if title:
+		title.text = "SPEEDRUN"
+	var best_lbl := get_node_or_null("Items/BestScore") as Label
+	if best_lbl:
+		best_lbl.text = "NUOVO RECORD!" if is_record else "RECORD"
+		best_lbl.visible = true
+	var best_num := get_node_or_null("Items/L_BestScoreNumber") as Label
+	if best_num:
+		best_num.text = str(record)
+		best_num.visible = true
+
+
 # Mostra la schermata di fine partita.
 # Se is_new_record == true usa il layout viola "BEST SCORE!" (tutto centrato).
 func show_result(is_new_record: bool) -> void:

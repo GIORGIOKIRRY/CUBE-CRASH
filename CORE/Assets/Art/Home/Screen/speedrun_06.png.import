@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://divcbagpoxybf"
-path="res://.godot/imported/screen_title_classic.svg-227df4e6673e598125ee027fe2062dfd.ctex"
+uid="uid://08d6qy1xvr8x"
+path="res://.godot/imported/speedrun_06.png-dd0fb4315aa827409e3bd520e9b54996.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://CORE/Assets/Art/Home/screen_title_classic.svg"
-dest_files=["res://.godot/imported/screen_title_classic.svg-227df4e6673e598125ee027fe2062dfd.ctex"]
+source_file="res://CORE/Assets/Art/Home/Screen/speedrun_06.png"
+dest_files=["res://.godot/imported/speedrun_06.png-dd0fb4315aa827409e3bd520e9b54996.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

@@ -25,6 +25,7 @@ config/icon="uid://o7mxndnfjij4"
 
 settings="*res://settings.gd"
 transition="*res://transition.gd"
+missions="*res://missions.gd"
 
 [display]
 

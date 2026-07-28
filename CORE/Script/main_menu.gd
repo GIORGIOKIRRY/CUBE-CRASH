@@ -39,10 +39,8 @@ const SCREEN_ANIM_FPS := 10.0
 
 # Test A/B/C: 3 modalità (nel sottomenu). Poi ne resterà una.
 const MODES := [
-	{"mode": "mode_c",  "label": "CLASSIC",     "sub": "combo + bombe",          "color": Color(0.70, 0.30, 0.80)},
-	{"mode": "classic", "label": "MODE 1 BETA", "sub": "classica (beta)",        "color": Color(0.20, 0.55, 0.80)},
-	{"mode": "mode_a",  "label": "MOD A",       "sub": "ogni azione = 1 mossa",  "color": Color(0.90, 0.55, 0.15)},
-	{"mode": "mode_b",  "label": "MOD B",       "sub": "no mosse (block blast)", "color": Color(0.25, 0.70, 0.35)},
+	{"mode": "mode_c",   "label": "CLASSIC",  "sub": "combo + bombe",         "color": Color(0.70, 0.30, 0.80)},
+	{"mode": "speedrun", "label": "SPEEDRUN", "sub": "piu punti in 5 minuti", "color": Color(0.95, 0.35, 0.15)},
 ]
 
 var _background: Sprite2D
@@ -80,6 +78,22 @@ var _mode_anims := {}                       # mode -> SpriteFrames (animazione a
 var _screen_title: Sprite2D                 # scritta (es. CLASSIC) sopra l'animazione
 var _mode_titles := {}                      # mode -> Texture2D (scritta a schermo)
 
+# Missioni (tastino TEMPORANEO + pannello, design provvisorio)
+var _missions_button: Button
+var _coin_label: Label
+var _missions_menu: Control
+var _missions_list: VBoxContainer
+var _missions_coins_label: Label
+var _missions_timer_label: Label
+
+# Menu bar in basso (missioni / home / shop)
+const NAV_TEX := Vector2(1600.0, 432.0)
+var _nav_bar: TextureRect
+var _nav_btns: Array = []
+var _nav_textures := {}
+var _tab := "home"
+var _shop_menu: Control
+
 var _art_pos := CAMERA_CENTER
 
 
@@ -91,8 +105,12 @@ func _ready() -> void:
 	_build_mode_screen()
 	_build_arrows()
 	_build_mode_menu()
+	_build_missions_menu()
+	_build_shop_menu()
+	_build_nav_bar()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
+	_select_tab("home", false)
 
 
 func _art_to_world(art: Vector2) -> Vector2:
@@ -102,7 +120,18 @@ func _art_to_world(art: Vector2) -> Vector2:
 # Ancora la scena arcade in basso e la scala; riposiziona anche tasto e scintille.
 func _layout() -> void:
 	var view_size := get_viewport_rect().size
-	var bottom_y := CAMERA_CENTER.y + view_size.y * 0.5 - BOTTOM_MARGIN
+	# barra nav in basso, full-width; altezza basata su una larghezza di riferimento
+	# limitata (576 = base di design) così su schermi larghi (iPad) non diventa enorme
+	var nav_h := minf(view_size.x, 620.0) * (NAV_TEX.y / NAV_TEX.x)
+	if _nav_bar:
+		_nav_bar.position = Vector2(0, view_size.y - nav_h)
+		_nav_bar.size = Vector2(view_size.x, nav_h)
+		for i in _nav_btns.size():
+			var b: Button = _nav_btns[i]
+			b.position = Vector2(view_size.x * i / 3.0, 0.0)
+			b.size = Vector2(view_size.x / 3.0, nav_h)
+	# cabinato ancorato al LIMITE INFERIORE (la barra ci passa sopra, è su un CanvasLayer)
+	var bottom_y := CAMERA_CENTER.y + view_size.y * 0.5
 	_art_pos = Vector2(CAMERA_CENTER.x, bottom_y - (ART_SIZE.y - ART_CENTER.y) * ART_SCALE)
 
 	for s: Node2D in [_background, _cabinet]:
@@ -124,6 +153,7 @@ func _layout() -> void:
 
 # --- Sfondo + cabinato animato -------------------------------------------------
 func _build_scene() -> void:
+	# (lo sfondo di riempimento è già in scena: SkyBG z=-6 + FloorBG z=-5)
 	_background = Sprite2D.new()
 	_background.texture = load("res://CORE/Assets/Art/Home/background.png")
 	_background.z_index = -4
@@ -309,15 +339,21 @@ func _build_screen_anim() -> void:
 	_screen_title.centered = true
 	add_child(_screen_title)
 
-	# "CLASSIC" (che avvia la gameplay mode_c) ha animazione + scritta; le altre mostrano il testo
-	var classic := SpriteFrames.new()
-	classic.add_animation("a")
-	classic.set_animation_loop("a", true)
-	classic.set_animation_speed("a", SCREEN_ANIM_FPS)
+	# CLASSIC (gameplay mode_c) e SPEEDRUN hanno animazione + scritta a schermo
+	_mode_anims["mode_c"] = _load_screen_frames("classic")
+	_mode_titles["mode_c"] = load("res://CORE/Assets/Art/Home/screen_title_classic.png")
+	_mode_anims["speedrun"] = _load_screen_frames("speedrun")
+	_mode_titles["speedrun"] = load("res://CORE/Assets/Art/Home/screen_title_speedrun.png")
+
+
+func _load_screen_frames(prefix: String) -> SpriteFrames:
+	var sf := SpriteFrames.new()
+	sf.add_animation("a")
+	sf.set_animation_loop("a", true)
+	sf.set_animation_speed("a", SCREEN_ANIM_FPS)
 	for i in range(1, 11):
-		classic.add_frame("a", load("res://CORE/Assets/Art/Home/Screen/classic_%02d.png" % i))
-	_mode_anims["mode_c"] = classic
-	_mode_titles["mode_c"] = load("res://CORE/Assets/Art/Home/screen_title_classic.svg")
+		sf.add_frame("a", load("res://CORE/Assets/Art/Home/Screen/%s_%02d.png" % [prefix, i]))
+	return sf
 
 
 # Posiziona la scritta esattamente sopra l'animazione (stesso centro/larghezza).
@@ -394,6 +430,8 @@ func _cycle_mode(dir: int) -> void:
 # Input a mano: press/release testati sul rettangolo-mondo del tasto (mouse + touch).
 func _input(event: InputEvent) -> void:
 	if _mode_menu == null or _mode_menu.visible:
+		return
+	if _tab != "home":
 		return
 	if not (event is InputEventMouseButton or event is InputEventScreenTouch):
 		return
@@ -566,3 +604,296 @@ func _on_link_button_pressed() -> void:
 func _on_terms_button_pressed() -> void:
 	settings.button_feedback()
 	%SettingsMenu.open_patchnotes_from_home()
+
+
+# --- MISSIONI (tastino TEMPORANEO + pannello) ----------------------------------
+func _build_missions_button() -> void:
+	_missions_button = Button.new()
+	_missions_button.text = "MISSIONI"
+	_missions_button.focus_mode = Control.FOCUS_NONE
+	_missions_button.position = Vector2(12, 408)
+	_missions_button.size = Vector2(150, 60)
+	_missions_button.add_theme_font_override("font", MODE_FONT)
+	_missions_button.add_theme_font_size_override("font_size", 28)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.13, 0.48, 0.72)
+	sb.set_corner_radius_all(14)
+	sb.set_border_width_all(3)
+	sb.border_color = Color(1, 1, 1, 0.5)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 5
+	sb.shadow_offset = Vector2(0, 3)
+	_missions_button.add_theme_stylebox_override("normal", sb)
+	_missions_button.add_theme_stylebox_override("hover", sb)
+	_missions_button.add_theme_stylebox_override("pressed", sb)
+	_missions_button.pressed.connect(_open_missions)
+	add_child(_missions_button)
+
+	_coin_label = Label.new()
+	_coin_label.add_theme_font_override("font", MODE_FONT)
+	_coin_label.add_theme_font_size_override("font_size", 24)
+	_coin_label.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+	_coin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_coin_label.position = Vector2(12, 472)
+	_coin_label.size = Vector2(150, 28)
+	add_child(_coin_label)
+	_update_coin_label()
+
+
+func _update_coin_label() -> void:
+	if _coin_label:
+		_coin_label.text = "%d monete" % missions.coins
+
+
+func _build_missions_menu() -> void:
+	_missions_menu = Control.new()
+	_missions_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_missions_menu.z_index = 940
+	_missions_menu.visible = false
+	add_child(_missions_menu)
+
+	# schermata PIENA (come lo shop), non un popup
+	var bg := ColorRect.new()
+	bg.color = Color(0.09, 0.17, 0.27, 1.0)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	bg.offset_left = -600.0
+	bg.offset_top = -600.0
+	bg.offset_right = 1400.0
+	bg.offset_bottom = 2000.0
+	_missions_menu.add_child(bg)
+
+	var title := Label.new()
+	title.text = "MISSIONI"
+	title.add_theme_font_override("font", MODE_FONT)
+	title.add_theme_font_size_override("font_size", 44)
+	title.add_theme_color_override("font_color", Color(1, 1, 1))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.position = Vector2(24, 132)
+	title.size = Vector2(528, 52)
+	_missions_menu.add_child(title)
+
+	_missions_coins_label = Label.new()
+	_missions_coins_label.add_theme_font_override("font", MODE_FONT)
+	_missions_coins_label.add_theme_font_size_override("font_size", 28)
+	_missions_coins_label.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+	_missions_coins_label.position = Vector2(44, 186)
+	_missions_coins_label.size = Vector2(240, 32)
+	_missions_menu.add_child(_missions_coins_label)
+
+	_missions_timer_label = Label.new()
+	_missions_timer_label.add_theme_font_override("font", MODE_FONT)
+	_missions_timer_label.add_theme_font_size_override("font_size", 20)
+	_missions_timer_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	_missions_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_missions_timer_label.position = Vector2(292, 190)
+	_missions_timer_label.size = Vector2(244, 28)
+	_missions_menu.add_child(_missions_timer_label)
+
+	_missions_list = VBoxContainer.new()
+	_missions_list.position = Vector2(44, 230)
+	_missions_list.size = Vector2(488, 620)
+	_missions_list.add_theme_constant_override("separation", 10)
+	_missions_menu.add_child(_missions_list)
+
+
+func _refresh_text() -> String:
+	var s := missions.seconds_until_refresh()
+	return "Nuove tra %dh %02dm" % [s / 3600, (s % 3600) / 60]
+
+
+func _open_missions() -> void:
+	settings.button_feedback()
+	missions._maybe_refresh()
+	_populate_missions()
+	_missions_menu.visible = true
+
+
+func _close_missions() -> void:
+	settings.button_feedback()
+	_missions_menu.visible = false
+	_update_coin_label()
+
+
+func _on_missions_dim_input(event: InputEvent) -> void:
+	var tap: bool = (event is InputEventMouseButton and not event.pressed) \
+		or (event is InputEventScreenTouch and not event.pressed)
+	if tap:
+		_select_tab("home")
+
+
+func _populate_missions() -> void:
+	for c in _missions_list.get_children():
+		c.queue_free()
+	_missions_coins_label.text = "Monete: %d" % missions.coins
+	_missions_timer_label.text = _refresh_text()
+	for i in missions.missions.size():
+		_missions_list.add_child(_make_mission_row(i, missions.missions[i]))
+
+
+func _make_mission_row(index: int, m: Dictionary) -> Control:
+	var row := ColorRect.new()
+	row.color = Color(1, 1, 1, 0.06)
+	row.custom_minimum_size = Vector2(488, 92)
+
+	var desc := Label.new()
+	desc.text = missions.describe(m)
+	desc.add_theme_font_override("font", MODE_FONT)
+	desc.add_theme_font_size_override("font_size", 22)
+	desc.add_theme_color_override("font_color", Color(1, 1, 1))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.position = Vector2(14, 8)
+	desc.size = Vector2(316, 48)
+	row.add_child(desc)
+
+	var prog := Label.new()
+	prog.text = "%d / %d" % [m["progress"], m["target"]]
+	prog.add_theme_font_override("font", MODE_FONT)
+	prog.add_theme_font_size_override("font_size", 20)
+	prog.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
+	prog.position = Vector2(14, 58)
+	prog.size = Vector2(200, 28)
+	row.add_child(prog)
+
+	var rew := Label.new()
+	rew.text = "+%d" % m["reward"]
+	rew.add_theme_font_override("font", MODE_FONT)
+	rew.add_theme_font_size_override("font_size", 24)
+	rew.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+	rew.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rew.position = Vector2(338, 8)
+	rew.size = Vector2(136, 30)
+	row.add_child(rew)
+
+	var claim := Button.new()
+	claim.focus_mode = Control.FOCUS_NONE
+	claim.add_theme_font_override("font", MODE_FONT)
+	claim.add_theme_font_size_override("font_size", 20)
+	claim.position = Vector2(338, 46)
+	claim.size = Vector2(136, 40)
+	if m["claimed"]:
+		claim.text = "FATTO"
+		claim.disabled = true
+	elif missions.is_complete(m):
+		claim.text = "RISCUOTI"
+		claim.pressed.connect(_claim_mission.bind(index))
+	else:
+		claim.text = "IN CORSO"
+		claim.disabled = true
+	row.add_child(claim)
+	return row
+
+
+func _claim_mission(index: int) -> void:
+	var got := missions.claim(index)
+	if got > 0:
+		settings.button_feedback()
+		_update_coin_label()
+		_populate_missions()
+
+
+# --- Menu bar in basso (missioni / home / shop) --------------------------------
+func _build_nav_bar() -> void:
+	_nav_textures = {
+		"missions": load("res://CORE/Assets/Art/Home/Nav/bar_missions.png"),
+		"home": load("res://CORE/Assets/Art/Home/Nav/bar_home.png"),
+		"shop": load("res://CORE/Assets/Art/Home/Nav/bar_shop.png"),
+	}
+	# CanvasLayer dedicato: la barra sta SOPRA tutto il resto (a prescindere dagli z_index)
+	var layer := CanvasLayer.new()
+	layer.layer = 10
+	add_child(layer)
+	_nav_bar = TextureRect.new()
+	_nav_bar.texture = _nav_textures["home"]
+	_nav_bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_nav_bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_nav_bar.stretch_mode = TextureRect.STRETCH_SCALE
+	_nav_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_nav_bar)
+	# 3 tasti invisibili sopra le celle (sinistra=missioni, centro=home, destra=shop)
+	var tabs := ["missions", "home", "shop"]
+	for i in 3:
+		var b := Button.new()
+		b.focus_mode = Control.FOCUS_NONE
+		b.mouse_filter = Control.MOUSE_FILTER_STOP
+		var empty := StyleBoxEmpty.new()
+		b.add_theme_stylebox_override("normal", empty)
+		b.add_theme_stylebox_override("hover", empty)
+		b.add_theme_stylebox_override("pressed", empty)
+		b.add_theme_stylebox_override("focus", empty)
+		b.pressed.connect(_select_tab.bind(tabs[i]))
+		_nav_bar.add_child(b)
+		_nav_btns.append(b)
+
+
+func _select_tab(tab: String, feedback: bool = true) -> void:
+	if feedback:
+		settings.button_feedback()
+	_tab = tab
+	if _nav_bar:
+		_nav_bar.texture = _nav_textures.get(tab, _nav_textures["home"])
+	if _missions_menu:
+		_missions_menu.visible = false
+	if _shop_menu:
+		_shop_menu.visible = false
+	_set_home_visible(tab == "home")
+	if tab == "missions":
+		missions._maybe_refresh()
+		_populate_missions()
+		_missions_menu.visible = true
+	elif tab == "shop":
+		_shop_menu.visible = true
+
+
+func _set_home_visible(v: bool) -> void:
+	for n in [_background, _cabinet, _play_base, _sparkles,
+			_arrow_l_base, _arrow_l_pressed, _arrow_r_base, _arrow_r_pressed,
+			_arrow_l_sparkles, _arrow_r_sparkles, _screen_anim, _screen_title, _mode_screen]:
+		if n:
+			n.visible = v
+	if _play_pressed:
+		_play_pressed.visible = false
+	if _sparkles:
+		_sparkles.emitting = v
+	if _arrow_l_sparkles:
+		_arrow_l_sparkles.emitting = v
+	if _arrow_r_sparkles:
+		_arrow_r_sparkles.emitting = v
+	if v:
+		_update_mode_screen()
+
+
+func _build_shop_menu() -> void:
+	_shop_menu = Control.new()
+	_shop_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_shop_menu.z_index = 940
+	_shop_menu.visible = false
+	add_child(_shop_menu)
+	var bg := ColorRect.new()
+	bg.color = Color(0.09, 0.17, 0.27, 1.0)
+	bg.offset_left = -600.0
+	bg.offset_top = -600.0
+	bg.offset_right = 1400.0
+	bg.offset_bottom = 2000.0
+	_shop_menu.add_child(bg)
+	var t := Label.new()
+	t.text = "SHOP"
+	t.add_theme_font_override("font", MODE_FONT)
+	t.add_theme_font_size_override("font_size", 70)
+	t.add_theme_color_override("font_color", Color(1, 1, 1))
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.offset_left = 38.0
+	t.offset_right = 538.0
+	t.offset_top = 380.0
+	t.offset_bottom = 470.0
+	_shop_menu.add_child(t)
+	var s := Label.new()
+	s.text = "PROSSIMAMENTE"
+	s.add_theme_font_override("font", MODE_FONT)
+	s.add_theme_font_size_override("font_size", 34)
+	s.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	s.offset_left = 38.0
+	s.offset_right = 538.0
+	s.offset_top = 476.0
+	s.offset_bottom = 520.0
+	_shop_menu.add_child(s)

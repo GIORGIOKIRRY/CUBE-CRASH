@@ -30,7 +30,7 @@ const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back.svg")
 const DIVIDER := preload("res://CORE/Assets/Art/UI/Settings/Divider.svg")
 const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
-const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🕹️ NUOVA HOME ARCADE\n🎯 Cabinato animato\n◀▶ Scegli la modalità con le frecce ai lati (compare sullo schermo)\n▶️ PLAY avvia la modalità scelta\n\n🧩 NUOVA MODALITÀ CLASSIC\n💥 Combo a raffica + bombe\n🧱 Niente mosse: perdi solo se riempi la tavola\n📈 Difficoltà graduale\n\n🔗 COMBO\n✨ Nuove animazioni combo (fino a COMBO 11)\n🔢 Le combo si sommano: a fine partita +100 punti ognuna\n\n💠 CUBI SPECIALI (per colore)\n⬆️ Verticale distrugge la COLONNA\n➡️ Orizzontale distrugge la RIGA\n🧨 Bomba: esplosione 3x3 (rarissima)\n🎁 Spuntano anche tra i 3 blocchi in basso\n\n🧪 Altre modalità: MODE 1 BETA, MOD A, MOD B\n\n📱 Grazie per aver provato questa build!"
+const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🕹️ NUOVA HOME ARCADE\n🎯 Cabinato animato, scegli la modalità con le frecce\n📱 Menu in basso: Missioni · Home · Shop\n\n🧩 MODALITÀ\n💥 CLASSIC — combo a raffica + bombe\n⏱️ SPEEDRUN — più punti in 5 minuti (countdown 3-2-1-GO!)\n\n🎯 MISSIONI GIORNALIERE\n✅ 6 missioni ogni 24h (punteggi, colori, combo...)\n🪙 Guadagna monete completandole\n\n🔗 COMBO fino a 11 con nuove animazioni\n💠 Cubi speciali per colore (colonna / riga / bomba)\n\n🛒 Shop in arrivo!\n\n📱 Grazie per aver provato questa build!"
 
 const CONTACT_EMAIL := "cubecrash.game@gmail.com"
 const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non richiede account, non raccoglie dati personali e salva i progressi solo sul tuo dispositivo."

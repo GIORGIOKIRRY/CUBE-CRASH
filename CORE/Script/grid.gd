@@ -935,6 +935,9 @@ func _process(_delta: float) -> void:
 				_update_timer_label()
 				_trigger_game_over("time")
 				return
+			# rete di sicurezza anti-blocco: se la board è piena, libera spazio
+			if not is_resolving and _is_board_full():
+				_remove_random_cells(10)
 		_update_timer_label()
 	# difficoltà basata sul tempo: aggiorna ~1 volta al secondo anche mentre si risolve
 	if Time.get_ticks_msec() - _last_diff_update_ms > 1000:
@@ -1087,7 +1090,11 @@ func _input(event: InputEvent) -> void:
 
 func check_game_over() -> void:
 	if _is_speedrun:
-		return   # speedrun: si perde SOLO a tempo, mai per spazio
+		# speedrun: si perde SOLO a tempo, mai per spazio. Se la board si riempie del tutto
+		# libera automaticamente qualche cella (valvola), così non si resta MAI bloccati.
+		if not is_game_over and not is_resolving and _is_board_full():
+			_remove_random_cells(10)
+		return
 	if is_game_over or is_resolving:
 		return
 

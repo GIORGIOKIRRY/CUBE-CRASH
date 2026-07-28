@@ -10,18 +10,21 @@ const ART_CENTER := Vector2(400.0, 700.0)
 const CAMERA_CENTER := Vector2(288.0, 512.0)
 const ART_SCALE := 0.9
 const BOTTOM_MARGIN := 0.0
+const CABINET_DROP := 90.0                    # abbassa il cabinato così i tasti in alto non lo coprono
 
 # Animazione cabinato (riflesso sul marquee): 12 frame, poi fermo 15s, poi riparte.
 const CAB_FPS := 12.0
 const CAB_HOLD := 6.0    # 1s di animazione + 6s di pausa = ripete ~ogni 7s
 
-# Tasto PLAY sul deck (coord canvas 800x1400). Asset BASE 272x96, PREMUTO 272x88.
-# Dimensionato per LARGHEZZA (altezza dall'aspect dell'asset), ancorato per il BASSO.
-const PLAY_TEX_BASE := Vector2(272.0, 96.0)
-const PLAY_TEX_PRESSED := Vector2(272.0, 88.0)
-const PLAY_WIDTH_ART := 260.0                # larghezza voluta nel canvas
-const PLAY_CENTER_ART := Vector2(399.0, 887.0) # centro dello SCHERMO del cabinato (abbassato)
-const SPARKLE_OFFSET_Y := 0.0                # scintille al centro del tasto
+# Deck in basso (coord canvas 800x1400): tasto CUBE DECK (576x576) + tasto PLAY (1408x576)
+# AFFIANCATI, stessa altezza, centrati. Press = leggero scurimento (modulate).
+const PLAY_NEW_TEX := Vector2(1408.0, 576.0)
+const DECK_TEX := Vector2(576.0, 576.0)
+const DECK_BTN_H_ART := 150.0                # altezza comune dei due tasti (più grandi)
+const DECK_GAP_ART := -4.0                    # attaccati (piccolo che chiude il seam, niente sovrapposizione visibile)
+const DECK_ROW_CENTER_ART := Vector2(399.0, 990.0)  # centro coppia (compensato per CABINET_DROP)
+const PRESS_SINK := 5.0                       # px di "affondamento" alla pressione
+const SPARKLE_OFFSET_Y := 0.0
 
 # Frecce cambia-modalità ai lati dello schermo del cabinato (asset 88x136, punta a DESTRA).
 # La sinistra è la stessa freccia specchiata (flip_h).
@@ -54,6 +57,20 @@ var _play_pressed: Sprite2D
 var _play_world_center := Vector2.ZERO
 var _play_world_size := Vector2.ZERO
 var _play_pressing := false
+var _deck_sprite: Sprite2D
+var _deck_world_center := Vector2.ZERO
+var _deck_world_size := Vector2.ZERO
+var _deck_pressing := false
+var _deck_menu: Control
+var _play_base_pos := Vector2.ZERO           # posizione base (non premuta) per il sink idempotente
+var _deck_base_pos := Vector2.ZERO
+
+# Barra in alto a destra: coin count + classifica + impostazioni
+var _coin_bar: TextureRect
+var _coin_count_label: Label
+var _leader_btn: TextureButton
+var _settings_btn2: TextureButton
+var _leader_menu: Control
 var _sparkles: CPUParticles2D
 var _mode_menu: Control
 
@@ -107,6 +124,9 @@ func _ready() -> void:
 	_build_mode_menu()
 	_build_missions_menu()
 	_build_shop_menu()
+	_build_deck_menu()
+	_build_leader_menu()
+	_build_top_right()
 	_build_nav_bar()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
@@ -130,8 +150,8 @@ func _layout() -> void:
 			var b: Button = _nav_btns[i]
 			b.position = Vector2(view_size.x * i / 3.0, 0.0)
 			b.size = Vector2(view_size.x / 3.0, nav_h)
-	# cabinato ancorato al LIMITE INFERIORE (la barra ci passa sopra, è su un CanvasLayer)
-	var bottom_y := CAMERA_CENTER.y + view_size.y * 0.5
+	# cabinato ancorato in basso ma ABBASSATO di CABINET_DROP (la barra ci passa sopra, CanvasLayer)
+	var bottom_y := CAMERA_CENTER.y + view_size.y * 0.5 + CABINET_DROP
 	_art_pos = Vector2(CAMERA_CENTER.x, bottom_y - (ART_SIZE.y - ART_CENTER.y) * ART_SCALE)
 
 	for s: Node2D in [_background, _cabinet]:
@@ -197,19 +217,19 @@ func _build_play_button() -> void:
 	# Scintille bianche "sbrilluccicose" dietro il tasto.
 	_sparkles = _make_sparkles(26.0, 46, 45.0, 105.0, 2.5, 4.5)
 
-	# Tasto: due Sprite2D (base + premuto, allineati in basso). Input a mano in _input().
+	# Tasto PLAY (nuova grafica). Input a mano in _input().
 	_play_base = Sprite2D.new()
-	_play_base.texture = load("res://CORE/Assets/Art/Home/play_base.png")
+	_play_base.texture = load("res://CORE/Assets/Art/Home/play_new.png")
 	_play_base.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_play_base.z_index = 0
 	add_child(_play_base)
 
-	_play_pressed = Sprite2D.new()
-	_play_pressed.texture = load("res://CORE/Assets/Art/Home/play_pressed.png")
-	_play_pressed.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_play_pressed.z_index = 0
-	_play_pressed.visible = false
-	add_child(_play_pressed)
+	# Tasto CUBE DECK (a sinistra del PLAY)
+	_deck_sprite = Sprite2D.new()
+	_deck_sprite.texture = load("res://CORE/Assets/Art/Home/cube_deck.png")
+	_deck_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_deck_sprite.z_index = 0
+	add_child(_deck_sprite)
 
 
 func _make_pixel_texture() -> ImageTexture:
@@ -247,24 +267,29 @@ func _make_sparkles(radius: float, amount: int, vmin: float, vmax: float, smin: 
 func _position_play_button() -> void:
 	if not _play_base:
 		return
-	var center := _art_to_world(PLAY_CENTER_ART)
-	# scala mondo dello sprite: porta l'asset (272px) alla larghezza voluta nel canvas
-	var s := (PLAY_WIDTH_ART / PLAY_TEX_BASE.x) * ART_SCALE
-	var base_disp := PLAY_TEX_BASE * s        # dimensioni a schermo (mondo) del base
-	var pressed_disp := PLAY_TEX_PRESSED * s
+	# stessa scala per entrambi (stessa altezza); PLAY più largo per aspect
+	var s := (DECK_BTN_H_ART / DECK_TEX.y) * ART_SCALE
+	var play_w := DECK_BTN_H_ART * (PLAY_NEW_TEX.x / PLAY_NEW_TEX.y)
+	var deck_w := DECK_BTN_H_ART
+	var total_w := deck_w + DECK_GAP_ART + play_w
+	var left := DECK_ROW_CENTER_ART.x - total_w * 0.5
+	var deck_cx := left + deck_w * 0.5
+	var play_cx := left + deck_w + DECK_GAP_ART + play_w * 0.5
+	var y := DECK_ROW_CENTER_ART.y
 
-	_play_base.position = center
+	_deck_sprite.position = _art_to_world(Vector2(deck_cx, y))
+	_deck_sprite.scale = Vector2(s, s)
+	_deck_base_pos = _deck_sprite.position
+	_deck_world_center = _deck_sprite.position
+	_deck_world_size = DECK_TEX * s
+
+	_play_base.position = _art_to_world(Vector2(play_cx, y))
 	_play_base.scale = Vector2(s, s)
+	_play_base_pos = _play_base.position
+	_play_world_center = _play_base.position
+	_play_world_size = PLAY_NEW_TEX * s
 
-	# premuto allineato in basso (stesso bordo inferiore del base) -> sembra affondare
-	_play_pressed.scale = Vector2(s, s)
-	_play_pressed.position = Vector2(center.x, center.y + (base_disp.y - pressed_disp.y) * 0.5)
-
-	# rettangolo di hit nel mondo (per _input)
-	_play_world_center = center
-	_play_world_size = base_disp
-
-	_sparkles.position = _art_to_world(Vector2(PLAY_CENTER_ART.x, PLAY_CENTER_ART.y + SPARKLE_OFFSET_Y))
+	_sparkles.position = _play_base.position
 	_sparkles.scale = Vector2(ART_SCALE, ART_SCALE)
 
 
@@ -433,16 +458,24 @@ func _input(event: InputEvent) -> void:
 		return
 	if _tab != "home":
 		return
+	if _deck_menu and _deck_menu.visible:
+		return
+	if _leader_menu and _leader_menu.visible:
+		return
 	if not (event is InputEventMouseButton or event is InputEventScreenTouch):
 		return
 	var world: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * event.position
 	var play_rect := Rect2(_play_world_center - _play_world_size * 0.5, _play_world_size)
+	var deck_rect := Rect2(_deck_world_center - _deck_world_size * 0.5, _deck_world_size)
 	var l_rect := Rect2(_arrow_l_center - _arrow_hit_size * 0.5, _arrow_hit_size)
 	var r_rect := Rect2(_arrow_r_center - _arrow_hit_size * 0.5, _arrow_hit_size)
 	if event.pressed:
 		if play_rect.has_point(world):
 			_play_pressing = true
 			_on_play_down()
+		elif deck_rect.has_point(world):
+			_deck_pressing = true
+			_on_deck_down()
 		elif l_rect.has_point(world):
 			_arrow_l_pressing = true
 			_arrow_down(_arrow_l_base, _arrow_l_pressed, _arrow_l_sparkles)
@@ -455,6 +488,11 @@ func _input(event: InputEvent) -> void:
 			_on_play_up()
 			if play_rect.has_point(world):
 				_on_play_pressed()
+		if _deck_pressing:
+			_deck_pressing = false
+			_on_deck_up()
+			if deck_rect.has_point(world):
+				_on_deck_pressed()
 		if _arrow_l_pressing:
 			_arrow_l_pressing = false
 			_arrow_up(_arrow_l_base, _arrow_l_pressed, _arrow_l_sparkles)
@@ -469,14 +507,14 @@ func _input(event: InputEvent) -> void:
 
 func _on_play_down() -> void:
 	settings.button_feedback()
-	_play_base.visible = false
-	_play_pressed.visible = true
+	_play_base.modulate = Color(0.85, 0.85, 0.85)
+	_play_base.position = _play_base_pos + Vector2(0, PRESS_SINK)   # affonda un filo
 	_sparkles.emitting = false
 
 
 func _on_play_up() -> void:
-	_play_base.visible = true
-	_play_pressed.visible = false
+	_play_base.modulate = Color(1, 1, 1)
+	_play_base.position = _play_base_pos
 	# se non si apre il menu (rilascio fuori dal tasto), le scintille riprendono
 	_sparkles.emitting = not _mode_menu.visible
 
@@ -484,6 +522,172 @@ func _on_play_up() -> void:
 func _on_play_pressed() -> void:
 	# la modalità si sceglie con le frecce (mostrata sullo schermo): PLAY la avvia
 	_start_mode(MODES[_mode_index]["mode"])
+
+
+# --- Tasto CUBE DECK -----------------------------------------------------------
+func _on_deck_down() -> void:
+	settings.button_feedback()
+	_deck_sprite.modulate = Color(0.85, 0.85, 0.85)
+	_deck_sprite.position = _deck_base_pos + Vector2(0, PRESS_SINK)
+
+
+func _on_deck_up() -> void:
+	_deck_sprite.modulate = Color(1, 1, 1)
+	_deck_sprite.position = _deck_base_pos
+
+
+func _on_deck_pressed() -> void:
+	if _deck_menu:
+		_deck_menu.visible = true
+
+
+func _build_deck_menu() -> void:
+	_deck_menu = Control.new()
+	_deck_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_deck_menu.z_index = 960
+	_deck_menu.visible = false
+	add_child(_deck_menu)
+	var dim := ColorRect.new()
+	dim.color = Color(0.07, 0.13, 0.22, 0.98)
+	dim.offset_left = -600.0
+	dim.offset_top = -600.0
+	dim.offset_right = 1400.0
+	dim.offset_bottom = 2000.0
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(_on_deck_dim_input)
+	_deck_menu.add_child(dim)
+	var t := Label.new()
+	t.text = "CUBE DECK"
+	t.add_theme_font_override("font", MODE_FONT)
+	t.add_theme_font_size_override("font_size", 70)
+	t.add_theme_color_override("font_color", Color(1, 1, 1))
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.offset_left = 38.0
+	t.offset_right = 538.0
+	t.offset_top = 380.0
+	t.offset_bottom = 470.0
+	_deck_menu.add_child(t)
+	var s := Label.new()
+	s.text = "PROSSIMAMENTE\n(tocca per chiudere)"
+	s.add_theme_font_override("font", MODE_FONT)
+	s.add_theme_font_size_override("font_size", 30)
+	s.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	s.offset_left = 38.0
+	s.offset_right = 538.0
+	s.offset_top = 478.0
+	s.offset_bottom = 580.0
+	_deck_menu.add_child(s)
+
+
+func _on_deck_dim_input(event: InputEvent) -> void:
+	var tap: bool = (event is InputEventMouseButton and not event.pressed) \
+		or (event is InputEventScreenTouch and not event.pressed)
+	if tap:
+		settings.button_feedback()
+		_deck_menu.visible = false
+
+
+# --- Barra in alto a destra (coin count + classifica + impostazioni) -----------
+func _build_top_right() -> void:
+	# COIN COUNT (barra con moneta a sx + numero) SOPRA le due icone
+	_coin_bar = TextureRect.new()
+	_coin_bar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
+	_coin_bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_coin_bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_coin_bar.stretch_mode = TextureRect.STRETCH_SCALE
+	_coin_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_coin_bar.position = Vector2(360.0, 4.0)
+	_coin_bar.size = Vector2(192.0, 192.0 * 176.0 / 792.0)
+	add_child(_coin_bar)
+
+	_coin_count_label = Label.new()
+	_coin_count_label.add_theme_font_override("font", MODE_FONT)
+	_coin_count_label.add_theme_font_size_override("font_size", 30)
+	_coin_count_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_coin_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_coin_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_coin_count_label.position = Vector2(406.0, 4.0)
+	_coin_count_label.size = Vector2(140.0, 43.0)
+	add_child(_coin_count_label)
+	_update_coin_count()
+
+	# CLASSIFICA (trofeo) a SINISTRA delle impostazioni — più grandi e alzate
+	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(388.0, 50.0), 78.0)
+	_leader_btn.pressed.connect(_on_leaderboard_pressed)
+	# IMPOSTAZIONI (nuova icona)
+	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 50.0), 78.0)
+	_settings_btn2.pressed.connect(_on_settings_button_pressed)
+
+
+func _make_icon_button(path: String, pos: Vector2, sz: float) -> TextureButton:
+	var b := TextureButton.new()
+	b.texture_normal = load(path)
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.position = pos
+	b.size = Vector2(sz, sz)
+	add_child(b)
+	return b
+
+
+func _update_coin_count() -> void:
+	if _coin_count_label:
+		_coin_count_label.text = str(missions.coins)
+
+
+func _on_leaderboard_pressed() -> void:
+	settings.button_feedback()
+	if _leader_menu:
+		_leader_menu.visible = true
+
+
+func _build_leader_menu() -> void:
+	_leader_menu = Control.new()
+	_leader_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_leader_menu.z_index = 960
+	_leader_menu.visible = false
+	add_child(_leader_menu)
+	var dim := ColorRect.new()
+	dim.color = Color(0.07, 0.13, 0.22, 0.98)
+	dim.offset_left = -600.0
+	dim.offset_top = -600.0
+	dim.offset_right = 1400.0
+	dim.offset_bottom = 2000.0
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(_on_leader_dim_input)
+	_leader_menu.add_child(dim)
+	var t := Label.new()
+	t.text = "CLASSIFICA"
+	t.add_theme_font_override("font", MODE_FONT)
+	t.add_theme_font_size_override("font_size", 70)
+	t.add_theme_color_override("font_color", Color(1, 1, 1))
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.offset_left = 38.0
+	t.offset_right = 538.0
+	t.offset_top = 380.0
+	t.offset_bottom = 470.0
+	_leader_menu.add_child(t)
+	var s := Label.new()
+	s.text = "PROSSIMAMENTE\n(tocca per chiudere)"
+	s.add_theme_font_override("font", MODE_FONT)
+	s.add_theme_font_size_override("font_size", 30)
+	s.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
+	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	s.offset_left = 38.0
+	s.offset_right = 538.0
+	s.offset_top = 478.0
+	s.offset_bottom = 580.0
+	_leader_menu.add_child(s)
+
+
+func _on_leader_dim_input(event: InputEvent) -> void:
+	var tap: bool = (event is InputEventMouseButton and not event.pressed) \
+		or (event is InputEventScreenTouch and not event.pressed)
+	if tap:
+		settings.button_feedback()
+		_leader_menu.visible = false
 
 
 # --- Sottomenu scelta modalità -------------------------------------------------
@@ -788,6 +992,7 @@ func _claim_mission(index: int) -> void:
 	if got > 0:
 		settings.button_feedback()
 		_update_coin_label()
+		_update_coin_count()
 		_populate_missions()
 
 
@@ -835,6 +1040,11 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 		_missions_menu.visible = false
 	if _shop_menu:
 		_shop_menu.visible = false
+	if _deck_menu:
+		_deck_menu.visible = false
+	if _leader_menu:
+		_leader_menu.visible = false
+	_update_coin_count()
 	_set_home_visible(tab == "home")
 	if tab == "missions":
 		missions._maybe_refresh()
@@ -845,7 +1055,7 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 
 
 func _set_home_visible(v: bool) -> void:
-	for n in [_background, _cabinet, _play_base, _sparkles,
+	for n in [_background, _cabinet, _play_base, _deck_sprite, _sparkles,
 			_arrow_l_base, _arrow_l_pressed, _arrow_r_base, _arrow_r_pressed,
 			_arrow_l_sparkles, _arrow_r_sparkles, _screen_anim, _screen_title, _mode_screen]:
 		if n:

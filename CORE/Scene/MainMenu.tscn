@@ -37,30 +37,6 @@ offset_right = 1500.0
 offset_bottom = 2000.0
 color = Color(0.28235295, 0.4627451, 0.62352943, 1)
 
-[node name="LinkButton" type="TextureButton" parent="."]
-layout_mode = 0
-offset_left = 36.0
-offset_top = 0.0
-offset_right = 98.0
-offset_bottom = 62.0
-texture_normal = ExtResource("4_ivbl6")
-
-[node name="SettingsButton" type="TextureButton" parent="."]
-layout_mode = 0
-offset_left = 478.0
-offset_top = 0.0
-offset_right = 540.0
-offset_bottom = 62.0
-texture_normal = ExtResource("6_oines")
-
-[node name="TermsButton" type="TextureButton" parent="."]
-layout_mode = 0
-offset_left = 478.0
-offset_top = 80.0
-offset_right = 540.0
-offset_bottom = 142.0
-texture_normal = ExtResource("7_3hh32")
-
 [node name="SettingsMenu" parent="." instance=ExtResource("10_b6brl")]
 unique_name_in_owner = true
 visible = false
@@ -70,7 +46,3 @@ z_index = 1000
 [node name="AudioStreamPlayer2D" type="AudioStreamPlayer" parent="."]
 unique_name_in_owner = true
 stream = ExtResource("10_xphv5")
-
-[connection signal="pressed" from="SettingsButton" to="." method="_on_settings_button_pressed"]
-[connection signal="pressed" from="LinkButton" to="." method="_on_link_button_pressed"]
-[connection signal="pressed" from="TermsButton" to="." method="_on_terms_button_pressed"]

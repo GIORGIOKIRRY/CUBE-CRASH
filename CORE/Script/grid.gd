@@ -1412,6 +1412,9 @@ func _remove_random_cells(n: int) -> void:
 		settings.vibrate(50)
 
 func _show_game_over_screen() -> void:
+	# Interstitial a ogni sconfitta (anche speedrun): appare sopra la
+	# schermata finale, alla chiusura si ritrova il game over.
+	ads.show_interstitial()
 	# suono finale: record battuto -> New High Score, altrimenti Game Over
 	if _is_new_record:
 		settings.play_highscore()

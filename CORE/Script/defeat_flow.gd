@@ -119,9 +119,23 @@ func _on_revive() -> void:
 		return
 	_revived = true
 	settings.button_feedback()
-	# TODO: pubblicità rewarded prima del revive.
 	_hide_all()
-	revive_requested.emit()
+	# Rewarded: il revive arriva solo a video completato. Se l'annuncio non
+	# è pronto (es. niente rete) il revive è gratis: meglio non punire.
+	if not ads.show_rewarded():
+		revive_requested.emit()
+		return
+	var earned := [false]   # array: le lambda GDScript catturano per valore
+	var on_earned := func(_amount: int, _type: String) -> void: earned[0] = true
+	ads.rewarded_earned.connect(on_earned)
+	await ads.rewarded_closed
+	await get_tree().process_frame   # assorbe l'ordine deferred dei segnali
+	ads.rewarded_earned.disconnect(on_earned)
+	if earned[0]:
+		revive_requested.emit()
+	else:
+		# video chiuso in anticipo: niente premio, si va al game over
+		finished.emit()
 
 func _hide_all() -> void:
 	_count.stop()

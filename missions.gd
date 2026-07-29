@@ -5,8 +5,11 @@ extends Node
 # I progressi arrivano da grid.gd via report_*(). Le ricompense (monete) si riscuotono a mano.
 
 const SAVE_PATH := "user://missions.dat"
-const REFRESH_SECONDS := 86400   # 24h
-const DATA_VERSION := 3           # bump per FORZARE un reset delle missioni una volta
+const REFRESH_SECONDS := 86400      # 24h (giornaliere)
+const WEEKLY_REFRESH_SECONDS := 604800   # 7 giorni (settimanali)
+const DATA_VERSION := 5           # bump per FORZARE un reset delle missioni una volta
+const DAILY_REWARD := 200         # ogni missione giornaliera vale 200 monete
+const WEEKLY_REWARD := 1000       # ogni missione settimanale vale 1000 monete
 var _data_version: int = 0
 const NUM_MISSIONS := 6
 const COLORS := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
@@ -16,8 +19,10 @@ const COLOR_IT := {
 }
 
 var coins: int = 0
-var missions: Array = []      # 6 dict: {type, param, target, progress, reward, claimed}
-var last_refresh: int = 0     # unix time dell'ultima rigenerazione
+var missions: Array = []      # 6 dict GIORNALIERE: {type, param, target, progress, reward, claimed}
+var weekly: Array = []        # 6 dict SETTIMANALI (stessa struttura, target/ricompense maggiori)
+var last_refresh: int = 0     # unix time dell'ultima rigenerazione giornaliera
+var last_weekly_refresh: int = 0   # unix time dell'ultima rigenerazione settimanale
 
 
 func _ready() -> void:
@@ -26,6 +31,8 @@ func _ready() -> void:
 		# reset forzato delle missioni (le monete restano)
 		_generate()
 		last_refresh = _now()
+		_generate_weekly()
+		last_weekly_refresh = _now()
 		_data_version = DATA_VERSION
 		_save()
 	_maybe_refresh()
@@ -39,10 +46,21 @@ func seconds_until_refresh() -> int:
 	return maxi(0, REFRESH_SECONDS - (_now() - last_refresh))
 
 
+func seconds_until_weekly_refresh() -> int:
+	return maxi(0, WEEKLY_REFRESH_SECONDS - (_now() - last_weekly_refresh))
+
+
 func _maybe_refresh() -> void:
+	var changed := false
 	if missions.is_empty() or (_now() - last_refresh) >= REFRESH_SECONDS:
 		_generate()
 		last_refresh = _now()
+		changed = true
+	if weekly.is_empty() or (_now() - last_weekly_refresh) >= WEEKLY_REFRESH_SECONDS:
+		_generate_weekly()
+		last_weekly_refresh = _now()
+		changed = true
+	if changed:
 		_save()
 
 
@@ -64,70 +82,113 @@ func _generate() -> void:
 
 func _mk_score() -> Dictionary:
 	var t: int = [800, 1500, 3000, 5000].pick_random()
-	return {"type": "score", "param": "", "target": t, "progress": 0, "reward": int(t / 20.0), "claimed": false}
+	return {"type": "score", "param": "", "target": t, "progress": 0, "reward": DAILY_REWARD, "claimed": false}
 
 func _mk_break_color(c: String) -> Dictionary:
 	var t: int = [20, 40, 60].pick_random()
-	return {"type": "break_color", "param": c, "target": t, "progress": 0, "reward": t, "claimed": false}
+	return {"type": "break_color", "param": c, "target": t, "progress": 0, "reward": DAILY_REWARD, "claimed": false}
 
 func _mk_break_total() -> Dictionary:
 	var t: int = [80, 150, 250].pick_random()
-	return {"type": "break_total", "param": "", "target": t, "progress": 0, "reward": int(t / 2.0), "claimed": false}
+	return {"type": "break_total", "param": "", "target": t, "progress": 0, "reward": DAILY_REWARD, "claimed": false}
 
 func _mk_combo() -> Dictionary:
 	var t: int = [3, 4, 5].pick_random()
-	return {"type": "combo", "param": "", "target": t, "progress": 0, "reward": t * 30, "claimed": false}
+	return {"type": "combo", "param": "", "target": t, "progress": 0, "reward": DAILY_REWARD, "claimed": false}
 
 func _mk_play() -> Dictionary:
 	var t: int = [3, 5].pick_random()
-	return {"type": "play", "param": "", "target": t, "progress": 0, "reward": t * 20, "claimed": false}
+	return {"type": "play", "param": "", "target": t, "progress": 0, "reward": DAILY_REWARD, "claimed": false}
+
+
+# --- SETTIMANALI: target e ricompense molto piu' grandi (durano 7 giorni) --------
+func _generate_weekly() -> void:
+	var pool: Array = []
+	pool.append(_mk_w_score())
+	var cols: Array = COLORS.duplicate()
+	cols.shuffle()
+	pool.append(_mk_w_break_color(cols[0]))
+	pool.append(_mk_w_break_color(cols[1]))
+	pool.append(_mk_w_combo())
+	pool.append(_mk_w_break_total())
+	pool.append(_mk_w_play())
+	pool.shuffle()
+	weekly = pool.slice(0, NUM_MISSIONS)
+
+func _mk_w_score() -> Dictionary:
+	var t: int = [8000, 15000, 25000].pick_random()
+	return {"type": "score", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
+
+func _mk_w_break_color(c: String) -> Dictionary:
+	var t: int = [150, 250, 400].pick_random()
+	return {"type": "break_color", "param": c, "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
+
+func _mk_w_break_total() -> Dictionary:
+	var t: int = [500, 900, 1500].pick_random()
+	return {"type": "break_total", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
+
+func _mk_w_combo() -> Dictionary:
+	var t: int = [6, 7, 8].pick_random()
+	return {"type": "combo", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
+
+func _mk_w_play() -> Dictionary:
+	var t: int = [15, 25].pick_random()
+	return {"type": "play", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
 
 
 # --- Report progressi (chiamati da grid.gd) ------------------------------------
+# I progressi valgono per ENTRAMBE le liste (giornaliere + settimanali).
+func _all_lists() -> Array:
+	return [missions, weekly]
+
 func report_break(color: String, n: int = 1) -> void:
 	var changed := false
-	for m in missions:
-		if m["claimed"]:
-			continue
-		if m["type"] == "break_total":
-			m["progress"] = mini(m["target"], m["progress"] + n)
-			changed = true
-		elif m["type"] == "break_color" and m["param"] == color:
-			m["progress"] = mini(m["target"], m["progress"] + n)
-			changed = true
+	for arr in _all_lists():
+		for m in arr:
+			if m["claimed"]:
+				continue
+			if m["type"] == "break_total":
+				m["progress"] = mini(m["target"], m["progress"] + n)
+				changed = true
+			elif m["type"] == "break_color" and m["param"] == color:
+				m["progress"] = mini(m["target"], m["progress"] + n)
+				changed = true
 	if changed:
 		_save()
 
 func report_score(s: int) -> void:
 	var changed := false
-	for m in missions:
-		if m["claimed"]:
-			continue
-		if m["type"] == "score" and s > m["progress"]:
-			m["progress"] = mini(m["target"], s)
-			changed = true
+	for arr in _all_lists():
+		for m in arr:
+			if m["claimed"]:
+				continue
+			if m["type"] == "score" and s > m["progress"]:
+				m["progress"] = mini(m["target"], s)
+				changed = true
 	if changed:
 		_save()
 
 func report_combo(level: int) -> void:
 	var changed := false
-	for m in missions:
-		if m["claimed"]:
-			continue
-		if m["type"] == "combo" and level > m["progress"]:
-			m["progress"] = mini(m["target"], level)
-			changed = true
+	for arr in _all_lists():
+		for m in arr:
+			if m["claimed"]:
+				continue
+			if m["type"] == "combo" and level > m["progress"]:
+				m["progress"] = mini(m["target"], level)
+				changed = true
 	if changed:
 		_save()
 
 func report_play() -> void:
 	var changed := false
-	for m in missions:
-		if m["claimed"]:
-			continue
-		if m["type"] == "play":
-			m["progress"] = mini(m["target"], m["progress"] + 1)
-			changed = true
+	for arr in _all_lists():
+		for m in arr:
+			if m["claimed"]:
+				continue
+			if m["type"] == "play":
+				m["progress"] = mini(m["target"], m["progress"] + 1)
+				changed = true
 	if changed:
 		_save()
 
@@ -136,16 +197,22 @@ func report_play() -> void:
 func is_complete(m: Dictionary) -> bool:
 	return int(m["progress"]) >= int(m["target"])
 
-func claim(index: int) -> int:
-	if index < 0 or index >= missions.size():
+func _claim_from(arr: Array, index: int) -> int:
+	if index < 0 or index >= arr.size():
 		return 0
-	var m: Dictionary = missions[index]
+	var m: Dictionary = arr[index]
 	if m["claimed"] or not is_complete(m):
 		return 0
 	m["claimed"] = true
 	coins += int(m["reward"])
 	_save()
 	return int(m["reward"])
+
+func claim(index: int) -> int:
+	return _claim_from(missions, index)
+
+func claim_weekly(index: int) -> int:
+	return _claim_from(weekly, index)
 
 func describe(m: Dictionary) -> String:
 	match m["type"]:
@@ -168,6 +235,8 @@ func _save() -> void:
 	cfg.set_value("m", "coins", coins)
 	cfg.set_value("m", "last_refresh", last_refresh)
 	cfg.set_value("m", "missions", missions)
+	cfg.set_value("m", "weekly", weekly)
+	cfg.set_value("m", "last_weekly_refresh", last_weekly_refresh)
 	cfg.set_value("m", "version", DATA_VERSION)
 	cfg.save(SAVE_PATH)
 
@@ -177,4 +246,6 @@ func _load() -> void:
 		coins = int(cfg.get_value("m", "coins", 0))
 		last_refresh = int(cfg.get_value("m", "last_refresh", 0))
 		missions = cfg.get_value("m", "missions", [])
+		weekly = cfg.get_value("m", "weekly", [])
+		last_weekly_refresh = int(cfg.get_value("m", "last_weekly_refresh", 0))
 		_data_version = int(cfg.get_value("m", "version", 0))

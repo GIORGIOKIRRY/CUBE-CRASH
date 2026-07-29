@@ -71,6 +71,11 @@ var _coin_bar: TextureRect
 var _coin_count_label: Label
 var _leader_btn: TextureButton
 var _settings_btn2: TextureButton
+var _profile_pic: TextureRect
+var _name_frame: TextureRect
+var _name_edit: LineEdit
+var _player_name: String = "PLAYER"
+const PROFILE_CFG := "user://profile.cfg"
 var _leader_menu: Control
 var _sparkles: CPUParticles2D
 var _mode_menu: Control
@@ -103,7 +108,13 @@ var _missions_menu: Control
 var _missions_list: VBoxContainer
 var _missions_scroll: ScrollContainer
 var _missions_coins_label: Label
+var _missions_coin_bar: TextureRect
 var _missions_timer_label: Label
+var _missions_tabs: TextureRect
+var _missions_panel: ColorRect
+var _tab_weekly_btn: Button
+var _tab_daily_btn: Button
+var _missions_tab: String = "weekly"   # "weekly" | "daily"
 
 # Menu bar in basso (missioni / home / shop)
 const NAV_TEX := Vector2(1600.0, 432.0)
@@ -152,11 +163,31 @@ func _layout() -> void:
 			var b: Button = _nav_btns[i]
 			b.position = Vector2(view_size.x * i / 3.0, 0.0)
 			b.size = Vector2(view_size.x / 3.0, nav_h)
-	# lista missioni: dal sotto-testata fino alla nav bar
-	if _missions_scroll:
-		var mtop := 270.0
-		_missions_scroll.position = Vector2(32.0, mtop)
-		_missions_scroll.size = Vector2(512.0, maxf(120.0, view_size.y - nav_h - mtop))
+	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
+	if _missions_tabs:
+		var tabs_y := 200.0
+		var th := view_size.x * 94.0 / 576.0
+		_missions_tabs.position = Vector2(0, tabs_y)
+		_missions_tabs.size = Vector2(view_size.x, th)
+		if _tab_weekly_btn:
+			_tab_weekly_btn.position = Vector2(0, tabs_y)
+			_tab_weekly_btn.size = Vector2(view_size.x * 0.5, th)
+		if _tab_daily_btn:
+			_tab_daily_btn.position = Vector2(view_size.x * 0.5, tabs_y)
+			_tab_daily_btn.size = Vector2(view_size.x * 0.5, th)
+		var panel_top := tabs_y + th - 6.0
+		if _missions_panel:
+			# pannello attaccato fino al FONDO schermo (dietro la nav bar): niente blu residuo
+			_missions_panel.position = Vector2(0, panel_top)
+			_missions_panel.size = Vector2(view_size.x, maxf(60.0, view_size.y - panel_top))
+		if _missions_timer_label:
+			_missions_timer_label.position = Vector2(0, panel_top + 12.0)
+			_missions_timer_label.size = Vector2(view_size.x, 28.0)
+		if _missions_scroll:
+			var scroll_top := panel_top + 50.0
+			# clipped frame attaccato al FONDO dello schermo (il tail lascia scorrere sopra la nav bar)
+			_missions_scroll.position = Vector2(32.0, scroll_top)
+			_missions_scroll.size = Vector2(view_size.x - 64.0, maxf(120.0, view_size.y - scroll_top))
 	# cabinato ancorato in basso ma ABBASSATO di CABINET_DROP (la barra ci passa sopra, CanvasLayer)
 	var bottom_y := CAMERA_CENTER.y + view_size.y * 0.5 + CABINET_DROP
 	_art_pos = Vector2(CAMERA_CENTER.x, bottom_y - (ART_SIZE.y - ART_CENTER.y) * ART_SCALE)
@@ -192,14 +223,10 @@ func _build_scene() -> void:
 	_background = Sprite2D.new()
 	_background.texture = load("res://CORE/Assets/Art/Home/background.png")
 	_background.z_index = -4
+	_background.visible = false   # sfondo home = blu pieno (SkyBG); backdrop nascosto
 	add_child(_background)
 
-	# Ombra a fondo schermo: sopra il cabinato (z=-2), sotto play/deck (z=0).
-	_home_shadow = Sprite2D.new()
-	_home_shadow.texture = load("res://CORE/Assets/Art/Home/ombra.png")
-	_home_shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_home_shadow.z_index = -1
-	add_child(_home_shadow)
+	# (ombra home rimossa)
 
 	var frames := SpriteFrames.new()
 	frames.add_animation("play")
@@ -263,6 +290,7 @@ func _make_pixel_texture() -> ImageTexture:
 # Emettitore di scintille bianche a pixel (nascono al centro, sparano in tutte le direzioni).
 func _make_sparkles(radius: float, amount: int, vmin: float, vmax: float, smin: float, smax: float) -> CPUParticles2D:
 	var sp := CPUParticles2D.new()
+	sp.self_modulate = Color(1, 1, 1, 0)   # effetto pixel disattivato (invisibile)
 	sp.texture = _make_pixel_texture()
 	sp.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	sp.z_index = -1                       # dietro all'elemento (z=0), davanti al cabinato (z=-2)
@@ -642,6 +670,66 @@ func _build_top_right() -> void:
 	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 74.0), 78.0)
 	_settings_btn2.pressed.connect(_on_settings_button_pressed)
 
+	# PROFILE PICTURE a SINISTRA (stessa altezza di classifica/impostazioni)
+	_profile_pic = TextureRect.new()
+	_profile_pic.texture = load("res://CORE/Assets/Art/Home/profile_picture.png")
+	_profile_pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_profile_pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_profile_pic.stretch_mode = TextureRect.STRETCH_SCALE
+	_profile_pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_profile_pic.position = Vector2(24.0, 74.0)
+	_profile_pic.size = Vector2(78.0, 78.0)
+	add_child(_profile_pic)
+
+	# NAME FRAME a DESTRA della profile, stesso livello e stessa altezza (attaccato)
+	_load_player_name()
+	var nf_h := 78.0                       # stessa altezza della profile / dei bottoni
+	var nf_w := nf_h * 896.0 / 384.0       # mantiene l'aspect del frame
+	_name_frame = TextureRect.new()
+	_name_frame.texture = load("res://CORE/Assets/Art/Home/name_frame.png")
+	_name_frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_name_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_name_frame.stretch_mode = TextureRect.STRETCH_SCALE
+	_name_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_name_frame.position = Vector2(24.0 + 78.0 - 18.0, 74.0)
+	_name_frame.size = Vector2(nf_w, nf_h)
+	add_child(_name_frame)
+
+	_name_edit = LineEdit.new()
+	_name_edit.text = _player_name
+	_name_edit.max_length = 12
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_edit.placeholder_text = "NOME"
+	_name_edit.add_theme_font_override("font", MODE_FONT)
+	_name_edit.add_theme_font_size_override("font_size", 24)
+	_name_edit.add_theme_color_override("font_color", Color(1, 1, 1))
+	_name_edit.add_theme_color_override("font_placeholder_color", Color(1, 1, 1, 0.5))
+	var empty := StyleBoxEmpty.new()
+	_name_edit.add_theme_stylebox_override("normal", empty)
+	_name_edit.add_theme_stylebox_override("focus", empty)
+	_name_edit.position = _name_frame.position + Vector2(14.0, nf_h * 0.14)
+	_name_edit.size = Vector2(nf_w - 28.0, nf_h * 0.58)
+	_name_edit.text_submitted.connect(func(_t: String) -> void: _name_edit.release_focus())
+	_name_edit.focus_exited.connect(_save_player_name)
+	add_child(_name_edit)
+
+
+func _load_player_name() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(PROFILE_CFG) == OK:
+		_player_name = str(cfg.get_value("profile", "name", "PLAYER"))
+
+func _save_player_name() -> void:
+	if _name_edit:
+		var n := _name_edit.text.strip_edges()
+		if n == "":
+			n = "PLAYER"
+			_name_edit.text = n
+		_player_name = n
+	var cfg := ConfigFile.new()
+	cfg.set_value("profile", "name", _player_name)
+	cfg.save(PROFILE_CFG)
+
 
 func _make_icon_button(path: String, pos: Vector2, sz: float) -> TextureButton:
 	var b := TextureButton.new()
@@ -882,64 +970,65 @@ func _build_missions_menu() -> void:
 	_missions_menu.visible = false
 	layer.add_child(_missions_menu)
 
-	# sfondo uguale a quello della home (SkyBG/FloorBG di MainMenu.tscn)
+	# sfondo blu pieno (adattato a tutto lo schermo)
 	var bg := ColorRect.new()
-	bg.color = Color(0.31764707, 0.44705883, 0.5921569, 1.0)
+	bg.color = Color(5.0 / 255.0, 120.0 / 255.0, 236.0 / 255.0, 1.0)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_missions_menu.add_child(bg)
-	var floor_bg := ColorRect.new()
-	floor_bg.color = Color(0.28235295, 0.4627451, 0.62352943, 1.0)
-	floor_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	floor_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	floor_bg.offset_top = -220.0
-	floor_bg.offset_bottom = 0.0
-	_missions_menu.add_child(floor_bg)
 
-	# coin counter (come la home) in ALTO A SINISTRA
+	# pannello scuro (contenuto): dietro allo scroll, stirato fino alla nav bar (in _layout)
+	_missions_panel = ColorRect.new()
+	_missions_panel.color = Color(0.0, 79.0 / 255.0, 135.0 / 255.0, 1.0)
+	_missions_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_missions_menu.add_child(_missions_panel)
+
+	# coin counter in ALTO A DESTRA (nella fascia trasparente sopra i tab)
 	var coinbar := TextureRect.new()
 	coinbar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
 	coinbar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	coinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	coinbar.stretch_mode = TextureRect.STRETCH_SCALE
 	coinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	coinbar.position = Vector2(356, 116)
+	coinbar.position = Vector2(356, 132)
 	coinbar.size = Vector2(196, 196.0 * 176.0 / 792.0)
+	coinbar.pivot_offset = coinbar.size * 0.5
 	_missions_menu.add_child(coinbar)
+	_missions_coin_bar = coinbar
 	_missions_coins_label = Label.new()
 	_missions_coins_label.add_theme_font_override("font", MODE_FONT)
 	_missions_coins_label.add_theme_font_size_override("font_size", 30)
 	_missions_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_missions_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_missions_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_missions_coins_label.position = Vector2(406, 116)
+	_missions_coins_label.position = Vector2(406, 132)
 	_missions_coins_label.size = Vector2(140, 44)
 	_missions_menu.add_child(_missions_coins_label)
 
-	# titolo
-	var title := Label.new()
-	title.text = "MISSIONI"
-	title.add_theme_font_override("font", MODE_FONT)
-	title.add_theme_font_size_override("font_size", 38)
-	title.add_theme_color_override("font_color", Color(1, 1, 1))
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position = Vector2(24, 172)
-	title.size = Vector2(528, 44)
-	_missions_menu.add_child(title)
+	# striscia TAB (weekly / daily): texture full-width, posizionata in _layout
+	_missions_tabs = TextureRect.new()
+	_missions_tabs.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_missions_tabs.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_missions_tabs.stretch_mode = TextureRect.STRETCH_SCALE
+	_missions_tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_missions_tabs.texture = load(MISS + "tabs_weekly.png")
+	_missions_menu.add_child(_missions_tabs)
+	_tab_weekly_btn = _make_tab_button(func() -> void: _select_mission_tab("weekly"))
+	_tab_daily_btn = _make_tab_button(func() -> void: _select_mission_tab("daily"))
 
+	# timer "Nuove missioni disponibili tra:" (dentro il pannello, sopra la lista)
 	_missions_timer_label = Label.new()
 	_missions_timer_label.add_theme_font_override("font", MODE_FONT)
 	_missions_timer_label.add_theme_font_size_override("font_size", 20)
-	_missions_timer_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	_missions_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_missions_timer_label.position = Vector2(24, 126)
-	_missions_timer_label.size = Vector2(300, 26)
+	_missions_timer_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	_missions_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_missions_menu.add_child(_missions_timer_label)
 
-	# lista SCROLLABILE (drag): scrollbar nascosta, riempie fino alla nav bar (in _layout)
+	# lista SCROLLABILE clippata dentro il pannello (posizione/size in _layout)
 	_missions_scroll = ScrollContainer.new()
 	_missions_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_missions_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_missions_scroll.clip_contents = true
 	_missions_menu.add_child(_missions_scroll)
 	_missions_list = VBoxContainer.new()
 	_missions_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -948,9 +1037,35 @@ func _build_missions_menu() -> void:
 	_missions_scroll.add_child(_missions_list)
 
 
+# Tasto trasparente per un tab (posizione/size in _layout).
+func _make_tab_button(cb: Callable) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_NONE
+	var empty := StyleBoxEmpty.new()
+	b.add_theme_stylebox_override("normal", empty)
+	b.add_theme_stylebox_override("hover", empty)
+	b.add_theme_stylebox_override("pressed", empty)
+	b.add_theme_stylebox_override("focus", empty)
+	b.pressed.connect(cb)
+	_missions_menu.add_child(b)
+	return b
+
+
+func _select_mission_tab(tab: String) -> void:
+	settings.button_feedback()
+	_missions_tab = tab
+	if _missions_tabs:
+		var p := MISS + ("tabs_weekly.png" if tab == "weekly" else "tabs_daily.png")
+		_missions_tabs.texture = load(p)
+	_populate_missions()
+
+
 func _refresh_text() -> String:
+	if _missions_tab == "weekly":
+		var w := missions.seconds_until_weekly_refresh()
+		return "Nuove missioni disponibili tra: %dg %02dh" % [w / 86400, (w % 86400) / 3600]
 	var s := missions.seconds_until_refresh()
-	return "Nuove tra %dh %02dm" % [s / 3600, (s % 3600) / 60]
+	return "Nuove missioni disponibili tra: %dh %02dm" % [s / 3600, (s % 3600) / 60]
 
 
 func _open_missions() -> void:
@@ -977,14 +1092,18 @@ func _populate_missions() -> void:
 	for c in _missions_list.get_children():
 		c.queue_free()
 	_missions_coins_label.text = str(missions.coins)
+	if _missions_tabs:
+		_missions_tabs.texture = load(MISS + ("tabs_weekly.png" if _missions_tab == "weekly" else "tabs_daily.png"))
 	_missions_timer_label.text = _refresh_text()
-	for i in missions.missions.size():
-		if missions.missions[i]["claimed"]:
+	var is_weekly := _missions_tab == "weekly"
+	var arr: Array = missions.weekly if is_weekly else missions.missions
+	for i in arr.size():
+		if arr[i]["claimed"]:
 			continue   # riscosse: spariscono
-		_missions_list.add_child(_make_mission_row(i, missions.missions[i]))
-	# spazio in fondo: margine di scroll comodo (non si "blocca" a fine lista)
+		_missions_list.add_child(_make_mission_row(i, arr[i], is_weekly))
+	# spazio in fondo: abbastanza da far salire l'ultima riga sopra la nav bar
 	var tail := Control.new()
-	tail.custom_minimum_size = Vector2(0, 60)
+	tail.custom_minimum_size = Vector2(0, 180)
 	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_missions_list.add_child(tail)
 
@@ -1031,7 +1150,7 @@ func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, 
 
 const MISS_SINK := 4.0
 
-func _make_mission_row(index: int, m: Dictionary) -> Control:
+func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Control:
 	var done: bool = missions.is_complete(m) and not m["claimed"]
 	var bg_tex: String = "mission_bg_done.png" if done else "mission_bg.png"
 	var icon_tex: String = "icon_frame_done.png" if done else "icon_frame.png"
@@ -1117,18 +1236,38 @@ func _make_mission_row(index: int, m: Dictionary) -> Control:
 	btn.button_down.connect(func() -> void: content.position = Vector2(0, MISS_SINK))
 	btn.button_up.connect(func() -> void: content.position = Vector2.ZERO)
 	if done:
-		btn.pressed.connect(_claim_mission.bind(index))
+		btn.pressed.connect(_claim_mission.bind(index, is_weekly))
 	row.add_child(btn)
 	return row
 
 
-func _claim_mission(index: int) -> void:
-	var got := missions.claim(index)
+func _claim_mission(index: int, is_weekly: bool = false) -> void:
+	var before := missions.coins
+	var got := missions.claim_weekly(index) if is_weekly else missions.claim(index)
 	if got > 0:
 		settings.button_feedback()
 		_update_coin_label()
 		_update_coin_count()
 		_populate_missions()
+		_animate_coin_gain(before, missions.coins)
+
+
+# Monete che salgono (conteggio) + rimbalzo quando si riscatta una missione.
+func _animate_coin_gain(from_v: int, to_v: int) -> void:
+	if _missions_coins_label == null:
+		return
+	_missions_coins_label.pivot_offset = _missions_coins_label.size * 0.5
+	var t := create_tween()
+	t.tween_method(func(v: float) -> void: _missions_coins_label.set_text(str(int(round(v)))), float(from_v), float(to_v), 0.6)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var tb := create_tween()
+	tb.tween_property(_missions_coins_label, "scale", Vector2(1.45, 1.45), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tb.tween_property(_missions_coins_label, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	if _missions_coin_bar:
+		_missions_coin_bar.scale = Vector2.ONE
+		var tc := create_tween()
+		tc.tween_property(_missions_coin_bar, "scale", Vector2(1.12, 1.12), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tc.tween_property(_missions_coin_bar, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 
 
 # --- Menu bar in basso (missioni / home / shop) --------------------------------
@@ -1190,7 +1329,7 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 
 
 func _set_home_visible(v: bool) -> void:
-	for n in [_background, _home_shadow, _cabinet, _play_base, _deck_sprite, _sparkles,
+	for n in [_cabinet, _play_base, _deck_sprite, _sparkles,
 			_arrow_l_base, _arrow_l_pressed, _arrow_r_base, _arrow_r_pressed,
 			_arrow_l_sparkles, _arrow_r_sparkles, _screen_anim, _screen_title, _mode_screen]:
 		if n:

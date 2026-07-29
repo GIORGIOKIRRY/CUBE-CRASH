@@ -26,7 +26,7 @@ offset_left = -900.0
 offset_top = -900.0
 offset_right = 1500.0
 offset_bottom = 2000.0
-color = Color(0.31764707, 0.44705883, 0.5921569, 1)
+color = Color(0.019607844, 0.47058824, 0.9254902, 1)
 
 [node name="FloorBG" type="ColorRect" parent="."]
 z_index = -5
@@ -35,7 +35,7 @@ offset_left = -900.0
 offset_top = 1080.0
 offset_right = 1500.0
 offset_bottom = 2000.0
-color = Color(0.28235295, 0.4627451, 0.62352943, 1)
+color = Color(0.019607844, 0.47058824, 0.9254902, 1)
 
 [node name="SettingsMenu" parent="." instance=ExtResource("10_b6brl")]
 unique_name_in_owner = true

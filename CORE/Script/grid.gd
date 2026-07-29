@@ -29,7 +29,7 @@ const EXPLO_FRAMES := [
 ]
 const EXPLO_FPS := 20.0                # 6 frame ≈ 0.3s; il cubo dietro sparisce al 3° frame
 const COMBO_EFFECT_SCALE := 0.85       # scala dell'animazione COMBO (frame nativi 500x302)
-const COMBO_SPEED := 2.0               # velocità di riproduzione (rapida ma un filo più lunga)
+const COMBO_SPEED := 1.1               # velocità di riproduzione (più lenta = più fluida)
 
 # Bilanciamento tavola (stile Block Blast: scacchiera quasi sempre piena).
 # Quando è ≥70% piena, esplode UN cubo casuale (2 se ≥80%, rarissimamente 3),
@@ -202,9 +202,11 @@ var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosion
 var _combo_frames: Dictionary = {}          # livello -> SpriteFrames (COMBO 1..4)
 var _combo_fx: Dictionary = {}              # livello -> SpriteFrames effetto a schermo intero (4 lati)
 var _active_combo_fx: CanvasLayer = null    # effetto full-screen attualmente in corso
+var _active_combo_num: AnimatedSprite2D = null   # numero COMBO attualmente in corso
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
 var _last_shown_score: int = -1             # per l'animazione pop del punteggio
 var _score_pop_tween: Tween = null
+var _score_count_tween: Tween = null
 # Statistiche partita (per calibrare la durata)
 var _game_start_ms: int = 0
 var _stat_placements: int = 0
@@ -308,9 +310,11 @@ func _ready() -> void:
 		_explo_frames.add_frame("boom", tex)
 
 	# NB: le animazioni COMBO (numeri + effetti a schermo intero) NON si
-	# precaricano più qui: erano centinaia di MB caricati a ogni avvio partita
-	# (causa crash/jetsam su iOS e Android). Ora si caricano in modo LAZY, per
-	# livello, alla prima occorrenza, con cache (vedi _get_combo_frames/_get_combo_fx).
+	# precaricano tutte qui (erano centinaia di MB -> crash/jetsam). Si caricano LAZY
+	# per livello (vedi _get_combo_frames/_get_combo_fx). Per evitare il LAG alla prima
+	# combo, i livelli bassi (1..4, i più comuni) si scaldano in BACKGROUND su un thread
+	# subito dopo l'avvio: quando servono sono già in cache = niente hitch.
+	_preload_common_combos.call_deferred()
 
 	_last_action_ms = Time.get_ticks_msec()
 
@@ -1535,9 +1539,9 @@ func _setup_speedrun_ui() -> void:
 	var pl = ui.get_node_or_null("PointLabel")
 	if pl:
 		pfont = pl.get_theme_font("font")
-		pl.add_theme_font_size_override("font_size", 50)
-		pl.offset_top = 4
-		pl.offset_bottom = 58
+		pl.add_theme_font_size_override("font_size", 54)
+		pl.offset_top = 50
+		pl.offset_bottom = 104
 	_timer_label = Label.new()
 	if pfont:
 		_timer_label.add_theme_font_override("font", pfont)
@@ -1546,8 +1550,8 @@ func _setup_speedrun_ui() -> void:
 	_timer_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_timer_label.offset_left = 38
 	_timer_label.offset_right = 538
-	_timer_label.offset_top = 66
-	_timer_label.offset_bottom = 196
+	_timer_label.offset_top = 104
+	_timer_label.offset_bottom = 234
 	ui.add_child(_timer_label)
 	var mv = ui.get_node_or_null("MOOVES")
 	if mv:
@@ -1575,10 +1579,21 @@ func _update_point_label() -> void:
 		lbl = get_node_or_null("../UI/PointLabel")
 	if lbl and lbl is Label:
 		var increased := _last_shown_score >= 0 and score > _last_shown_score
-		lbl.text = str(score)
 		_last_shown_score = score
 		if increased:
+			_animate_score_count(lbl, score)   # numero che sale (come le monete)
 			_pop_point_label(lbl)
+		else:
+			lbl.text = str(score)
+
+# Il punteggio "sale" fino al nuovo valore (stessa idea dell'animazione monete).
+func _animate_score_count(lbl: Label, to_v: int) -> void:
+	var from_v := int(lbl.text) if lbl.text.is_valid_int() else to_v
+	if _score_count_tween != null and _score_count_tween.is_valid():
+		_score_count_tween.kill()
+	_score_count_tween = lbl.create_tween()
+	_score_count_tween.tween_method(func(v: float) -> void: lbl.set_text(str(int(round(v)))), float(from_v), float(to_v), 0.3)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 # Animazione di ingrandimento del numero centrale a ogni guadagno di punti
 func _pop_point_label(lbl: Control) -> void:
@@ -1730,7 +1745,12 @@ func _show_points_gain_popup(amount: int) -> void:
 	pop.add_theme_color_override("font_color", Color(0.25, 0.85, 0.35))
 	pop.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pop.size = Vector2(240, 50)
-	pop.position = Vector2(288 - 120, 8)   # centrato, sopra il numero grande
+	# classic: centrato, un po' più in basso. speedrun: in alto e spostato a destra
+	# del counter (che è centrato) così non si sovrappone a counter/timer.
+	if _is_speedrun:
+		pop.position = Vector2(288 - 120, 6)   # centrato, SOPRA il counter dei punti
+	else:
+		pop.position = Vector2(288 - 120, 48)
 	pop.z_index = 60
 	ui.add_child(pop)
 	var start_y: float = pop.position.y
@@ -2180,6 +2200,25 @@ func _build_combo_frames(prefix: String) -> SpriteFrames:
 		i += 1
 	return sf
 
+# Scalda in BACKGROUND (thread) le combo piu' comuni (1..4) subito dopo l'avvio,
+# cosi' la prima combo non deve caricare i frame al volo (niente lag/hitch).
+func _preload_common_combos() -> void:
+	await get_tree().create_timer(0.3).timeout
+	if not is_inside_tree():
+		return   # partita già uscita
+	for lvl in range(1, 5):
+		for prefix in ["combo%d" % lvl, "effect%d" % lvl]:
+			var i := 1
+			while true:
+				var p := "res://CORE/Assets/Art/Game/Combo/%s_%03d.png" % [prefix, i]
+				if not ResourceLoader.exists(p):
+					break
+				ResourceLoader.load_threaded_request(p)
+				i += 1
+		await get_tree().process_frame
+	# NB: non pre-costruiamo le SpriteFrames sul main thread (causava hitch all'avvio):
+	# i frame sono già in cache via thread, quindi la prima combo li prende al volo.
+
 # Effetto COMBO a schermo intero: cornice sui 4 lati, adattata a OGNI dispositivo.
 # Sta su una CanvasLayer (spazio-schermo, indipendente da camera/risoluzione) e viene
 # scalato in modo NON uniforme così tocca esattamente tutti e 4 i bordi.
@@ -2204,7 +2243,7 @@ func _show_combo_fullscreen(level: int) -> void:
 	asp.centered = true
 	asp.position = view * 0.5
 	asp.scale = Vector2(view.x / fw, view.y / fh)   # riempie tutti e 4 i lati
-	asp.speed_scale = 1.4
+	asp.speed_scale = 0.85
 	layer.add_child(asp)
 	asp.animation_finished.connect(layer.queue_free)
 	asp.play("c")
@@ -2215,6 +2254,9 @@ func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	var frames: SpriteFrames = _get_combo_frames(anim_level)
 	if frames == null or frames.get_frame_count("c") == 0:
 		return
+	# niente sovrapposizioni: rimuovi il numero COMBO precedente ancora in animazione
+	if is_instance_valid(_active_combo_num):
+		_active_combo_num.queue_free()
 	var asp := AnimatedSprite2D.new()
 	asp.sprite_frames = frames
 	asp.animation = "c"
@@ -2223,6 +2265,7 @@ func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	asp.speed_scale = COMBO_SPEED
 	asp.z_index = 200
 	add_child(asp)
+	_active_combo_num = asp
 	asp.animation_finished.connect(asp.queue_free)
 	asp.play("c")
 	settings.play_combo(level)

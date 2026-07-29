@@ -200,6 +200,8 @@ var _preview_fade_tween: Tween = null       # dissolvenza della preview
 var _drag_scale_tween: Tween = null         # tween di scala del cubo trascinato
 var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosione
 var _combo_frames: Dictionary = {}          # livello -> SpriteFrames (COMBO 1..4)
+var _combo_fx: Dictionary = {}              # livello -> SpriteFrames effetto a schermo intero (4 lati)
+var _active_combo_fx: CanvasLayer = null    # effetto full-screen attualmente in corso
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
 var _last_shown_score: int = -1             # per l'animazione pop del punteggio
 var _score_pop_tween: Tween = null
@@ -308,6 +310,14 @@ func _ready() -> void:
 	# SpriteFrames delle animazioni COMBO 1..11 (frame ~33fps, sfondo trasparente)
 	for lvl in range(1, 12):
 		_combo_frames[lvl] = _build_combo_frames("combo%d" % lvl)
+
+	# Effetti COMBO a schermo intero (cornice sui 4 lati) per ogni livello 1..11.
+	# Il 9 non ha una sua GIF: usa l'8 come fallback.
+	for lvl in range(1, 12):
+		var fx := _build_combo_frames("effect%d" % lvl)
+		if fx.get_frame_count("c") == 0 and _combo_fx.has(lvl - 1):
+			fx = _combo_fx[lvl - 1]
+		_combo_fx[lvl] = fx
 
 	_last_action_ms = Time.get_ticks_msec()
 
@@ -2165,8 +2175,38 @@ func _build_combo_frames(prefix: String) -> SpriteFrames:
 		i += 1
 	return sf
 
+# Effetto COMBO a schermo intero: cornice sui 4 lati, adattata a OGNI dispositivo.
+# Sta su una CanvasLayer (spazio-schermo, indipendente da camera/risoluzione) e viene
+# scalato in modo NON uniforme così tocca esattamente tutti e 4 i bordi.
+func _show_combo_fullscreen(level: int) -> void:
+	var fx: SpriteFrames = _combo_fx.get(level)
+	if fx == null or fx.get_frame_count("c") == 0:
+		return
+	# sostituisci l'effetto precedente (le combo si susseguono rapide)
+	if is_instance_valid(_active_combo_fx):
+		_active_combo_fx.queue_free()
+	var tex0: Texture2D = fx.get_frame_texture("c", 0)
+	var fw := float(tex0.get_width())
+	var fh := float(tex0.get_height())
+	var view := get_viewport_rect().size
+	var layer := CanvasLayer.new()
+	layer.layer = 90
+	add_child(layer)
+	_active_combo_fx = layer
+	var asp := AnimatedSprite2D.new()
+	asp.sprite_frames = fx
+	asp.animation = "c"
+	asp.centered = true
+	asp.position = view * 0.5
+	asp.scale = Vector2(view.x / fw, view.y / fh)   # riempie tutti e 4 i lati
+	asp.speed_scale = 1.4
+	layer.add_child(asp)
+	asp.animation_finished.connect(layer.queue_free)
+	asp.play("c")
+
 func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	var anim_level: int = clampi(level, 1, 11)   # dalla 12ª combo in poi usa COMBO 11
+	_show_combo_fullscreen(anim_level)           # cornice a schermo intero per ogni combo
 	if not _combo_frames.has(anim_level) or _combo_frames[anim_level].get_frame_count("c") == 0:
 		return
 	var asp := AnimatedSprite2D.new()

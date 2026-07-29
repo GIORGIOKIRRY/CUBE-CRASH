@@ -26,6 +26,17 @@ const REAL_BANNER_IOS := "ca-app-pub-7508049500048357/8815946941"
 const REAL_INTERSTITIAL_IOS := "ca-app-pub-7508049500048357/8536177127"
 const REAL_REWARDED_IOS := "ca-app-pub-7508049500048357/1504553278"
 
+# --- ID DI TEST ufficiali Google ---
+# Usati SOLO nei build di debug (export-debug): mostrano annunci finti che
+# funzionano sempre, anche con l'account AdMob non ancora approvato. Nei
+# build di release (export-release) si usano gli ID reali qui sopra.
+const TEST_BANNER_IOS := "ca-app-pub-3940256099942544/2934735716"
+const TEST_INTERSTITIAL_IOS := "ca-app-pub-3940256099942544/4411468910"
+const TEST_REWARDED_IOS := "ca-app-pub-3940256099942544/1712485313"
+const TEST_BANNER_ANDROID := "ca-app-pub-3940256099942544/6300978111"
+const TEST_INTERSTITIAL_ANDROID := "ca-app-pub-3940256099942544/1033173712"
+const TEST_REWARDED_ANDROID := "ca-app-pub-3940256099942544/5224354917"
+
 var _initialized: bool = false
 var _banner: AdView = null
 var _banner_wanted: bool = false        # richiesta arrivata prima dell'init
@@ -103,12 +114,18 @@ func _is_sdk_ready() -> bool:
 # ID UNITÀ (per piattaforma)
 # ============================================================
 func _banner_id() -> String:
+	if OS.is_debug_build():
+		return TEST_BANNER_IOS if OS.get_name() == "iOS" else TEST_BANNER_ANDROID
 	return REAL_BANNER_IOS if OS.get_name() == "iOS" else REAL_BANNER_ANDROID
 
 func _interstitial_id() -> String:
+	if OS.is_debug_build():
+		return TEST_INTERSTITIAL_IOS if OS.get_name() == "iOS" else TEST_INTERSTITIAL_ANDROID
 	return REAL_INTERSTITIAL_IOS if OS.get_name() == "iOS" else REAL_INTERSTITIAL_ANDROID
 
 func _rewarded_id() -> String:
+	if OS.is_debug_build():
+		return TEST_REWARDED_IOS if OS.get_name() == "iOS" else TEST_REWARDED_ANDROID
 	return REAL_REWARDED_IOS if OS.get_name() == "iOS" else REAL_REWARDED_ANDROID
 
 # ============================================================

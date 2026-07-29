@@ -100,6 +100,7 @@ var _missions_button: Button
 var _coin_label: Label
 var _missions_menu: Control
 var _missions_list: VBoxContainer
+var _missions_scroll: ScrollContainer
 var _missions_coins_label: Label
 var _missions_timer_label: Label
 
@@ -150,6 +151,11 @@ func _layout() -> void:
 			var b: Button = _nav_btns[i]
 			b.position = Vector2(view_size.x * i / 3.0, 0.0)
 			b.size = Vector2(view_size.x / 3.0, nav_h)
+	# lista missioni: dal sotto-testata fino alla nav bar
+	if _missions_scroll:
+		var mtop := 226.0
+		_missions_scroll.position = Vector2(32.0, mtop)
+		_missions_scroll.size = Vector2(512.0, maxf(120.0, view_size.y - nav_h - mtop))
 	# cabinato ancorato in basso ma ABBASSATO di CABINET_DROP (la barra ci passa sopra, CanvasLayer)
 	var bottom_y := CAMERA_CENTER.y + view_size.y * 0.5 + CABINET_DROP
 	_art_pos = Vector2(CAMERA_CENTER.x, bottom_y - (ART_SIZE.y - ART_CENTER.y) * ART_SCALE)
@@ -614,10 +620,10 @@ func _build_top_right() -> void:
 	_update_coin_count()
 
 	# CLASSIFICA (trofeo) a SINISTRA delle impostazioni — più grandi e alzate
-	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(388.0, 50.0), 78.0)
+	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(388.0, 74.0), 78.0)
 	_leader_btn.pressed.connect(_on_leaderboard_pressed)
 	# IMPOSTAZIONI (nuova icona)
-	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 50.0), 78.0)
+	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 74.0), 78.0)
 	_settings_btn2.pressed.connect(_on_settings_button_pressed)
 
 
@@ -851,54 +857,71 @@ func _update_coin_label() -> void:
 
 
 func _build_missions_menu() -> void:
+	# CanvasLayer (screen-space, come la nav bar): niente shift della camera
+	var layer := CanvasLayer.new()
+	layer.layer = 5
+	add_child(layer)
 	_missions_menu = Control.new()
 	_missions_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_missions_menu.z_index = 940
 	_missions_menu.visible = false
-	add_child(_missions_menu)
+	layer.add_child(_missions_menu)
 
-	# schermata PIENA (come lo shop), non un popup
 	var bg := ColorRect.new()
 	bg.color = Color(0.09, 0.17, 0.27, 1.0)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	bg.offset_left = -600.0
-	bg.offset_top = -600.0
-	bg.offset_right = 1400.0
-	bg.offset_bottom = 2000.0
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_missions_menu.add_child(bg)
 
+	# coin counter (come la home) in ALTO A SINISTRA
+	var coinbar := TextureRect.new()
+	coinbar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
+	coinbar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coinbar.stretch_mode = TextureRect.STRETCH_SCALE
+	coinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	coinbar.position = Vector2(24, 116)
+	coinbar.size = Vector2(196, 196.0 * 176.0 / 792.0)
+	_missions_menu.add_child(coinbar)
+	_missions_coins_label = Label.new()
+	_missions_coins_label.add_theme_font_override("font", MODE_FONT)
+	_missions_coins_label.add_theme_font_size_override("font_size", 30)
+	_missions_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_missions_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_missions_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_missions_coins_label.position = Vector2(74, 116)
+	_missions_coins_label.size = Vector2(140, 44)
+	_missions_menu.add_child(_missions_coins_label)
+
+	# titolo
 	var title := Label.new()
 	title.text = "MISSIONI"
 	title.add_theme_font_override("font", MODE_FONT)
-	title.add_theme_font_size_override("font_size", 44)
+	title.add_theme_font_size_override("font_size", 38)
 	title.add_theme_color_override("font_color", Color(1, 1, 1))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position = Vector2(24, 132)
-	title.size = Vector2(528, 52)
+	title.position = Vector2(24, 172)
+	title.size = Vector2(528, 44)
 	_missions_menu.add_child(title)
-
-	_missions_coins_label = Label.new()
-	_missions_coins_label.add_theme_font_override("font", MODE_FONT)
-	_missions_coins_label.add_theme_font_size_override("font_size", 28)
-	_missions_coins_label.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
-	_missions_coins_label.position = Vector2(44, 186)
-	_missions_coins_label.size = Vector2(240, 32)
-	_missions_menu.add_child(_missions_coins_label)
 
 	_missions_timer_label = Label.new()
 	_missions_timer_label.add_theme_font_override("font", MODE_FONT)
 	_missions_timer_label.add_theme_font_size_override("font_size", 20)
 	_missions_timer_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
 	_missions_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_missions_timer_label.position = Vector2(292, 190)
-	_missions_timer_label.size = Vector2(244, 28)
+	_missions_timer_label.position = Vector2(300, 126)
+	_missions_timer_label.size = Vector2(236, 26)
 	_missions_menu.add_child(_missions_timer_label)
 
+	# lista SCROLLABILE (drag): scrollbar nascosta, riempie fino alla nav bar (in _layout)
+	_missions_scroll = ScrollContainer.new()
+	_missions_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_missions_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_missions_menu.add_child(_missions_scroll)
 	_missions_list = VBoxContainer.new()
-	_missions_list.position = Vector2(44, 230)
-	_missions_list.size = Vector2(488, 620)
-	_missions_list.add_theme_constant_override("separation", 10)
-	_missions_menu.add_child(_missions_list)
+	_missions_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_missions_list.custom_minimum_size = Vector2(488, 0)
+	_missions_list.add_theme_constant_override("separation", 12)
+	_missions_scroll.add_child(_missions_list)
 
 
 func _refresh_text() -> String:
@@ -929,62 +952,138 @@ func _on_missions_dim_input(event: InputEvent) -> void:
 func _populate_missions() -> void:
 	for c in _missions_list.get_children():
 		c.queue_free()
-	_missions_coins_label.text = "Monete: %d" % missions.coins
+	_missions_coins_label.text = str(missions.coins)
 	_missions_timer_label.text = _refresh_text()
 	for i in missions.missions.size():
+		if missions.missions[i]["claimed"]:
+			continue   # riscosse: spariscono
 		_missions_list.add_child(_make_mission_row(i, missions.missions[i]))
 
 
+const ROW_W := 488.0
+const ROW_H := 146.0
+const MISS := "res://CORE/Assets/Art/UI/Missions/"
+
+func _miss_tex(path: String, pos: Vector2, sz: Vector2, keep: bool = false) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = load(path)
+	t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED if keep else TextureRect.STRETCH_SCALE
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	t.position = pos
+	t.size = sz
+	return t
+
+func _mission_icon_path(m: Dictionary) -> String:
+	var color := "red"
+	match m["type"]:
+		"break_color": color = str(m["param"])
+		"score": color = "yellow"
+		"break_total": color = "blue"
+		"combo": color = "purple"
+		"play": color = "green"
+	var cap := color.capitalize()
+	return "res://CORE/Assets/Art/Game/Cubes/%s/%s.svg" % [cap, cap]
+
+func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, halign: int) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_override("font", MODE_FONT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.horizontal_alignment = halign
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.position = pos
+	l.size = sz
+	return l
+
+const MISS_SINK := 4.0
+
 func _make_mission_row(index: int, m: Dictionary) -> Control:
-	var row := ColorRect.new()
-	row.color = Color(1, 1, 1, 0.06)
-	row.custom_minimum_size = Vector2(488, 92)
+	var done: bool = missions.is_complete(m) and not m["claimed"]
+	var bg_tex: String = "mission_bg_done.png" if done else "mission_bg.png"
+	var icon_tex: String = "icon_frame_done.png" if done else "icon_frame.png"
+	var rew_tex: String = "reward_frame_done.png" if done else "reward_frame.png"
+	var txt_col: Color = Color(0.08, 0.20, 0.02) if done else Color(1, 1, 1)
 
-	var desc := Label.new()
-	desc.text = missions.describe(m)
-	desc.add_theme_font_override("font", MODE_FONT)
-	desc.add_theme_font_size_override("font_size", 22)
-	desc.add_theme_color_override("font_color", Color(1, 1, 1))
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.position = Vector2(14, 8)
-	desc.size = Vector2(316, 48)
-	row.add_child(desc)
+	var row := Control.new()
+	row.custom_minimum_size = Vector2(ROW_W, ROW_H)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE   # non blocca lo scroll
+	# contenuto: si abbassa alla pressione
+	var content := Control.new()
+	content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.position = Vector2.ZERO
+	content.size = Vector2(ROW_W, ROW_H)
+	row.add_child(content)
 
-	var prog := Label.new()
-	prog.text = "%d / %d" % [m["progress"], m["target"]]
-	prog.add_theme_font_override("font", MODE_FONT)
-	prog.add_theme_font_size_override("font_size", 20)
-	prog.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0))
-	prog.position = Vector2(14, 58)
-	prog.size = Vector2(200, 28)
-	row.add_child(prog)
+	content.add_child(_miss_tex(MISS + bg_tex, Vector2.ZERO, Vector2(ROW_W, ROW_H)))
 
-	var rew := Label.new()
-	rew.text = "+%d" % m["reward"]
-	rew.add_theme_font_override("font", MODE_FONT)
-	rew.add_theme_font_size_override("font_size", 24)
-	rew.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
-	rew.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rew.position = Vector2(338, 8)
-	rew.size = Vector2(136, 30)
-	row.add_child(rew)
+	# ICONA (sinistra) = frame + cubo del colore della missione
+	var ih := ROW_H * 0.72
+	var iw := ih * (576.0 / 608.0)
+	var ix := ROW_W * 0.045
+	var iy := (ROW_H - ih) * 0.5
+	content.add_child(_miss_tex(MISS + icon_tex, Vector2(ix, iy), Vector2(iw, ih)))
+	var cs := iw * 0.62
+	content.add_child(_miss_tex(_mission_icon_path(m), Vector2(ix + (iw - cs) * 0.5, iy + (ih - cs) * 0.5), Vector2(cs, cs), true))
 
-	var claim := Button.new()
-	claim.focus_mode = Control.FOCUS_NONE
-	claim.add_theme_font_override("font", MODE_FONT)
-	claim.add_theme_font_size_override("font_size", 20)
-	claim.position = Vector2(338, 46)
-	claim.size = Vector2(136, 40)
-	if m["claimed"]:
-		claim.text = "FATTO"
-		claim.disabled = true
-	elif missions.is_complete(m):
-		claim.text = "RISCUOTI"
-		claim.pressed.connect(_claim_mission.bind(index))
+	# REWARD (destra) = frame + "RICOMPENSE" + coin + quantità
+	var rw := iw
+	var rh := ih
+	var rx := ROW_W - ROW_W * 0.045 - rw
+	var ry := iy
+	content.add_child(_miss_tex(MISS + rew_tex, Vector2(rx, ry), Vector2(rw, rh)))
+	content.add_child(_miss_label("RICOMPENSE", 13, txt_col, Vector2(rx, ry + 6), Vector2(rw, 16), HORIZONTAL_ALIGNMENT_CENTER))
+	var coinS := rh * 0.40
+	var coinX := rx + rw * 0.10
+	var coinY := ry + rh * 0.42
+	content.add_child(_miss_tex(MISS + "coin_icon.png", Vector2(coinX, coinY), Vector2(coinS, coinS), true))
+	var amt_col: Color = Color(0.08, 0.20, 0.02) if done else Color(1, 0.86, 0.12)
+	content.add_child(_miss_label(str(m["reward"]), 22, amt_col, Vector2(coinX + coinS + 4, coinY), Vector2(rw * 0.55, coinS), HORIZONTAL_ALIGNMENT_LEFT))
+
+	# CENTRO: testo (ALLINEATO A SINISTRA) + barra progresso
+	var cl := ix + iw + ROW_W * 0.03
+	var cr := rx - ROW_W * 0.03
+	var cw := cr - cl
+	content.add_child(_miss_label(missions.describe(m), 20, txt_col, Vector2(cl, ROW_H * 0.08), Vector2(cw, ROW_H * 0.44), HORIZONTAL_ALIGNMENT_LEFT))
+
+	var bw := cw * 0.98
+	var bh := bw * (224.0 / 1280.0)
+	var bx := cl + (cw - bw) * 0.5
+	var by := ROW_H * 0.60
+	if done:
+		content.add_child(_miss_tex(MISS + "bar_complete.png", Vector2(bx, by), Vector2(bw, bh)))
+		content.add_child(_miss_label("RISCATTA LE RICOMPENSE", 13, Color(0.06, 0.16, 0.02), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER))
 	else:
-		claim.text = "IN CORSO"
-		claim.disabled = true
-	row.add_child(claim)
+		content.add_child(_miss_tex(MISS + "bar_back.png", Vector2(bx, by), Vector2(bw, bh)))
+		var frac := clampf(float(m["progress"]) / float(maxi(1, int(m["target"]))), 0.0, 1.0)
+		var fill := ColorRect.new()
+		fill.color = Color(1.0, 0.82, 0.10)
+		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		fill.position = Vector2(bx + bw * 0.025, by + bh * 0.143)
+		fill.size = Vector2(bw * (0.974 - 0.025) * frac, bh * (0.853 - 0.143))
+		content.add_child(fill)
+		content.add_child(_miss_tex(MISS + "bar_front.png", Vector2(bx, by), Vector2(bw, bh)))
+		content.add_child(_miss_label("%d/%d" % [m["progress"], m["target"]], 18, Color(1, 1, 1), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER))
+
+	# tasto: ogni missione è pressabile (affonda); se completa riscuote
+	var btn := Button.new()
+	btn.focus_mode = Control.FOCUS_NONE
+	var empty := StyleBoxEmpty.new()
+	btn.add_theme_stylebox_override("normal", empty)
+	btn.add_theme_stylebox_override("hover", empty)
+	btn.add_theme_stylebox_override("pressed", empty)
+	btn.add_theme_stylebox_override("focus", empty)
+	btn.position = Vector2.ZERO
+	btn.size = Vector2(ROW_W, ROW_H)
+	btn.button_down.connect(func() -> void: content.position = Vector2(0, MISS_SINK))
+	btn.button_up.connect(func() -> void: content.position = Vector2.ZERO)
+	if done:
+		btn.pressed.connect(_claim_mission.bind(index))
+	row.add_child(btn)
 	return row
 
 

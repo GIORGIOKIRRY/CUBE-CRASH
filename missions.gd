@@ -6,6 +6,8 @@ extends Node
 
 const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400   # 24h
+const DATA_VERSION := 2           # bump per FORZARE un reset delle missioni una volta
+var _data_version: int = 0
 const NUM_MISSIONS := 6
 const COLORS := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
 const COLOR_IT := {
@@ -20,6 +22,12 @@ var last_refresh: int = 0     # unix time dell'ultima rigenerazione
 
 func _ready() -> void:
 	_load()
+	if _data_version < DATA_VERSION:
+		# reset forzato delle missioni (le monete restano)
+		_generate()
+		last_refresh = _now()
+		_data_version = DATA_VERSION
+		_save()
 	_maybe_refresh()
 
 
@@ -160,6 +168,7 @@ func _save() -> void:
 	cfg.set_value("m", "coins", coins)
 	cfg.set_value("m", "last_refresh", last_refresh)
 	cfg.set_value("m", "missions", missions)
+	cfg.set_value("m", "version", DATA_VERSION)
 	cfg.save(SAVE_PATH)
 
 func _load() -> void:
@@ -168,3 +177,4 @@ func _load() -> void:
 		coins = int(cfg.get_value("m", "coins", 0))
 		last_refresh = int(cfg.get_value("m", "last_refresh", 0))
 		missions = cfg.get_value("m", "missions", [])
+		_data_version = int(cfg.get_value("m", "version", 0))

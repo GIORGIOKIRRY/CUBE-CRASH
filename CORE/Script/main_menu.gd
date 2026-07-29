@@ -10,7 +10,7 @@ const ART_CENTER := Vector2(400.0, 700.0)
 const CAMERA_CENTER := Vector2(288.0, 512.0)
 const ART_SCALE := 0.9
 const BOTTOM_MARGIN := 0.0
-const CABINET_DROP := 90.0                    # abbassa il cabinato così i tasti in alto non lo coprono
+const CABINET_DROP := 120.0                   # abbassa il cabinato così i tasti in alto non lo coprono
 
 # Animazione cabinato (riflesso sul marquee): 12 frame, poi fermo 15s, poi riparte.
 const CAB_FPS := 12.0
@@ -22,7 +22,7 @@ const PLAY_NEW_TEX := Vector2(1408.0, 576.0)
 const DECK_TEX := Vector2(576.0, 576.0)
 const DECK_BTN_H_ART := 150.0                # altezza comune dei due tasti (più grandi)
 const DECK_GAP_ART := -4.0                    # attaccati (piccolo che chiude il seam, niente sovrapposizione visibile)
-const DECK_ROW_CENTER_ART := Vector2(399.0, 990.0)  # centro coppia (compensato per CABINET_DROP)
+const DECK_ROW_CENTER_ART := Vector2(399.0, 946.0)  # centro coppia (compensato per CABINET_DROP)
 const PRESS_SINK := 5.0                       # px di "affondamento" alla pressione
 const SPARKLE_OFFSET_Y := 0.0
 
@@ -340,6 +340,7 @@ func _arrow_down(base: Sprite2D, pressed: Sprite2D, spk: CPUParticles2D) -> void
 	settings.button_feedback()
 	base.visible = false
 	pressed.visible = true
+	pressed.position = base.position + Vector2(0, PRESS_SINK)   # affonda di qualche pixel
 	spk.emitting = false
 
 
@@ -1062,6 +1063,11 @@ func _set_home_visible(v: bool) -> void:
 			n.visible = v
 	if _play_pressed:
 		_play_pressed.visible = false
+	# i frame "schiacciati" delle frecce restano nascosti (mostrati solo durante la pressione)
+	if _arrow_l_pressed:
+		_arrow_l_pressed.visible = false
+	if _arrow_r_pressed:
+		_arrow_r_pressed.visible = false
 	if _sparkles:
 		_sparkles.emitting = v
 	if _arrow_l_sparkles:

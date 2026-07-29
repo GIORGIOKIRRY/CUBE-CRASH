@@ -194,6 +194,7 @@ var bottom_pieces: Array = [null, null, null]  # 3 slot
 var dragging_piece: Node = null
 var dragging_from_slot: int = -1
 var drag_start_pos: Vector2 = Vector2.ZERO
+var _multi_drags: Dictionary = {}   # speedrun: indice-dito -> pezzo trascinato (multi-touch)
 var _placement_preview: Polygon2D = null   # fantasma della cella dove verrà piazzato
 var _preview_fade_tween: Tween = null       # dissolvenza della preview
 var _drag_scale_tween: Tween = null         # tween di scala del cubo trascinato
@@ -556,7 +557,14 @@ func find_matches() -> bool:
 			_show_combo_effect(_last_combo_shown, _combo_effect_pos(cells))
 		is_resolving = true
 		_cancel_drag()
-		get_parent().get_node("DestroyTimer").start()
+		var dt: Timer = get_parent().get_node("DestroyTimer")
+		if _is_speedrun:
+			# speedrun: risoluzione RAPIDA e NON riavviata a ogni piazzamento, così più match
+			# (anche da mani diverse) si risolvono subito insieme invece di accodarsi/bloccarsi
+			if dt.is_stopped():
+				dt.start(0.15)
+		else:
+			dt.start()
 	return any_match
 
 func destroy_matched() -> Array:
@@ -998,6 +1006,10 @@ func _input(event: InputEvent) -> void:
 		# speedrun: input consentito anche durante le cascate (più mosse in contemporanea)
 		if is_game_over or (is_resolving and not _is_speedrun):
 			return
+		# speedrun: MULTI-TOUCH (un drag indipendente per ogni DITO)
+		if _is_speedrun:
+			_handle_multitouch(event)
+			return
 		# Inizio drag: mouse down su un pezzo della BottomGrid
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			var clicked := _get_bottom_piece_under_mouse()
@@ -1115,8 +1127,9 @@ func check_game_over() -> void:
 
 
 func _get_bottom_piece_under_mouse() -> Node:
-	var mouse_pos = get_global_mouse_position()
+	return _bottom_piece_at(get_global_mouse_position())
 
+func _bottom_piece_at(mouse_pos: Vector2) -> Node:
 	for s in range(3):
 		var p: Node = bottom_pieces[s]
 		if p == null:
@@ -1141,6 +1154,74 @@ func _get_bottom_piece_under_mouse() -> Node:
 				return p
 
 	return null
+
+
+# Piazza un pezzo trascinato nella cella sotto world_pos (o lo rimanda allo slot).
+# Usato dal MULTI-TOUCH (speedrun); stessa logica del drag singolo.
+func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
+	var target_grid := pixel_to_grid(world_pos.x, world_pos.y)
+	if is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null and (not _moves_enabled or current_moves > 0):
+		piece.set_meta("origin", "grid")
+		piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+		piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
+		all_pieces[target_grid.x][target_grid.y] = piece
+		cell_active[target_grid.x][target_grid.y] = true
+		settings.play_place()
+		bottom_pieces[slot] = null
+		_replenish_bottom_slot(slot)
+		if _moves_enabled:
+			current_moves -= 1
+			if current_moves < 0:
+				current_moves = 0
+			update_moves_label()
+			_show_move_cost_popup()
+		_moves_since_balance += 1
+		_stat_placements += 1
+		score += points_per_placement
+		lifetime_score += points_per_placement
+		if score > high_score:
+			high_score = score
+		_show_points_gain_popup(points_per_placement)
+		_update_point_label()
+		_update_high_score_labels_everywhere()
+		_save_scores()
+		check_game_over()
+		_combo_count = 0
+		_find_wave = 0
+		_combo_matches = 0
+		_last_combo_shown = 0
+		if not find_matches():
+			_maybe_balance_board()
+		check_game_over()
+	else:
+		piece.global_position = _bottom_slot_pixel(slot)
+		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+	if piece is CanvasItem:
+		piece.z_index = 0
+
+
+# Multi-touch (solo speedrun): un drag indipendente per ogni dito (event.index).
+func _handle_multitouch(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var wp: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
+		if event.pressed:
+			if _multi_drags.has(event.index):
+				return
+			var clicked := _bottom_piece_at(wp)
+			if clicked != null and not _multi_drags.values().has(clicked):
+				_multi_drags[event.index] = clicked
+				if clicked is CanvasItem:
+					clicked.z_index = 999
+				clicked.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+				settings.play_pickup()
+		elif _multi_drags.has(event.index):
+			var piece: Node = _multi_drags[event.index]
+			_multi_drags.erase(event.index)
+			_place_dragged_piece(piece, int(piece.get_meta("slot_idx")), wp)
+	elif event is InputEventScreenDrag and _multi_drags.has(event.index):
+		var piece2: Node = _multi_drags[event.index]
+		piece2.global_position = get_global_transform_with_canvas().affine_inverse() * event.position
+
 
 func update_moves_label() -> void:
 	# mode_c: il contatore mostra le COMBO totali, non le mosse

@@ -47,6 +47,7 @@ const MODES := [
 ]
 
 var _background: Sprite2D
+var _home_shadow: Sprite2D
 var _cabinet: AnimatedSprite2D
 var _hold_timer: Timer
 
@@ -153,7 +154,7 @@ func _layout() -> void:
 			b.size = Vector2(view_size.x / 3.0, nav_h)
 	# lista missioni: dal sotto-testata fino alla nav bar
 	if _missions_scroll:
-		var mtop := 226.0
+		var mtop := 270.0
 		_missions_scroll.position = Vector2(32.0, mtop)
 		_missions_scroll.size = Vector2(512.0, maxf(120.0, view_size.y - nav_h - mtop))
 	# cabinato ancorato in basso ma ABBASSATO di CABINET_DROP (la barra ci passa sopra, CanvasLayer)
@@ -164,6 +165,14 @@ func _layout() -> void:
 		if s:
 			s.position = _art_pos
 			s.scale = Vector2(ART_SCALE, ART_SCALE)
+
+	# ombra: larga quanto lo schermo, bordo inferiore allineato al fondo schermo
+	if _home_shadow and _home_shadow.texture:
+		var stex := _home_shadow.texture.get_size()
+		var ssc := view_size.x / stex.x
+		_home_shadow.scale = Vector2(ssc, ssc)
+		var screen_bottom := CAMERA_CENTER.y + view_size.y * 0.5
+		_home_shadow.position = Vector2(CAMERA_CENTER.x, screen_bottom - stex.y * ssc * 0.5)
 
 	_position_play_button()
 	_position_arrows()
@@ -184,6 +193,13 @@ func _build_scene() -> void:
 	_background.texture = load("res://CORE/Assets/Art/Home/background.png")
 	_background.z_index = -4
 	add_child(_background)
+
+	# Ombra a fondo schermo: sopra il cabinato (z=-2), sotto play/deck (z=0).
+	_home_shadow = Sprite2D.new()
+	_home_shadow.texture = load("res://CORE/Assets/Art/Home/ombra.png")
+	_home_shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_home_shadow.z_index = -1
+	add_child(_home_shadow)
 
 	var frames := SpriteFrames.new()
 	frames.add_animation("play")
@@ -866,11 +882,19 @@ func _build_missions_menu() -> void:
 	_missions_menu.visible = false
 	layer.add_child(_missions_menu)
 
+	# sfondo uguale a quello della home (SkyBG/FloorBG di MainMenu.tscn)
 	var bg := ColorRect.new()
-	bg.color = Color(0.09, 0.17, 0.27, 1.0)
+	bg.color = Color(0.31764707, 0.44705883, 0.5921569, 1.0)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_missions_menu.add_child(bg)
+	var floor_bg := ColorRect.new()
+	floor_bg.color = Color(0.28235295, 0.4627451, 0.62352943, 1.0)
+	floor_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	floor_bg.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	floor_bg.offset_top = -220.0
+	floor_bg.offset_bottom = 0.0
+	_missions_menu.add_child(floor_bg)
 
 	# coin counter (come la home) in ALTO A SINISTRA
 	var coinbar := TextureRect.new()
@@ -879,7 +903,7 @@ func _build_missions_menu() -> void:
 	coinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	coinbar.stretch_mode = TextureRect.STRETCH_SCALE
 	coinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	coinbar.position = Vector2(24, 116)
+	coinbar.position = Vector2(356, 116)
 	coinbar.size = Vector2(196, 196.0 * 176.0 / 792.0)
 	_missions_menu.add_child(coinbar)
 	_missions_coins_label = Label.new()
@@ -888,7 +912,7 @@ func _build_missions_menu() -> void:
 	_missions_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_missions_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_missions_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_missions_coins_label.position = Vector2(74, 116)
+	_missions_coins_label.position = Vector2(406, 116)
 	_missions_coins_label.size = Vector2(140, 44)
 	_missions_menu.add_child(_missions_coins_label)
 
@@ -907,9 +931,9 @@ func _build_missions_menu() -> void:
 	_missions_timer_label.add_theme_font_override("font", MODE_FONT)
 	_missions_timer_label.add_theme_font_size_override("font_size", 20)
 	_missions_timer_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	_missions_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_missions_timer_label.position = Vector2(300, 126)
-	_missions_timer_label.size = Vector2(236, 26)
+	_missions_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_missions_timer_label.position = Vector2(24, 126)
+	_missions_timer_label.size = Vector2(300, 26)
 	_missions_menu.add_child(_missions_timer_label)
 
 	# lista SCROLLABILE (drag): scrollbar nascosta, riempie fino alla nav bar (in _layout)
@@ -958,6 +982,11 @@ func _populate_missions() -> void:
 		if missions.missions[i]["claimed"]:
 			continue   # riscosse: spariscono
 		_missions_list.add_child(_make_mission_row(i, missions.missions[i]))
+	# spazio in fondo: margine di scroll comodo (non si "blocca" a fine lista)
+	var tail := Control.new()
+	tail.custom_minimum_size = Vector2(0, 60)
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_missions_list.add_child(tail)
 
 
 const ROW_W := 488.0
@@ -1007,10 +1036,11 @@ func _make_mission_row(index: int, m: Dictionary) -> Control:
 	var bg_tex: String = "mission_bg_done.png" if done else "mission_bg.png"
 	var icon_tex: String = "icon_frame_done.png" if done else "icon_frame.png"
 	var rew_tex: String = "reward_frame_done.png" if done else "reward_frame.png"
-	var txt_col: Color = Color(0.08, 0.20, 0.02) if done else Color(1, 1, 1)
+	var txt_col := Color(1, 1, 1)   # testo sempre bianco (anche missioni completate)
 
 	var row := Control.new()
 	row.custom_minimum_size = Vector2(ROW_W, ROW_H)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER   # riga centrata orizzontalmente
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE   # non blocca lo scroll
 	# contenuto: si abbassa alla pressione
 	var content := Control.new()
@@ -1036,12 +1066,12 @@ func _make_mission_row(index: int, m: Dictionary) -> Control:
 	var rx := ROW_W - ROW_W * 0.045 - rw
 	var ry := iy
 	content.add_child(_miss_tex(MISS + rew_tex, Vector2(rx, ry), Vector2(rw, rh)))
-	content.add_child(_miss_label("RICOMPENSE", 13, txt_col, Vector2(rx, ry + 6), Vector2(rw, 16), HORIZONTAL_ALIGNMENT_CENTER))
+	content.add_child(_miss_label("RICOMPENSE", 16, txt_col, Vector2(rx, ry + 3), Vector2(rw, 20), HORIZONTAL_ALIGNMENT_CENTER))
 	var coinS := rh * 0.40
 	var coinX := rx + rw * 0.10
 	var coinY := ry + rh * 0.42
 	content.add_child(_miss_tex(MISS + "coin_icon.png", Vector2(coinX, coinY), Vector2(coinS, coinS), true))
-	var amt_col: Color = Color(0.08, 0.20, 0.02) if done else Color(1, 0.86, 0.12)
+	var amt_col: Color = Color(1, 1, 1) if done else Color(1, 0.86, 0.12)
 	content.add_child(_miss_label(str(m["reward"]), 22, amt_col, Vector2(coinX + coinS + 4, coinY), Vector2(rw * 0.55, coinS), HORIZONTAL_ALIGNMENT_LEFT))
 
 	# CENTRO: testo (ALLINEATO A SINISTRA) + barra progresso
@@ -1056,7 +1086,7 @@ func _make_mission_row(index: int, m: Dictionary) -> Control:
 	var by := ROW_H * 0.60
 	if done:
 		content.add_child(_miss_tex(MISS + "bar_complete.png", Vector2(bx, by), Vector2(bw, bh)))
-		content.add_child(_miss_label("RISCATTA LE RICOMPENSE", 13, Color(0.06, 0.16, 0.02), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER))
+		content.add_child(_miss_label("RISCATTA LE RICOMPENSE", 13, Color(1, 1, 1), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER))
 	else:
 		content.add_child(_miss_tex(MISS + "bar_back.png", Vector2(bx, by), Vector2(bw, bh)))
 		var frac := clampf(float(m["progress"]) / float(maxi(1, int(m["target"]))), 0.0, 1.0)
@@ -1067,7 +1097,10 @@ func _make_mission_row(index: int, m: Dictionary) -> Control:
 		fill.size = Vector2(bw * (0.974 - 0.025) * frac, bh * (0.853 - 0.143))
 		content.add_child(fill)
 		content.add_child(_miss_tex(MISS + "bar_front.png", Vector2(bx, by), Vector2(bw, bh)))
-		content.add_child(_miss_label("%d/%d" % [m["progress"], m["target"]], 18, Color(1, 1, 1), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER))
+		var prog := _miss_label("%d/%d" % [m["progress"], m["target"]], 18, Color(1, 1, 1), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER)
+		prog.add_theme_constant_override("outline_size", 6)
+		prog.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+		content.add_child(prog)
 
 	# tasto: ogni missione è pressabile (affonda); se completa riscuote
 	var btn := Button.new()
@@ -1079,6 +1112,8 @@ func _make_mission_row(index: int, m: Dictionary) -> Control:
 	btn.add_theme_stylebox_override("focus", empty)
 	btn.position = Vector2.ZERO
 	btn.size = Vector2(ROW_W, ROW_H)
+	# PASS: il tap preme la riga, ma il drag arriva alla ScrollContainer (scroll fluido, non si blocca)
+	btn.mouse_filter = Control.MOUSE_FILTER_PASS
 	btn.button_down.connect(func() -> void: content.position = Vector2(0, MISS_SINK))
 	btn.button_up.connect(func() -> void: content.position = Vector2.ZERO)
 	if done:
@@ -1155,7 +1190,7 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 
 
 func _set_home_visible(v: bool) -> void:
-	for n in [_background, _cabinet, _play_base, _deck_sprite, _sparkles,
+	for n in [_background, _home_shadow, _cabinet, _play_base, _deck_sprite, _sparkles,
 			_arrow_l_base, _arrow_l_pressed, _arrow_r_base, _arrow_r_pressed,
 			_arrow_l_sparkles, _arrow_r_sparkles, _screen_anim, _screen_title, _mode_screen]:
 		if n:

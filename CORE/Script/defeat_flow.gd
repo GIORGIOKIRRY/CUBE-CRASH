@@ -58,20 +58,11 @@ func _build() -> void:
 	add_child(_dim)
 
 	# --- countdown (fase 2): un po' più in alto ---
+	# NB: i 125 frame (576x1024, ~295 MB) NON si caricano qui: rallentavano/appesantivano
+	# OGNI avvio partita mentre il countdown serve solo al revive (raro). Lazy: vedi _ensure_count_frames().
 	_count = AnimatedSprite2D.new()
 	_count.position = Vector2(288, 462)
 	_count.visible = false
-	var frames := SpriteFrames.new()
-	if frames.has_animation("default"):
-		frames.remove_animation("default")
-	frames.add_animation("count")
-	frames.set_animation_loop("count", false)
-	frames.set_animation_speed("count", COUNT_FPS)
-	for i in COUNT_FRAMES:
-		var tex: Texture2D = load("res://CORE/Assets/Art/GameOver/Countdown/Cube Crash 5 sec_%05d.png" % i)
-		if tex:
-			frames.add_frame("count", tex)
-	_count.sprite_frames = frames
 	add_child(_count)
 
 	# --- tasto revive (fase 2): più in basso ---
@@ -100,7 +91,23 @@ func start(reason: String, allow_revive: bool = true) -> void:
 		return
 	_start_revive()
 
+func _ensure_count_frames() -> void:
+	if _count.sprite_frames != null:
+		return   # già costruito (cache)
+	var frames := SpriteFrames.new()
+	if frames.has_animation("default"):
+		frames.remove_animation("default")
+	frames.add_animation("count")
+	frames.set_animation_loop("count", false)
+	frames.set_animation_speed("count", COUNT_FPS)
+	for i in COUNT_FRAMES:
+		var tex: Texture2D = load("res://CORE/Assets/Art/GameOver/Countdown/Cube Crash 5 sec_%05d.png" % i)
+		if tex:
+			frames.add_frame("count", tex)
+	_count.sprite_frames = frames
+
 func _start_revive() -> void:
+	_ensure_count_frames()   # carica i frame countdown solo ora (lazy)
 	_dim.visible = true
 	_count.visible = true
 	_revive_btn.visible = true

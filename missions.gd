@@ -6,7 +6,7 @@ extends Node
 
 const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400   # 24h
-const DATA_VERSION := 2           # bump per FORZARE un reset delle missioni una volta
+const DATA_VERSION := 3           # bump per FORZARE un reset delle missioni una volta
 var _data_version: int = 0
 const NUM_MISSIONS := 6
 const COLORS := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]

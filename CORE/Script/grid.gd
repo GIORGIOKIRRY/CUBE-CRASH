@@ -307,17 +307,10 @@ func _ready() -> void:
 	for tex in EXPLO_FRAMES:
 		_explo_frames.add_frame("boom", tex)
 
-	# SpriteFrames delle animazioni COMBO 1..11 (frame ~33fps, sfondo trasparente)
-	for lvl in range(1, 12):
-		_combo_frames[lvl] = _build_combo_frames("combo%d" % lvl)
-
-	# Effetti COMBO a schermo intero (cornice sui 4 lati) per ogni livello 1..11.
-	# Il 9 non ha una sua GIF: usa l'8 come fallback.
-	for lvl in range(1, 12):
-		var fx := _build_combo_frames("effect%d" % lvl)
-		if fx.get_frame_count("c") == 0 and _combo_fx.has(lvl - 1):
-			fx = _combo_fx[lvl - 1]
-		_combo_fx[lvl] = fx
+	# NB: le animazioni COMBO (numeri + effetti a schermo intero) NON si
+	# precaricano più qui: erano centinaia di MB caricati a ogni avvio partita
+	# (causa crash/jetsam su iOS e Android). Ora si caricano in modo LAZY, per
+	# livello, alla prima occorrenza, con cache (vedi _get_combo_frames/_get_combo_fx).
 
 	_last_action_ms = Time.get_ticks_msec()
 
@@ -1140,29 +1133,19 @@ func _get_bottom_piece_under_mouse() -> Node:
 	return _bottom_piece_at(get_global_mouse_position())
 
 func _bottom_piece_at(mouse_pos: Vector2) -> Node:
+	# Area di tocco FISSA e generosa ancorata al CENTRO DELLO SLOT (non alla texture/scala
+	# corrente del pezzo). Così il tap "prende" sempre — anche subito dopo un piazzamento o
+	# mentre il pezzo rientra/anima — e copre tutta la cella del tray senza zone morte.
+	# Vale sia per il drag normale sia per il multitouch della speedrun.
+	var hw := bottom_spacing_px * 0.5
+	var hh := bottom_spacing_px * 0.62
 	for s in range(3):
 		var p: Node = bottom_pieces[s]
 		if p == null:
 			continue
-
-		var sprite: Sprite2D = null
-		if p.has_node("Sprite2D"):
-			sprite = p.get_node("Sprite2D")
-		if sprite != null and sprite.texture != null:
-			# calcolo il rect globale in base a texture e scala (sprite * nodo pezzo)
-			var tex_size: Vector2 = sprite.texture.get_size() * sprite.scale * p.scale
-			# posizione del centro: uso la global_position del pezzo (non dello sprite)
-			# posizione del centro: uso la global_position del pezzo (non dello sprite)
-			var center: Vector2 = p.global_position
-			var rect := Rect2(center - tex_size * 0.5, tex_size)
-			if rect.has_point(mouse_pos):
-				return p
-		else:
-			# fallback: piccolo box quadrato attorno al centro del pezzo
-			var r := Rect2(p.global_position - Vector2(24, 24), Vector2(48, 48))
-			if r.has_point(mouse_pos):
-				return p
-
+		var center: Vector2 = to_global(_bottom_slot_pixel(s))
+		if absf(mouse_pos.x - center.x) <= hw and absf(mouse_pos.y - center.y) <= hh:
+			return p
 	return null
 
 
@@ -1510,6 +1493,13 @@ func _remove_random_cells(n: int) -> void:
 		settings.vibrate(50)
 
 func _show_game_over_screen() -> void:
+	# Speedrun: si va dritti alla schermata finale senza DefeatFlow, quindi la
+	# board resta sotto. Nascondila (e il timer) così i cubi non si sovrappongono
+	# al punteggio mostrato.
+	if _is_speedrun:
+		visible = false
+		if _timer_label:
+			_timer_label.visible = false
 	# Interstitial a ogni sconfitta (anche speedrun): appare sopra la
 	# schermata finale, alla chiusura si ritrova il game over.
 	ads.show_interstitial()
@@ -2160,6 +2150,21 @@ func _combo_effect_pos(cells: Array) -> Vector2:
 	cy = clampf(cy, 235.0 + effect_h * 0.5, 900.0)
 	return Vector2(cx, cy)
 
+# Getter LAZY con cache: costruisce le SpriteFrames del livello solo alla prima
+# occorrenza (evita di caricare centinaia di MB in _ready → niente crash memoria).
+func _get_combo_frames(level: int) -> SpriteFrames:
+	if not _combo_frames.has(level):
+		_combo_frames[level] = _build_combo_frames("combo%d" % level)
+	return _combo_frames[level]
+
+func _get_combo_fx(level: int) -> SpriteFrames:
+	if not _combo_fx.has(level):
+		var fx := _build_combo_frames("effect%d" % level)
+		if fx.get_frame_count("c") == 0 and level > 1:
+			fx = _get_combo_fx(level - 1)   # es. il 9 (assente) usa l'8
+		_combo_fx[level] = fx
+	return _combo_fx[level]
+
 # Costruisce le SpriteFrames di una combo caricando i frame "prefix_001.png", ... finché esistono
 func _build_combo_frames(prefix: String) -> SpriteFrames:
 	var sf := SpriteFrames.new()
@@ -2179,7 +2184,7 @@ func _build_combo_frames(prefix: String) -> SpriteFrames:
 # Sta su una CanvasLayer (spazio-schermo, indipendente da camera/risoluzione) e viene
 # scalato in modo NON uniforme così tocca esattamente tutti e 4 i bordi.
 func _show_combo_fullscreen(level: int) -> void:
-	var fx: SpriteFrames = _combo_fx.get(level)
+	var fx: SpriteFrames = _get_combo_fx(level)
 	if fx == null or fx.get_frame_count("c") == 0:
 		return
 	# sostituisci l'effetto precedente (le combo si susseguono rapide)
@@ -2207,10 +2212,11 @@ func _show_combo_fullscreen(level: int) -> void:
 func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	var anim_level: int = clampi(level, 1, 11)   # dalla 12ª combo in poi usa COMBO 11
 	_show_combo_fullscreen(anim_level)           # cornice a schermo intero per ogni combo
-	if not _combo_frames.has(anim_level) or _combo_frames[anim_level].get_frame_count("c") == 0:
+	var frames: SpriteFrames = _get_combo_frames(anim_level)
+	if frames == null or frames.get_frame_count("c") == 0:
 		return
 	var asp := AnimatedSprite2D.new()
-	asp.sprite_frames = _combo_frames[anim_level]
+	asp.sprite_frames = frames
 	asp.animation = "c"
 	asp.position = world_pos
 	asp.scale = Vector2(COMBO_EFFECT_SCALE, COMBO_EFFECT_SCALE)

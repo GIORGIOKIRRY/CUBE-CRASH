@@ -65,12 +65,28 @@ func change_scene(path: String) -> void:
 	if _busy:
 		return
 	_busy = true
+	# Avvia il caricamento in BACKGROUND subito, così avviene DURANTE il wipe (niente
+	# freeze su device lenti): la scena si carica mentre la copertura si anima.
+	ResourceLoader.load_threaded_request(path)
 	_fit_to_screen()
 	_sprite.visible = true
 	_sprite.play("cover")
 	await _sprite.animation_finished
-	# schermo tutto coperto: cambio scena senza che si veda lo stacco
-	get_tree().change_scene_to_file(path)
+	# schermo coperto: attende che il caricamento (in parallelo al wipe) sia pronto
+	var packed: PackedScene = null
+	while true:
+		var st := ResourceLoader.load_threaded_get_status(path)
+		if st == ResourceLoader.THREAD_LOAD_LOADED:
+			packed = ResourceLoader.load_threaded_get(path)
+			break
+		elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			break
+		await get_tree().process_frame
+	# cambio scena senza che si veda lo stacco
+	if packed != null:
+		get_tree().change_scene_to_packed(packed)
+	else:
+		get_tree().change_scene_to_file(path)   # fallback
 	await get_tree().process_frame
 	await get_tree().process_frame
 	_sprite.play("reveal")

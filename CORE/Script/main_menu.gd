@@ -8,9 +8,9 @@ const MODE_FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 const ART_SIZE := Vector2(800.0, 1400.0)
 const ART_CENTER := Vector2(400.0, 700.0)
 const CAMERA_CENTER := Vector2(288.0, 512.0)
-const ART_SCALE := 0.9
+const ART_SCALE := 0.86
 const BOTTOM_MARGIN := 0.0
-const CABINET_DROP := 120.0                   # abbassa il cabinato così i tasti in alto non lo coprono
+const CABINET_DROP := 160.0                   # abbassa cabinato + tasto play (assieme via _art_to_world)
 
 # Animazione cabinato (riflesso sul marquee): 12 frame, poi fermo 15s, poi riparte.
 const CAB_FPS := 12.0
@@ -18,7 +18,7 @@ const CAB_HOLD := 6.0    # 1s di animazione + 6s di pausa = ripete ~ogni 7s
 
 # Deck in basso (coord canvas 800x1400): tasto CUBE DECK (576x576) + tasto PLAY (1408x576)
 # AFFIANCATI, stessa altezza, centrati. Press = leggero scurimento (modulate).
-const PLAY_NEW_TEX := Vector2(1408.0, 576.0)
+const PLAY_NEW_TEX := Vector2(1472.0, 576.0)
 const DECK_TEX := Vector2(576.0, 576.0)
 const DECK_BTN_H_ART := 150.0                # altezza comune dei due tasti (più grandi)
 const DECK_GAP_ART := -4.0                    # attaccati (piccolo che chiude il seam, niente sovrapposizione visibile)
@@ -48,7 +48,7 @@ const MODES := [
 
 var _background: Sprite2D
 var _home_shadow: Sprite2D
-var _cabinet: AnimatedSprite2D
+var _cabinet: Sprite2D
 var _hold_timer: Timer
 
 # Il tasto è fatto di Sprite2D (Node2D) per stare nello STESSO spazio del cabinato
@@ -76,6 +76,28 @@ var _name_frame: TextureRect
 var _name_edit: LineEdit
 var _player_name: String = "PLAYER"
 const PROFILE_CFG := "user://profile.cfg"
+# Schermata EDIT PROFILE
+const PROFILE_DIR := "res://CORE/Assets/Art/Home/Profile/"
+const PROFILE_ICONS := [   # icone profilo selezionabili (se ne aggiungeranno altre)
+	"res://CORE/Assets/Art/Home/Profile/icon_rocket.png",
+]
+var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
+var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
+var _profile_menu: Control
+var _profile_frame: Control
+var _profile_bg: TextureRect
+var _profile_title: Label
+var _profile_prev: TextureRect       # anteprima icona scelta (in alto a sx nella schermata)
+var _profile_namebox: TextureRect
+var _profile_name_title: Label
+var _profile_name_edit: LineEdit
+var _profile_edit_btn: TextureButton
+var _profile_selframe: TextureRect
+var _profile_scroll: ScrollContainer
+var _profile_grid: GridContainer
+var _profile_cancel: TextureButton
+var _profile_confirm: TextureButton
+var _profile_icon_btns: Array = []
 var _leader_menu: Control
 var _sparkles: CPUParticles2D
 var _mode_menu: Control
@@ -118,7 +140,10 @@ var _missions_tab: String = "weekly"   # "weekly" | "daily"
 
 # Menu bar in basso (missioni / home / shop)
 const NAV_TEX := Vector2(1600.0, 432.0)
+const NAV_FLAT_FRAC := 32.0 / 432.0   # il tab attivo sporge in alto: la barra piatta inizia più giù
+const NAV_MAX_W := 820.0              # larghezza max barra (su iPad/tablet non si stira: navy ai lati)
 var _nav_bar: TextureRect
+var _nav_bg: ColorRect
 var _nav_btns: Array = []
 var _nav_textures := {}
 var _tab := "home"
@@ -140,6 +165,7 @@ func _ready() -> void:
 	_build_deck_menu()
 	_build_leader_menu()
 	_build_top_right()
+	_build_profile_menu()
 	_build_nav_bar()
 	_layout()
 	get_viewport().size_changed.connect(_layout)
@@ -153,16 +179,23 @@ func _art_to_world(art: Vector2) -> Vector2:
 # Ancora la scena arcade in basso e la scala; riposiziona anche tasto e scintille.
 func _layout() -> void:
 	var view_size := get_viewport_rect().size
-	# barra nav in basso, full-width; altezza basata su una larghezza di riferimento
-	# limitata (576 = base di design) così su schermi larghi (iPad) non diventa enorme
-	var nav_h := minf(view_size.x, 620.0) * (NAV_TEX.y / NAV_TEX.x)
+	# barra nav: larghezza cap (ASPETTO NATIVO, niente stiramento su iPad/tablet), centrata;
+	# il navy dei lati lo riempie _nav_bg a tutta larghezza.
+	var bar_w := minf(view_size.x, NAV_MAX_W)
+	var nav_h := bar_w * (NAV_TEX.y / NAV_TEX.x)
+	var nav_top := view_size.y - nav_h
+	if _nav_bg:
+		# allineato alla barra PIATTA (il tab attivo sporge sopra): niente blocco navy agli angoli
+		_nav_bg.position = Vector2(0, nav_top + nav_h * NAV_FLAT_FRAC)
+		_nav_bg.size = Vector2(view_size.x, nav_h * (1.0 - NAV_FLAT_FRAC))
 	if _nav_bar:
-		_nav_bar.position = Vector2(0, view_size.y - nav_h)
-		_nav_bar.size = Vector2(view_size.x, nav_h)
+		var bar_left := (view_size.x - bar_w) * 0.5
+		_nav_bar.position = Vector2(bar_left, nav_top)
+		_nav_bar.size = Vector2(bar_w, nav_h)
 		for i in _nav_btns.size():
 			var b: Button = _nav_btns[i]
-			b.position = Vector2(view_size.x * i / 3.0, 0.0)
-			b.size = Vector2(view_size.x / 3.0, nav_h)
+			b.position = Vector2(bar_w * i / 3.0, 0.0)
+			b.size = Vector2(bar_w / 3.0, nav_h)
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
 		var tabs_y := 200.0
@@ -215,6 +248,7 @@ func _layout() -> void:
 		var sc := (SCREEN_ANIM_WIDTH_ART / SCREEN_ANIM_TEX.x) * ART_SCALE
 		_screen_anim.scale = Vector2(sc, sc)
 	_position_screen_title()
+	_layout_profile()
 
 
 # --- Sfondo + cabinato animato -------------------------------------------------
@@ -228,37 +262,12 @@ func _build_scene() -> void:
 
 	# (ombra home rimossa)
 
-	var frames := SpriteFrames.new()
-	frames.add_animation("play")
-	frames.set_animation_loop("play", false)
-	frames.set_animation_speed("play", CAB_FPS)
-	for i in range(1, 13):
-		frames.add_frame("play", load("res://CORE/Assets/Art/Home/Cabinet/cabinet_%02d.png" % i))
-
-	_cabinet = AnimatedSprite2D.new()
-	_cabinet.sprite_frames = frames
-	_cabinet.animation = "play"
+	# Cabinato STATICO (immagine unica, niente animazione)
+	_cabinet = Sprite2D.new()
+	_cabinet.texture = load("res://CORE/Assets/Art/Home/cabinet_static.png")
+	_cabinet.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_cabinet.z_index = -2
 	add_child(_cabinet)
-
-	_hold_timer = Timer.new()
-	_hold_timer.one_shot = true
-	_hold_timer.wait_time = CAB_HOLD
-	_hold_timer.timeout.connect(_replay_cabinet)
-	add_child(_hold_timer)
-
-	_cabinet.animation_finished.connect(_on_cabinet_finished)
-	_cabinet.frame = 0
-	_cabinet.play("play")
-
-
-func _on_cabinet_finished() -> void:
-	_hold_timer.start()
-
-
-func _replay_cabinet() -> void:
-	_cabinet.frame = 0
-	_cabinet.play("play")
 
 
 # --- Tasto PLAY + scintille ----------------------------------------------------
@@ -266,19 +275,13 @@ func _build_play_button() -> void:
 	# Scintille bianche "sbrilluccicose" dietro il tasto.
 	_sparkles = _make_sparkles(26.0, 46, 45.0, 105.0, 2.5, 4.5)
 
-	# Tasto PLAY (nuova grafica). Input a mano in _input().
+	# Tasto PLAY (nuova grafica), centrato. Input a mano in _input().
 	_play_base = Sprite2D.new()
-	_play_base.texture = load("res://CORE/Assets/Art/Home/play_new.png")
+	_play_base.texture = load("res://CORE/Assets/Art/Home/play_button_new.png")
 	_play_base.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_play_base.z_index = 0
 	add_child(_play_base)
-
-	# Tasto CUBE DECK (a sinistra del PLAY)
-	_deck_sprite = Sprite2D.new()
-	_deck_sprite.texture = load("res://CORE/Assets/Art/Home/cube_deck.png")
-	_deck_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_deck_sprite.z_index = 0
-	add_child(_deck_sprite)
+	# (Cube Deck rimosso)
 
 
 func _make_pixel_texture() -> ImageTexture:
@@ -317,29 +320,20 @@ func _make_sparkles(radius: float, amount: int, vmin: float, vmax: float, smin: 
 func _position_play_button() -> void:
 	if not _play_base:
 		return
-	# stessa scala per entrambi (stessa altezza); PLAY più largo per aspect
-	var s := (DECK_BTN_H_ART / DECK_TEX.y) * ART_SCALE
-	var play_w := DECK_BTN_H_ART * (PLAY_NEW_TEX.x / PLAY_NEW_TEX.y)
-	var deck_w := DECK_BTN_H_ART
-	var total_w := deck_w + DECK_GAP_ART + play_w
-	var left := DECK_ROW_CENTER_ART.x - total_w * 0.5
-	var deck_cx := left + deck_w * 0.5
-	var play_cx := left + deck_w + DECK_GAP_ART + play_w * 0.5
+	# PLAY da solo, centrato
+	var s := (DECK_BTN_H_ART / PLAY_NEW_TEX.y) * ART_SCALE
 	var y := DECK_ROW_CENTER_ART.y
 
-	_deck_sprite.position = _art_to_world(Vector2(deck_cx, y))
-	_deck_sprite.scale = Vector2(s, s)
-	_deck_base_pos = _deck_sprite.position
-	_deck_world_center = _deck_sprite.position
-	_deck_world_size = DECK_TEX * s
+	_deck_world_size = Vector2.ZERO   # deck rimosso: nessuna hit-area
 
-	_play_base.position = _art_to_world(Vector2(play_cx, y))
+	_play_base.position = _art_to_world(Vector2(DECK_ROW_CENTER_ART.x, y))
 	_play_base.scale = Vector2(s, s)
 	_play_base_pos = _play_base.position
 	_play_world_center = _play_base.position
 	_play_world_size = PLAY_NEW_TEX * s
 
-	_sparkles.position = _play_base.position
+	if _sparkles:
+		_sparkles.position = _play_base.position
 	_sparkles.scale = Vector2(ART_SCALE, ART_SCALE)
 
 
@@ -670,9 +664,10 @@ func _build_top_right() -> void:
 	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 74.0), 78.0)
 	_settings_btn2.pressed.connect(_on_settings_button_pressed)
 
-	# PROFILE PICTURE a SINISTRA (stessa altezza di classifica/impostazioni)
+	# PROFILE PICTURE a SINISTRA (mostra l'icona scelta; tap -> schermata EDIT PROFILE)
+	_load_player_name()
 	_profile_pic = TextureRect.new()
-	_profile_pic.texture = load("res://CORE/Assets/Art/Home/profile_picture.png")
+	_profile_pic.texture = load(_current_profile_icon_path())
 	_profile_pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_profile_pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_profile_pic.stretch_mode = TextureRect.STRETCH_SCALE
@@ -680,10 +675,19 @@ func _build_top_right() -> void:
 	_profile_pic.position = Vector2(24.0, 74.0)
 	_profile_pic.size = Vector2(78.0, 78.0)
 	add_child(_profile_pic)
+	var pbtn := Button.new()
+	pbtn.focus_mode = Control.FOCUS_NONE
+	var pe := StyleBoxEmpty.new()
+	pbtn.add_theme_stylebox_override("normal", pe)
+	pbtn.add_theme_stylebox_override("hover", pe)
+	pbtn.add_theme_stylebox_override("pressed", pe)
+	pbtn.add_theme_stylebox_override("focus", pe)
+	pbtn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pbtn.pressed.connect(_open_profile)
+	_profile_pic.add_child(pbtn)
 
-	# NAME FRAME a DESTRA della profile, stesso livello e stessa altezza (attaccato)
-	_load_player_name()
-	var nf_h := 78.0                       # stessa altezza della profile / dei bottoni
+	# NAME FRAME SOTTO la profile (l'icona sta SOPRA il frame del nome)
+	var nf_h := 78.0
 	var nf_w := nf_h * 896.0 / 384.0       # mantiene l'aspect del frame
 	_name_frame = TextureRect.new()
 	_name_frame.texture = load("res://CORE/Assets/Art/Home/name_frame.png")
@@ -691,33 +695,40 @@ func _build_top_right() -> void:
 	_name_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_name_frame.stretch_mode = TextureRect.STRETCH_SCALE
 	_name_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_name_frame.position = Vector2(24.0 + 78.0 - 18.0, 74.0)
+	_name_frame.position = Vector2(24.0, 74.0 + 78.0 + 2.0)
 	_name_frame.size = Vector2(nf_w, nf_h)
 	add_child(_name_frame)
 
+	# nome in SOLA LETTURA (si modifica solo in EDIT PROFILE), allineato a sinistra, più grande
 	_name_edit = LineEdit.new()
 	_name_edit.text = _player_name
 	_name_edit.max_length = 12
-	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_name_edit.placeholder_text = "NOME"
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_name_edit.editable = false
+	_name_edit.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_edit.add_theme_font_override("font", MODE_FONT)
-	_name_edit.add_theme_font_size_override("font_size", 24)
+	_name_edit.add_theme_font_size_override("font_size", 30)
 	_name_edit.add_theme_color_override("font_color", Color(1, 1, 1))
-	_name_edit.add_theme_color_override("font_placeholder_color", Color(1, 1, 1, 0.5))
+	_name_edit.add_theme_color_override("font_uneditable_color", Color(1, 1, 1))
 	var empty := StyleBoxEmpty.new()
 	_name_edit.add_theme_stylebox_override("normal", empty)
-	_name_edit.add_theme_stylebox_override("focus", empty)
-	_name_edit.position = _name_frame.position + Vector2(14.0, nf_h * 0.14)
-	_name_edit.size = Vector2(nf_w - 28.0, nf_h * 0.58)
-	_name_edit.text_submitted.connect(func(_t: String) -> void: _name_edit.release_focus())
-	_name_edit.focus_exited.connect(_save_player_name)
+	_name_edit.add_theme_stylebox_override("read_only", empty)
+	_name_edit.position = _name_frame.position + Vector2(22.0, nf_h * 0.12)
+	_name_edit.size = Vector2(nf_w - 34.0, nf_h * 0.62)
 	add_child(_name_edit)
 
+
+func _current_profile_icon_path() -> String:
+	var i := clampi(_profile_icon_index, 0, PROFILE_ICONS.size() - 1)
+	return PROFILE_ICONS[i]
 
 func _load_player_name() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PROFILE_CFG) == OK:
 		_player_name = str(cfg.get_value("profile", "name", "PLAYER"))
+		_profile_icon_index = int(cfg.get_value("profile", "icon", 0))
+	_profile_icon_index = clampi(_profile_icon_index, 0, PROFILE_ICONS.size() - 1)
+	_profile_sel_index = _profile_icon_index
 
 func _save_player_name() -> void:
 	if _name_edit:
@@ -726,9 +737,223 @@ func _save_player_name() -> void:
 			n = "PLAYER"
 			_name_edit.text = n
 		_player_name = n
+	_write_profile_cfg()
+
+func _write_profile_cfg() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("profile", "name", _player_name)
+	cfg.set_value("profile", "icon", _profile_icon_index)
 	cfg.save(PROFILE_CFG)
+
+
+# ======================= SCHERMATA EDIT PROFILE ================================
+func _ptex(path: String) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = load(path)
+	t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_SCALE
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return t
+
+func _ptbtn(path: String, cb: Callable) -> TextureButton:
+	var b := TextureButton.new()
+	b.texture_normal = load(path)
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_SCALE
+	b.pressed.connect(cb)
+	return b
+
+func _build_profile_menu() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 20   # sopra la nav bar (10)
+	add_child(layer)
+	_profile_menu = Control.new()
+	_profile_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_profile_menu.visible = false
+	layer.add_child(_profile_menu)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_profile_menu.add_child(dim)
+	_profile_frame = Control.new()
+	_profile_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_profile_menu.add_child(_profile_frame)
+	_profile_bg = _ptex(PROFILE_DIR + "frame_bg.png")
+	_profile_frame.add_child(_profile_bg)
+	# header
+	_profile_title = Label.new()
+	_profile_title.text = "EDIT PROFILE"
+	_profile_title.add_theme_font_override("font", MODE_FONT)
+	_profile_title.add_theme_color_override("font_color", Color(1, 1, 1))
+	_profile_title.add_theme_color_override("font_outline_color", Color(0.16, 0.07, 0.0))
+	_profile_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_profile_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_profile_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_profile_frame.add_child(_profile_title)
+	# anteprima icona scelta
+	_profile_prev = _ptex(_current_profile_icon_path())
+	_profile_frame.add_child(_profile_prev)
+	# name box + titolo + campo editabile
+	_profile_namebox = _ptex(PROFILE_DIR + "name_box.png")
+	_profile_frame.add_child(_profile_namebox)
+	_profile_name_title = Label.new()
+	_profile_name_title.text = "NOME GIOCATORE"
+	_profile_name_title.add_theme_font_override("font", MODE_FONT)
+	_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
+	_profile_name_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_profile_name_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_profile_frame.add_child(_profile_name_title)
+	_profile_name_edit = LineEdit.new()
+	_profile_name_edit.max_length = 12
+	_profile_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_profile_name_edit.add_theme_font_override("font", MODE_FONT)
+	_profile_name_edit.add_theme_color_override("font_color", Color(1, 1, 1))
+	var pe := StyleBoxEmpty.new()
+	_profile_name_edit.add_theme_stylebox_override("normal", pe)
+	_profile_name_edit.add_theme_stylebox_override("focus", pe)
+	# il nome si modifica SOLO col tasto giallo edit (non toccando la box): niente click diretti
+	_profile_name_edit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_profile_name_edit.text_submitted.connect(func(_t: String) -> void: _profile_name_edit.release_focus())
+	_profile_frame.add_child(_profile_name_edit)
+	# tasto modifica nome
+	_profile_edit_btn = _ptbtn(PROFILE_DIR + "edit_name.png", _profile_edit_name)
+	_profile_frame.add_child(_profile_edit_btn)
+	# frame selezione + griglia icone scorribile
+	_profile_selframe = _ptex(PROFILE_DIR + "select_frame.png")
+	_profile_frame.add_child(_profile_selframe)
+	_profile_scroll = ScrollContainer.new()
+	_profile_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_profile_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_profile_scroll.clip_contents = true
+	_profile_frame.add_child(_profile_scroll)
+	_profile_grid = GridContainer.new()
+	_profile_grid.columns = 4
+	_profile_scroll.add_child(_profile_grid)
+	for i in PROFILE_ICONS.size():
+		var b := _ptbtn(PROFILE_ICONS[i], _select_profile_icon.bind(i))
+		_profile_grid.add_child(b)
+		_profile_icon_btns.append(b)
+	# cancel / confirm
+	_profile_cancel = _ptbtn(PROFILE_DIR + "cancel.png", _close_profile)
+	_profile_frame.add_child(_profile_cancel)
+	_profile_confirm = _ptbtn(PROFILE_DIR + "confirm.png", _confirm_profile)
+	_profile_frame.add_child(_profile_confirm)
+
+
+func _layout_profile() -> void:
+	if not _profile_frame:
+		return
+	var view := get_viewport_rect().size
+	var fw := minf(view.x * 0.84, 452.0)
+	var fh := fw * 2912.0 / 2048.0
+	if fh > view.y * 0.88:
+		fh = view.y * 0.88
+		fw = fh * 2048.0 / 2912.0
+	var fx := (view.x - fw) * 0.5
+	var fy := (view.y - fh) * 0.5
+	_profile_frame.position = Vector2(fx, fy)
+	_profile_frame.size = Vector2(fw, fh)
+	_profile_bg.position = Vector2.ZERO
+	_profile_bg.size = Vector2(fw, fh)
+	# titolo grande con STROKE
+	_profile_title.add_theme_font_size_override("font_size", int(fh * 0.058))
+	_profile_title.add_theme_constant_override("outline_size", maxi(3, int(fh * 0.008)))
+	_profile_title.position = Vector2(0, fh * 0.008)
+	_profile_title.size = Vector2(fw, fh * 0.09)
+	# riga ATTACCATA: anteprima | name box | edit (gruppo centrato)
+	var row_cy := fh * 0.17
+	var prev_s := fw * 0.17
+	var eb_s := fw * 0.17
+	var nb_w := fw * 0.40
+	var nb_h := nb_w * 256.0 / 1280.0
+	var glx := (fw - (prev_s + nb_w + eb_s)) * 0.5
+	_profile_prev.position = Vector2(glx, row_cy - prev_s * 0.5)
+	_profile_prev.size = Vector2(prev_s, prev_s)
+	var nb_x := glx + prev_s
+	_profile_namebox.position = Vector2(nb_x, row_cy - nb_h * 0.5)
+	_profile_namebox.size = Vector2(nb_w, nb_h)
+	_profile_name_title.add_theme_font_size_override("font_size", int(fh * 0.02))
+	_profile_name_title.position = Vector2(nb_x, row_cy - nb_h * 0.5 - fh * 0.026)
+	_profile_name_title.size = Vector2(nb_w, fh * 0.026)
+	_profile_name_edit.add_theme_font_size_override("font_size", int(nb_h * 0.52))
+	_profile_name_edit.position = Vector2(nb_x + nb_w * 0.05, row_cy - nb_h * 0.32)
+	_profile_name_edit.size = Vector2(nb_w * 0.9, nb_h * 0.64)
+	_profile_edit_btn.position = Vector2(nb_x + nb_w, row_cy - eb_s * 0.5)
+	_profile_edit_btn.size = Vector2(eb_s, eb_s)
+	# frame selezione
+	var sf_w := fw * 0.90
+	var sf_h := sf_w * 1504.0 / 1856.0
+	var sf_x := (fw - sf_w) * 0.5
+	var sf_y := fh * 0.26
+	_profile_selframe.position = Vector2(sf_x, sf_y)
+	_profile_selframe.size = Vector2(sf_w, sf_h)
+	var pad := sf_w * 0.07
+	_profile_scroll.position = Vector2(sf_x + pad, sf_y + pad)
+	_profile_scroll.size = Vector2(sf_w - pad * 2.0, sf_h - pad * 2.0)
+	var gap := int(sf_w * 0.03)
+	_profile_grid.add_theme_constant_override("h_separation", gap)
+	_profile_grid.add_theme_constant_override("v_separation", gap)
+	var cell := (sf_w - pad * 2.0 - gap * 3) / 4.0
+	for b in _profile_icon_btns:
+		b.custom_minimum_size = Vector2(cell, cell)
+	# cancel / confirm
+	var bw := fw * 0.38
+	var bh := bw * 320.0 / 896.0
+	var by := fh * 0.90 - bh * 0.5
+	_profile_cancel.position = Vector2(fw * 0.265 - bw * 0.5, by)
+	_profile_cancel.size = Vector2(bw, bh)
+	_profile_confirm.position = Vector2(fw * 0.735 - bw * 0.5, by)
+	_profile_confirm.size = Vector2(bw, bh)
+
+
+func _open_profile() -> void:
+	settings.button_feedback()
+	_profile_sel_index = _profile_icon_index
+	_profile_name_edit.text = _player_name
+	_update_profile_selection()
+	_layout_profile()
+	_profile_menu.visible = true
+
+func _close_profile() -> void:
+	settings.button_feedback()
+	_profile_menu.visible = false
+
+func _select_profile_icon(i: int) -> void:
+	settings.button_feedback()
+	_profile_sel_index = i
+	_update_profile_selection()
+
+func _update_profile_selection() -> void:
+	for k in _profile_icon_btns.size():
+		var b: TextureButton = _profile_icon_btns[k]
+		b.modulate = Color(1, 1, 1) if k == _profile_sel_index else Color(0.5, 0.5, 0.5)
+	if _profile_prev:
+		_profile_prev.texture = load(PROFILE_ICONS[clampi(_profile_sel_index, 0, PROFILE_ICONS.size() - 1)])
+
+func _profile_edit_name() -> void:
+	settings.button_feedback()
+	if _profile_name_edit:
+		_profile_name_edit.grab_focus()
+		_profile_name_edit.select_all()
+
+func _confirm_profile() -> void:
+	settings.button_feedback()
+	# nome
+	var n := _profile_name_edit.text.strip_edges()
+	if n == "":
+		n = "PLAYER"
+	_player_name = n
+	if _name_edit:
+		_name_edit.text = _player_name   # aggiorna la home
+	# icona
+	_profile_icon_index = _profile_sel_index
+	if _profile_pic:
+		_profile_pic.texture = load(_current_profile_icon_path())
+	_write_profile_cfg()
+	_profile_menu.visible = false
 
 
 func _make_icon_button(path: String, pos: Vector2, sz: float) -> TextureButton:
@@ -1281,6 +1506,11 @@ func _build_nav_bar() -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = 10
 	add_child(layer)
+	# sfondo navy a tutta larghezza: riempie i lati su schermi larghi (iPad/tablet)
+	_nav_bg = ColorRect.new()
+	_nav_bg.color = Color(8.0 / 255.0, 5.0 / 255.0, 56.0 / 255.0, 1.0)
+	_nav_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_nav_bg)
 	_nav_bar = TextureRect.new()
 	_nav_bar.texture = _nav_textures["home"]
 	_nav_bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

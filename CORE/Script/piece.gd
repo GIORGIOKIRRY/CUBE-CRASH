@@ -11,9 +11,9 @@ var matched = false
 	#Sprite.texture = 
 	
 
-func move(target):
+func move(target, dur := 0.3):
 	var tween: Tween = create_tween()
-	tween.tween_property(self,"position",target, 0.3).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(self,"position",target, dur).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 func dim():
 	Player.active = true

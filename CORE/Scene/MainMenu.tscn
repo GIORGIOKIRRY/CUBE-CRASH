@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://ogbtgcl6552n" path="res://CORE/Assets/Art/UI/Menu/Settings.svg" id="6_oines"]
 [ext_resource type="Texture2D" uid="uid://cynr1v65k85vm" path="res://CORE/Assets/Art/UI/Menu/Terms.svg" id="7_3hh32"]
 [ext_resource type="PackedScene" uid="uid://bebf65fodfnno" path="res://CORE/Scene/settings_menu.tscn" id="10_b6brl"]
-[ext_resource type="AudioStream" uid="uid://cefqrwarsl4il" path="res://CORE/Assets/Music&Sound/Cube Crash LOBBY V2.mp3" id="10_xphv5"]
+[ext_resource type="AudioStream" path="res://CORE/Assets/Music&Sound/home_title.mp3" id="10_xphv5"]
 
 [node name="Menu" type="Control"]
 layout_mode = 3

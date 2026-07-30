@@ -46,7 +46,7 @@ const HINT_REPEAT_MS := 5000           # intervallo tra suggerimenti ripetuti
 @export var enable_empty_fall_fx: bool = true
 
 # ----- Difficulty Progression -----
-@export var difficulty_step_score: int = 3000  # ogni quanti punti sale la difficoltà (ricalibrato col nuovo scoring)
+@export var difficulty_step_score: int = 2400  # ogni quanti punti sale la difficoltà (rampa più veloce per i bravi)
 @export var max_difficulty_level: int = 10
 
 var difficulty_level: int = 0
@@ -80,6 +80,7 @@ var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 #  +1 = colonna intera (+ gravità/refill)   +2 = riga intera (+ gravità)
 #  +3 = bomba 5x5 che lascia un CRATERE vuoto (buchi da riempire, niente refill)
 var _is_mode_c: bool = false
+var _fall_speed_mult: float = 1.0   # caduta leggermente più lenta nella CLASSIC (non speedrun)
 var _is_speedrun: bool = false               # gameplay mode_c + timer 5 min + input libero durante le cascate
 var _speedrun_time_left: float = 300.0       # 5 minuti
 var _timer_label: Label = null
@@ -88,7 +89,7 @@ var _prev_speedrun_best: int = 0             # record speedrun PRIMA di questa p
 var _speedrun_started: bool = false          # il timer parte solo dopo il countdown 3-2-1-GO
 const MODE_C_COLOR_ORDER := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
 const MODE_C_START_COLORS := 5           # colori a inizio partita (facili le combo)
-const MODE_C_COLORS_PER_STEP := 3        # +1 colore ogni N livelli di difficoltà
+const MODE_C_COLORS_PER_STEP := 2        # +1 colore ogni N livelli (colori più in fretta = match più duri prima)
 # ordine dei cubi-bonus in possible_plus_pieces (3 per colore: +1,+2,+3)
 const MODE_C_PLUS_COLOR_ORDER := ["blue", "red", "pink", "purple", "yellow", "orange", "green"]
 var _mc_active_count: int = MODE_C_START_COLORS
@@ -203,6 +204,7 @@ var _combo_frames: Dictionary = {}          # livello -> SpriteFrames (COMBO 1..
 var _combo_fx: Dictionary = {}              # livello -> SpriteFrames effetto a schermo intero (4 lati)
 var _active_combo_fx: CanvasLayer = null    # effetto full-screen attualmente in corso
 var _active_combo_num: AnimatedSprite2D = null   # numero COMBO attualmente in corso
+var _special_beam_frames: Dictionary = {}        # colore -> SpriteFrames beam V/O per colore
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
 var _last_shown_score: int = -1             # per l'animazione pop del punteggio
 var _score_pop_tween: Tween = null
@@ -261,6 +263,7 @@ func _ready() -> void:
 	_mode = settings.game_mode
 	_is_speedrun = _mode == "speedrun"
 	_is_mode_c = _mode == "mode_c" or _is_speedrun   # speedrun = gameplay CLASSIC/mode_c
+	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else 1.0
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
 	_build_plus_pools()
@@ -550,6 +553,21 @@ func find_matches() -> bool:
 							any_match = true
 	if any_match:
 		_find_wave += 1
+		# BEAM speciali V/O: parte SUBITO (appena lo speciale entra in un match), cioè
+		# prima del DestroyTimer/distruzione dei blocchi. Meta "beam_done" = una volta sola.
+		if not _moves_enabled:
+			for i in width:
+				for j in height:
+					var pc = all_pieces[i][j]
+					if pc != null and pc.matched and not pc.has_meta("beam_done"):
+						var mv := _get_piece_mooves(pc)
+						if mv == 1 or mv == 2:
+							pc.set_meta("beam_done", true)
+							var pcol: String = str(pc.color) if pc.get("color") != null else "red"
+							var cc := Vector2i(i, j)
+							var hh := mv == 2
+							# parte leggermente dopo (ma comunque prima della distruzione)
+							get_tree().create_timer(0.12).timeout.connect(func() -> void: _spawn_special_beam(cc, hh, pcol))
 		# COMBO = più di un match (simultanei o in cascata). L'animazione è SEQUENZIALE:
 		# la prima combo della catena è COMBO 1, poi 2, poi 3... una per wave, MAI a salti
 		# (anche se una wave azzera più linee insieme). Reset a fine catena → riparte da 1.
@@ -640,8 +658,8 @@ func destroy_matched() -> Array:
 		lifetime_score += gained
 		_show_points_gain_popup(gained)
 
-		# High score live-update
-		if score > high_score:
+		# High score live-update (solo classic: lo speedrun ha il suo _speedrun_best)
+		if not _is_speedrun and score > high_score:
 			high_score = score
 
 		# UI + Salva
@@ -678,6 +696,9 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 			for dy in range(-1, 3):
 				cells.append(Vector2i(center.x + dx, center.y + dy))
 
+	# NB: il beam V/O parte già in find_matches (prima del DestroyTimer). Qui i blocchi
+	# si distruggono normalmente: essendo dopo il DestroyTimer, il beam è già in corso.
+	var is_beam := (val == 1 or val == 2)
 	var cleared := 0
 	for c in cells:
 		if not is_in_grid(c):
@@ -685,9 +706,8 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		var p = all_pieces[c.x][c.y]
 		if p != null:
 			all_pieces[c.x][c.y] = null
-			# V/O (colonna/riga) in mode_c: stessa animazione del MATCH (pop), NON l'esplosione
-			# bianca. La bianca resta SOLO per la bomba (val 3) e per mode_b.
-			if _is_mode_c and val != 3:
+			# V/O: pop del match (l'esplosione bianca resta SOLO per bomba val 3 / mode_b)
+			if is_beam or (_is_mode_c and val != 3):
 				_destroy_piece_single(p)
 			else:
 				_spawn_explosion(grid_to_pixel(c.x, c.y), p)
@@ -698,12 +718,51 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		if crater:
 			cell_active[c.x][c.y] = false   # buco: spazio vuoto e duraturo da riempire
 	if cleared > 0:
-		if _is_mode_c and val != 3:
+		if is_beam or (_is_mode_c and val != 3):
 			settings.play_destroy()    # V/O: suono del match
 		else:
 			settings.play_explosion()  # bomba / mode_b
 		settings.vibrate(60)
 	return cleared
+
+# Animazione BEAM dei cubi speciali: verticale per V (colonna), ruotata 90° per O (riga).
+# Sempre CENTRATA sul cubo speciale.
+func _get_special_beam_frames(color: String) -> SpriteFrames:
+	if not _special_beam_frames.has(color):
+		var sf := SpriteFrames.new()
+		sf.add_animation("b")
+		sf.set_animation_loop("b", false)
+		sf.set_animation_speed("b", 30.0)
+		var i := 1
+		while true:
+			var p := "res://CORE/Assets/Art/Game/SpecialBeam/%s_%03d.png" % [color, i]
+			if not ResourceLoader.exists(p):
+				break
+			sf.add_frame("b", load(p))
+			i += 1
+		if sf.get_frame_count("b") == 0 and color != "red":
+			sf = _get_special_beam_frames("red")   # fallback
+		_special_beam_frames[color] = sf
+	return _special_beam_frames[color]
+
+func _spawn_special_beam(center: Vector2i, horizontal: bool, color: String = "red") -> void:
+	var frames := _get_special_beam_frames(color)
+	if frames == null or frames.get_frame_count("b") == 0:
+		return
+	var asp := AnimatedSprite2D.new()
+	asp.sprite_frames = frames
+	asp.animation = "b"
+	asp.centered = true
+	asp.position = grid_to_pixel(center.x, center.y)   # centrato sul cubo speciale
+	var tex0 := frames.get_frame_texture("b", 0)
+	asp.scale = Vector2.ONE * (offset / float(tex0.get_width()))   # larghezza beam = una cella
+	if horizontal:
+		asp.rotation = PI / 2.0   # O: beam orizzontale (ruotato di 90°)
+	asp.speed_scale = 1.5
+	asp.z_index = 150   # sopra i cubi ma SOTTO le animazioni combo (numero z=200, effetto su CanvasLayer)
+	add_child(asp)
+	asp.animation_finished.connect(asp.queue_free)
+	asp.play("b")
 
 # Distrugge un blocco con l'animazione SINGOLA del match (pop), non l'esplosione bianca.
 func _destroy_piece_single(p: Node) -> void:
@@ -743,7 +802,7 @@ func _collapse_column(x: int) -> void:
 		all_pieces[x][ry] = cubes[k]
 		var target_px := grid_to_pixel(x, ry)
 		if cubes[k].has_method("move"):
-			cubes[k].move(target_px)
+			cubes[k].move(target_px, 0.3 * _fall_speed_mult)
 		else:
 			_tween_to(cubes[k], target_px, 0.15)
 
@@ -768,7 +827,7 @@ func _refill_column_active(x: int) -> void:
 			all_pieces[x][y] = piece
 			var target_px := grid_to_pixel(x, y)
 			if piece.has_method("move"):
-				piece.move(target_px)
+				piece.move(target_px, 0.3 * _fall_speed_mult)
 			else:
 				_tween_to(piece, target_px, 0.2)
 			count += 1
@@ -847,7 +906,7 @@ func _on_destroy_timer_timeout() -> void:
 
 func _tween_to(node: Node2D, to_pos: Vector2, dur: float = 0.15) -> void:
 	var tw := create_tween()
-	tw.tween_property(node, "position", to_pos, dur)\
+	tw.tween_property(node, "position", to_pos, dur * _fall_speed_mult)\
 		.set_trans(Tween.TRANS_QUAD)\
 		.set_ease(Tween.EASE_OUT)
 
@@ -874,7 +933,7 @@ func _refill_destroyed_cells_random(destroyed_cells: Array) -> void:
 					piece.position = spawn_px
 
 					if piece.has_method("move"):
-						piece.move(target_px)
+						piece.move(target_px, 0.3 * _fall_speed_mult)
 					else:
 						var dist := float(spawn_row - y)
 						_tween_to(piece, target_px, 0.15 + 0.03 * dist)
@@ -1071,7 +1130,7 @@ func _input(event: InputEvent) -> void:
 				# Punteggio: posizionare un blocco dà 30 punti
 				score += points_per_placement
 				lifetime_score += points_per_placement
-				if score > high_score:
+				if not _is_speedrun and score > high_score:
 					high_score = score
 				_show_points_gain_popup(points_per_placement)
 				_update_point_label()
@@ -1176,7 +1235,7 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 		_stat_placements += 1
 		score += points_per_placement
 		lifetime_score += points_per_placement
-		if score > high_score:
+		if not _is_speedrun and score > high_score:
 			high_score = score
 		_show_points_gain_popup(points_per_placement)
 		_update_point_label()
@@ -1427,8 +1486,8 @@ func _trigger_game_over(reason := "no_space") -> void:
 	else:
 		_is_new_record = score > _prev_high_score and score > 0
 
-	# Aggiorna HighScore
-	if score > high_score:
+	# Aggiorna HighScore (classic). In speedrun il record è _speedrun_best: non toccare high_score.
+	if not _is_speedrun and score > high_score:
 		high_score = score
 
 	# Salva su disco
@@ -1645,10 +1704,10 @@ func _on_settings_menu_menu_closed() -> void:
 
 func _update_difficulty() -> void:
 	# Difficoltà GRADUALE = max(tempo, punteggio). Il TEMPO è la leva principale:
-	# +1 livello ogni ~6 minuti → il livello massimo (durissimo) arriva verso i 60 minuti.
-	# Così: principiante ~5 min, medio ~20 min, esperto 1 ora+ (il punteggio accelera i più bravi).
+	# +1 livello ogni ~3.5 minuti → livello max verso i ~35 min (il punteggio accelera i bravi).
+	# Target durate: occasionale 3-8 min, medio 8-15 min, esperto 20-40 min (oltre 1h se tiene viva la partita).
 	var elapsed_min := float(Time.get_ticks_msec() - _game_start_ms) / 60000.0
-	var time_level := int(elapsed_min / 6.0)
+	var time_level := int(elapsed_min / 3.5)
 	var score_level := int(score / difficulty_step_score)
 	var new_level: int = min(maxi(time_level, score_level), max_difficulty_level)
 
@@ -2172,32 +2231,35 @@ func _combo_effect_pos(cells: Array) -> Vector2:
 
 # Getter LAZY con cache: costruisce le SpriteFrames del livello solo alla prima
 # occorrenza (evita di caricare centinaia di MB in _ready → niente crash memoria).
+const COMBO_FRAME_STEP := 2   # usa 1 frame ogni 2: metà upload GPU -> meno lag su device deboli
+
 func _get_combo_frames(level: int) -> SpriteFrames:
 	if not _combo_frames.has(level):
-		_combo_frames[level] = _build_combo_frames("combo%d" % level)
+		_combo_frames[level] = _build_combo_frames("combo%d" % level, COMBO_FRAME_STEP)
 	return _combo_frames[level]
 
 func _get_combo_fx(level: int) -> SpriteFrames:
 	if not _combo_fx.has(level):
-		var fx := _build_combo_frames("effect%d" % level)
+		var fx := _build_combo_frames("effect%d" % level, COMBO_FRAME_STEP)
 		if fx.get_frame_count("c") == 0 and level > 1:
 			fx = _get_combo_fx(level - 1)   # es. il 9 (assente) usa l'8
 		_combo_fx[level] = fx
 	return _combo_fx[level]
 
-# Costruisce le SpriteFrames di una combo caricando i frame "prefix_001.png", ... finché esistono
-func _build_combo_frames(prefix: String) -> SpriteFrames:
+# Costruisce le SpriteFrames di una combo. step>1 salta frame (meno texture da caricare/uploadare)
+# mantenendo la STESSA durata (fps proporzionale).
+func _build_combo_frames(prefix: String, step: int = 1) -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.add_animation("c")
 	sf.set_animation_loop("c", false)
-	sf.set_animation_speed("c", 33.0)
+	sf.set_animation_speed("c", 33.0 / float(step))
 	var i := 1
 	while i <= 200:
 		var path := "res://CORE/Assets/Art/Game/Combo/%s_%03d.png" % [prefix, i]
 		if not ResourceLoader.exists(path):
 			break
 		sf.add_frame("c", load(path))
-		i += 1
+		i += step
 	return sf
 
 # Scalda in BACKGROUND (thread) le combo piu' comuni (1..4) subito dopo l'avvio,
@@ -2214,7 +2276,7 @@ func _preload_common_combos() -> void:
 				if not ResourceLoader.exists(p):
 					break
 				ResourceLoader.load_threaded_request(p)
-				i += 1
+				i += COMBO_FRAME_STEP   # solo i frame effettivamente usati
 		await get_tree().process_frame
 	# NB: non pre-costruiamo le SpriteFrames sul main thread (causava hitch all'avvio):
 	# i frame sono già in cache via thread, quindi la prima combo li prende al volo.

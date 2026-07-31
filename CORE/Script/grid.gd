@@ -265,7 +265,7 @@ func _ready() -> void:
 	_mode = settings.game_mode
 	_is_speedrun = _mode == "speedrun"
 	_is_mode_c = _mode == "mode_c" or _is_speedrun   # speedrun = gameplay CLASSIC/mode_c
-	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else 1.0
+	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.15 if _is_speedrun else 1.0)
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
 	# SPEEDRUN: griglia e sfondo dedicati
@@ -276,13 +276,20 @@ func _ready() -> void:
 		var sfnode := get_node_or_null("../Sfondo") as TextureRect
 		if sfnode:
 			sfnode.texture = load("res://CORE/Assets/Art/Game/sfondo_speedrun.svg")
-	# icona uscita (in alto a destra): X per la classica, freccia per le altre
+	# icona uscita: speedrun = freccia ROSSA, classic = X, altre = freccia
 	var back_btn := get_node_or_null("../UI/BackButton") as TextureButton
 	if back_btn:
-		if _mode == "mode_c" and not _is_speedrun:
+		if _is_speedrun:
+			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_arrow_red.png")
+		elif _mode == "mode_c":
 			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x.png")
 		else:
 			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_arrow.png")
+	# speedrun: anche impostazioni ROSSE
+	if _is_speedrun:
+		var set_btn := get_node_or_null("../UI/SettingsButton") as TextureButton
+		if set_btn:
+			set_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/settings_red.png")
 	_build_plus_pools()
 	current_moves = max_moves
 	# mode_b: niente contatore mosse a schermo.
@@ -631,7 +638,7 @@ func find_matches() -> bool:
 			# speedrun: risoluzione RAPIDA e NON riavviata a ogni piazzamento, così più match
 			# (anche da mani diverse) si risolvono subito insieme invece di accodarsi/bloccarsi
 			if dt.is_stopped():
-				dt.start(0.15)
+				dt.start(0.22)
 		else:
 			dt.start()
 	return any_match
@@ -1699,8 +1706,11 @@ func _update_timer_label() -> void:
 	_timer_label.text = "%d:%02d" % [s / 60, s % 60]
 	if _speedrun_time_left <= 30.0:
 		_timer_label.add_theme_color_override("font_color", Color(0.95, 0.25, 0.25))  # rosso: ultimi 30s
+		_timer_label.add_theme_color_override("font_outline_color", Color(1, 1, 1))   # stroke bianco
+		_timer_label.add_theme_constant_override("outline_size", 12)
 	else:
 		_timer_label.add_theme_color_override("font_color", Color(1, 1, 1))
+		_timer_label.add_theme_constant_override("outline_size", 0)
 
 
 func _update_point_label() -> void:

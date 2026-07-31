@@ -37,7 +37,10 @@ offset_right = 1500.0
 offset_bottom = 2000.0
 color = Color(0.019607844, 0.47058824, 0.9254902, 1)
 
-[node name="SettingsMenu" parent="." instance=ExtResource("10_b6brl")]
+[node name="SettingsLayer" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="SettingsMenu" parent="SettingsLayer" instance=ExtResource("10_b6brl")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 1

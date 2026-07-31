@@ -42,6 +42,10 @@ func set_end_bonus(final_score: int, moves: int, per_move: int) -> void:
 
 # Speedrun: titolo "SPEEDRUN" e riga record dedicato (RECORD / NUOVO RECORD!)
 func set_speedrun_mode(record: int, is_record: bool) -> void:
+	# speedrun: sfondo rosso (come il gameplay) + X rossa
+	$Items/BG.color = Color(147.0 / 255.0, 32.0 / 255.0, 20.0 / 255.0, 1.0)
+	if has_node("Items/CloseButton"):
+		$Items/CloseButton.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x_red.png")
 	var title := get_node_or_null("Items/L_GameOver") as Label
 	if title:
 		title.text = "SPEEDRUN"
@@ -58,6 +62,14 @@ func set_speedrun_mode(record: int, is_record: bool) -> void:
 # Mostra la schermata di fine partita.
 # Se is_new_record == true usa il layout viola "BEST SCORE!" (tutto centrato).
 func show_result(is_new_record: bool) -> void:
+	# rimuovi il tasto condividi; usa la nuova X per chiudere
+	if has_node("Items/LinkButton"):
+		$Items/LinkButton.visible = false
+	if has_node("Items/CloseButton"):
+		var cb: TextureButton = $Items/CloseButton
+		cb.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x.png")
+		cb.ignore_texture_size = true
+		cb.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	if is_new_record:
 		_apply_new_record_layout()
 	visible = true
@@ -106,9 +118,7 @@ func _apply_new_record_layout() -> void:
 	# Sfondo viola (il BG è grande abbastanza da coprire tutto lo schermo, anche l'overscan)
 	$Items/BG.color = RECORD_PURPLE
 
-	# Tastini share (link) e X in viola scuro invece del blu profondo
-	$Items/LinkButton.texture_normal = LINK_PURPLE
-	$Items/CloseButton.texture_normal = CLOSE_PURPLE
+	# (share rimosso; la X resta quella nuova impostata in show_result)
 
 	# Titolo -> "BEST SCORE!" giallo, centrato
 	var title: Label = $Items/L_GameOver

@@ -74,12 +74,15 @@ var _settings_btn2: TextureButton
 var _profile_pic: TextureRect
 var _name_frame: TextureRect
 var _name_edit: LineEdit
+var _profile_pic_base: Vector2 = Vector2.ZERO
+var _name_frame_base: Vector2 = Vector2.ZERO
+var _name_edit_base: Vector2 = Vector2.ZERO
 var _player_name: String = "PLAYER"
 const PROFILE_CFG := "user://profile.cfg"
 # Schermata EDIT PROFILE
 const PROFILE_DIR := "res://CORE/Assets/Art/Home/Profile/"
 const PROFILE_ICONS := [   # icone profilo selezionabili (se ne aggiungeranno altre)
-	"res://CORE/Assets/Art/Home/Profile/icon_rocket.png",
+	"res://CORE/Assets/Art/Home/Profile/icon_king_cube.png",
 ]
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
@@ -710,6 +713,21 @@ func _build_top_right() -> void:
 	pbtn.add_theme_stylebox_override("focus", pe)
 	pbtn.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pbtn.pressed.connect(_open_profile)
+	_profile_pic_base = _profile_pic.position
+	pbtn.button_down.connect(func() -> void:
+		_profile_pic.position = _profile_pic_base + Vector2(0, PRESS_SINK)
+		_profile_pic.modulate = Color(0.85, 0.85, 0.85)
+		if _name_frame:
+			_name_frame.position = _name_frame_base + Vector2(0, PRESS_SINK)
+		if _name_edit:
+			_name_edit.position = _name_edit_base + Vector2(0, PRESS_SINK))
+	pbtn.button_up.connect(func() -> void:
+		_profile_pic.position = _profile_pic_base
+		_profile_pic.modulate = Color(1, 1, 1)
+		if _name_frame:
+			_name_frame.position = _name_frame_base
+		if _name_edit:
+			_name_edit.position = _name_edit_base)
 	_profile_pic.add_child(pbtn)
 
 	# NAME FRAME SOTTO la profile (l'icona sta SOPRA il frame del nome)
@@ -723,6 +741,7 @@ func _build_top_right() -> void:
 	_name_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_frame.position = Vector2(24.0 + 78.0 - 18.0, 74.0)
 	_name_frame.size = Vector2(nf_w, nf_h)
+	_name_frame_base = _name_frame.position
 	add_child(_name_frame)
 
 	# nome in SOLA LETTURA (si modifica solo in EDIT PROFILE), allineato a sinistra, più grande
@@ -742,6 +761,7 @@ func _build_top_right() -> void:
 	# centrato nel frame, leggermente spostato a destra
 	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.12, nf_h * 0.12)
 	_name_edit.size = Vector2(nf_w * 0.78, nf_h * 0.62)
+	_name_edit_base = _name_edit.position
 	add_child(_name_edit)
 
 
@@ -790,7 +810,18 @@ func _ptbtn(path: String, cb: Callable) -> TextureButton:
 	b.ignore_texture_size = true
 	b.stretch_mode = TextureButton.STRETCH_SCALE
 	b.pressed.connect(cb)
+	_add_press_sink(b)
 	return b
+
+
+# animazione pressione riutilizzabile: il tasto si abbassa e scurisce mentre è premuto
+func _add_press_sink(b: BaseButton) -> void:
+	b.button_down.connect(func() -> void:
+		b.position.y += PRESS_SINK
+		b.modulate = Color(0.85, 0.85, 0.85))
+	b.button_up.connect(func() -> void:
+		b.position.y -= PRESS_SINK
+		b.modulate = Color(1, 1, 1))
 
 func _build_profile_menu() -> void:
 	var layer := CanvasLayer.new()
@@ -893,9 +924,9 @@ func _layout_profile() -> void:
 	_profile_title.size = Vector2(fw, fh * 0.11)
 	# riga ATTACCATA: anteprima | name box (più grande) | edit
 	var row_cy := fh * 0.215
-	var prev_s := fw * 0.16
+	var prev_s := fw * 0.19
 	var eb_s := fw * 0.16
-	var nb_w := fw * 0.48
+	var nb_w := fw * 0.46
 	var nb_h := nb_w * 0.26   # name box un po' più alto del nativo (0.2) = più grande
 	var glx := (fw - (prev_s + nb_w + eb_s)) * 0.5
 	_profile_prev.position = Vector2(glx, row_cy - prev_s * 0.5)
@@ -994,6 +1025,14 @@ func _make_icon_button(path: String, pos: Vector2, sz: float) -> TextureButton:
 	b.position = pos
 	b.size = Vector2(sz, sz)
 	add_child(b)
+	# animazione pressione: si abbassa leggermente + scurisce
+	var base := pos
+	b.button_down.connect(func() -> void:
+		b.position = base + Vector2(0, PRESS_SINK)
+		b.modulate = Color(0.85, 0.85, 0.85))
+	b.button_up.connect(func() -> void:
+		b.position = base
+		b.modulate = Color(1, 1, 1))
 	return b
 
 
@@ -1038,6 +1077,7 @@ func _build_leader_menu() -> void:
 	_leader_close.position = Vector2(24, 108)
 	_leader_close.size = Vector2(72, 72)
 	_leader_close.pressed.connect(_close_leader)
+	_add_press_sink(_leader_close)
 	_leader_menu.add_child(_leader_close)
 	# titolo TOP CRASHER (stesso livello della X, centrato)
 	_leader_title = Label.new()
@@ -1103,6 +1143,8 @@ func _layout_leader() -> void:
 		return
 	var view := get_viewport_rect().size
 	var nav_h := minf(view.x, NAV_MAX_W) * (NAV_TEX.y / NAV_TEX.x)
+	if _leader_close:
+		_leader_close.position = Vector2(view.x - 96.0, 108.0)
 	if _leader_title:
 		_leader_title.position = Vector2(0, 116.0)
 		_leader_title.size = Vector2(view.x, 56.0)
@@ -1182,15 +1224,28 @@ func _gen_leaderboard(mode: String) -> Array:
 	if pscore > 0:
 		entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true})
 	entries.sort_custom(func(a, b): return a["score"] > b["score"])
-	entries = entries.slice(0, 100)
+	# rank reale del giocatore (anche oltre la top 100)
+	var player_rank := -1
 	for i in entries.size():
-		entries[i]["rank"] = i + 1
-	return entries
+		if entries[i].get("is_player", false):
+			player_rank = i + 1
+	var top: Array = entries.slice(0, 100)
+	for i in top.size():
+		top[i]["rank"] = i + 1
+	# se sei fuori dalla top 100, aggiungi la tua riga in fondo con "100+"
+	if pscore > 0 and player_rank > 100:
+		top.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true, "rank": 0, "rank_text": "100+"})
+	return top
 
 func _make_leader_row(e: Dictionary) -> Control:
-	var rank: int = e["rank"]
+	var rank: int = int(e.get("rank", 0))
+	var is_player: bool = e.get("is_player", false)
+	var rank_txt: String = str(e.get("rank_text", str(rank)))
+	# barra verde dedicata per la TUA riga (mostra subito la tua posizione)
 	var bar: String = "bar_other.png"
-	if rank == 1:
+	if is_player:
+		bar = "bar_player.png"
+	elif rank == 1:
 		bar = "bar_1.png"
 	elif rank == 2:
 		bar = "bar_2.png"
@@ -1200,16 +1255,12 @@ func _make_leader_row(e: Dictionary) -> Control:
 	row.custom_minimum_size = Vector2(LB_ROW_W, LB_ROW_H)
 	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# se è la TUA riga: contorno verde (copia della barra tinta di verde, dietro e più grande)
-	if e.get("is_player", false):
-		var outline := _miss_tex(LB_DIR + bar, Vector2(-4, -4), Vector2(LB_ROW_W + 8, LB_ROW_H + 8))
-		outline.modulate = Color(0.15, 1.0, 0.2)
-		row.add_child(outline)
 	# barra di sfondo
 	row.add_child(_miss_tex(LB_DIR + bar, Vector2.ZERO, Vector2(LB_ROW_W, LB_ROW_H)))
-	var txt_col := Color(0.10, 0.06, 0.0) if rank <= 3 else Color(1, 1, 1)
-	# posizione (numero) a sinistra
-	row.add_child(_lb_label(str(rank), 30, txt_col, Vector2(LB_ROW_W * 0.02, 0), Vector2(LB_ROW_W * 0.12, LB_ROW_H), HORIZONTAL_ALIGNMENT_CENTER))
+	var txt_col := Color(1, 1, 1) if (is_player or rank > 3) else Color(0.10, 0.06, 0.0)
+	# posizione (numero, o "100+") a sinistra
+	var rank_sz: int = 24 if e.has("rank_text") else 30
+	row.add_child(_lb_label(rank_txt, rank_sz, txt_col, Vector2(LB_ROW_W * 0.01, 0), Vector2(LB_ROW_W * 0.15, LB_ROW_H), HORIZONTAL_ALIGNMENT_CENTER))
 	# icona profilo (un po' più piccola)
 	var ic := LB_ROW_H * 0.62
 	row.add_child(_miss_tex(PROFILE_ICONS[clampi(int(e["icon"]), 0, PROFILE_ICONS.size() - 1)], Vector2(LB_ROW_W * 0.16, (LB_ROW_H - ic) * 0.5), Vector2(ic, ic), true))
@@ -1665,6 +1716,11 @@ func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Co
 	# badge "completata" in alto a destra della riga (solo se completa e non riscossa)
 	if done:
 		content.add_child(_miss_tex(MISS + "mission_done_badge.png", Vector2(ROW_W - 38.0, -14.0), Vector2(44.0, 44.0), true))
+		# stroke verde scuro sui testi delle missioni completate
+		for c in content.get_children():
+			if c is Label:
+				c.add_theme_color_override("font_outline_color", Color(0.0, 0.22, 0.06))
+				c.add_theme_constant_override("outline_size", 5)
 
 	# tasto: ogni missione è pressabile (affonda); se completa riscuote
 	var btn := Button.new()

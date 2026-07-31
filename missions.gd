@@ -7,7 +7,7 @@ extends Node
 const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400      # 24h (giornaliere)
 const WEEKLY_REFRESH_SECONDS := 604800   # 7 giorni (settimanali)
-const DATA_VERSION := 5           # bump per FORZARE un reset delle missioni una volta
+const DATA_VERSION := 6           # bump per FORZARE un reset delle missioni una volta
 const DAILY_REWARD := 200         # ogni missione giornaliera vale 200 monete
 const WEEKLY_REWARD := 1000       # ogni missione settimanale vale 1000 monete
 var _data_version: int = 0
@@ -33,6 +33,12 @@ func _ready() -> void:
 		last_refresh = _now()
 		_generate_weekly()
 		last_weekly_refresh = _now()
+		# TEST: alcune missioni già COMPLETATE (per verificare i badge). Rimuovere dopo.
+		if missions.size() >= 2:
+			missions[0]["progress"] = missions[0]["target"]
+			missions[1]["progress"] = missions[1]["target"]
+		if weekly.size() >= 1:
+			weekly[0]["progress"] = weekly[0]["target"]
 		_data_version = DATA_VERSION
 		_save()
 	_maybe_refresh()

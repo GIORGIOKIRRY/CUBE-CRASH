@@ -10,7 +10,7 @@ const ART_CENTER := Vector2(400.0, 700.0)
 const CAMERA_CENTER := Vector2(288.0, 512.0)
 const ART_SCALE := 0.86
 const BOTTOM_MARGIN := 0.0
-const CABINET_DROP := 160.0                   # abbassa cabinato + tasto play (assieme via _art_to_world)
+const CABINET_DROP := 115.0                   # abbassa cabinato + tasto play (assieme via _art_to_world)
 
 # Animazione cabinato (riflesso sul marquee): 12 frame, poi fermo 15s, poi riparte.
 const CAB_FPS := 12.0
@@ -22,7 +22,7 @@ const PLAY_NEW_TEX := Vector2(1472.0, 576.0)
 const DECK_TEX := Vector2(576.0, 576.0)
 const DECK_BTN_H_ART := 150.0                # altezza comune dei due tasti (più grandi)
 const DECK_GAP_ART := -4.0                    # attaccati (piccolo che chiude il seam, niente sovrapposizione visibile)
-const DECK_ROW_CENTER_ART := Vector2(399.0, 946.0)  # centro coppia (compensato per CABINET_DROP)
+const DECK_ROW_CENTER_ART := Vector2(399.0, 970.0)  # posizione tasto play (indipendente dal cabinato)
 const PRESS_SINK := 5.0                       # px di "affondamento" alla pressione
 const SPARKLE_OFFSET_Y := 0.0
 
@@ -99,6 +99,20 @@ var _profile_cancel: TextureButton
 var _profile_confirm: TextureButton
 var _profile_icon_btns: Array = []
 var _leader_menu: Control
+var _leader_bg: ColorRect
+var _leader_panel: ColorRect
+var _leader_tabs: TextureRect
+var _leader_timer: Label
+var _leader_scroll: ScrollContainer
+var _leader_list: VBoxContainer
+var _tab_classic_btn: Button
+var _tab_speed_btn: Button
+var _leader_close: TextureButton
+var _leader_title: Label
+var _leader_tab: String = "classic"
+const LB_DIR := "res://CORE/Assets/Art/UI/Leaderboard/"
+const LB_ROW_W := 500.0
+const LB_ROW_H := 74.0
 var _sparkles: CPUParticles2D
 var _mode_menu: Control
 
@@ -144,6 +158,9 @@ const NAV_FLAT_FRAC := 32.0 / 432.0   # il tab attivo sporge in alto: la barra p
 const NAV_MAX_W := 820.0              # larghezza max barra (su iPad/tablet non si stira: navy ai lati)
 var _nav_bar: TextureRect
 var _nav_bg: ColorRect
+var _nav_badge: TextureRect   # badge "missioni completate" sul tab missioni
+var _nav_badge_base: Vector2 = Vector2.ZERO
+var _nav_badge_raise: float = 0.0
 var _nav_btns: Array = []
 var _nav_textures := {}
 var _tab := "home"
@@ -196,6 +213,13 @@ func _layout() -> void:
 			var b: Button = _nav_btns[i]
 			b.position = Vector2(bar_w * i / 3.0, 0.0)
 			b.size = Vector2(bar_w / 3.0, nav_h)
+		# badge sopra il tab missioni (leftmost), in alto a destra della cella
+		if _nav_badge:
+			var bs := nav_h * 0.34
+			_nav_badge.size = Vector2(bs, bs)
+			_nav_badge_raise = nav_h * 0.14
+			_nav_badge_base = Vector2(bar_left + bar_w / 3.0 - bs * 0.35, nav_top - bs * 0.05)
+			_apply_nav_badge_pos()
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
 		var tabs_y := 200.0
@@ -249,6 +273,7 @@ func _layout() -> void:
 		_screen_anim.scale = Vector2(sc, sc)
 	_position_screen_title()
 	_layout_profile()
+	_layout_leader()
 
 
 # --- Sfondo + cabinato animato -------------------------------------------------
@@ -674,6 +699,7 @@ func _build_top_right() -> void:
 	_profile_pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_profile_pic.position = Vector2(24.0, 74.0)
 	_profile_pic.size = Vector2(78.0, 78.0)
+	_profile_pic.z_index = 1   # in primo piano rispetto al name frame (attaccato)
 	add_child(_profile_pic)
 	var pbtn := Button.new()
 	pbtn.focus_mode = Control.FOCUS_NONE
@@ -695,7 +721,7 @@ func _build_top_right() -> void:
 	_name_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_name_frame.stretch_mode = TextureRect.STRETCH_SCALE
 	_name_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_name_frame.position = Vector2(24.0, 74.0 + 78.0 + 2.0)
+	_name_frame.position = Vector2(24.0 + 78.0 - 18.0, 74.0)
 	_name_frame.size = Vector2(nf_w, nf_h)
 	add_child(_name_frame)
 
@@ -703,7 +729,7 @@ func _build_top_right() -> void:
 	_name_edit = LineEdit.new()
 	_name_edit.text = _player_name
 	_name_edit.max_length = 12
-	_name_edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_edit.editable = false
 	_name_edit.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_edit.add_theme_font_override("font", MODE_FONT)
@@ -713,8 +739,9 @@ func _build_top_right() -> void:
 	var empty := StyleBoxEmpty.new()
 	_name_edit.add_theme_stylebox_override("normal", empty)
 	_name_edit.add_theme_stylebox_override("read_only", empty)
-	_name_edit.position = _name_frame.position + Vector2(22.0, nf_h * 0.12)
-	_name_edit.size = Vector2(nf_w - 34.0, nf_h * 0.62)
+	# centrato nel frame, leggermente spostato a destra
+	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.12, nf_h * 0.12)
+	_name_edit.size = Vector2(nf_w * 0.78, nf_h * 0.62)
 	add_child(_name_edit)
 
 
@@ -803,6 +830,7 @@ func _build_profile_menu() -> void:
 	_profile_name_title.text = "NOME GIOCATORE"
 	_profile_name_title.add_theme_font_override("font", MODE_FONT)
 	_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
+	_profile_name_title.add_theme_color_override("font_outline_color", Color(0.16, 0.07, 0.0))
 	_profile_name_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_profile_name_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_profile_frame.add_child(_profile_name_title)
@@ -858,36 +886,37 @@ func _layout_profile() -> void:
 	_profile_frame.size = Vector2(fw, fh)
 	_profile_bg.position = Vector2.ZERO
 	_profile_bg.size = Vector2(fw, fh)
-	# titolo grande con STROKE
-	_profile_title.add_theme_font_size_override("font_size", int(fh * 0.058))
-	_profile_title.add_theme_constant_override("outline_size", maxi(3, int(fh * 0.008)))
-	_profile_title.position = Vector2(0, fh * 0.008)
-	_profile_title.size = Vector2(fw, fh * 0.09)
-	# riga ATTACCATA: anteprima | name box | edit (gruppo centrato)
-	var row_cy := fh * 0.17
-	var prev_s := fw * 0.17
-	var eb_s := fw * 0.17
-	var nb_w := fw * 0.40
-	var nb_h := nb_w * 256.0 / 1280.0
+	# titolo GRANDE con STROKE più spesso
+	_profile_title.add_theme_font_size_override("font_size", int(fh * 0.072))
+	_profile_title.add_theme_constant_override("outline_size", maxi(4, int(fh * 0.015)))
+	_profile_title.position = Vector2(0, -fh * 0.006)
+	_profile_title.size = Vector2(fw, fh * 0.11)
+	# riga ATTACCATA: anteprima | name box (più grande) | edit
+	var row_cy := fh * 0.215
+	var prev_s := fw * 0.16
+	var eb_s := fw * 0.16
+	var nb_w := fw * 0.48
+	var nb_h := nb_w * 0.26   # name box un po' più alto del nativo (0.2) = più grande
 	var glx := (fw - (prev_s + nb_w + eb_s)) * 0.5
 	_profile_prev.position = Vector2(glx, row_cy - prev_s * 0.5)
 	_profile_prev.size = Vector2(prev_s, prev_s)
 	var nb_x := glx + prev_s
 	_profile_namebox.position = Vector2(nb_x, row_cy - nb_h * 0.5)
 	_profile_namebox.size = Vector2(nb_w, nb_h)
-	_profile_name_title.add_theme_font_size_override("font_size", int(fh * 0.02))
-	_profile_name_title.position = Vector2(nb_x, row_cy - nb_h * 0.5 - fh * 0.026)
-	_profile_name_title.size = Vector2(nb_w, fh * 0.026)
-	_profile_name_edit.add_theme_font_size_override("font_size", int(nb_h * 0.52))
-	_profile_name_edit.position = Vector2(nb_x + nb_w * 0.05, row_cy - nb_h * 0.32)
-	_profile_name_edit.size = Vector2(nb_w * 0.9, nb_h * 0.64)
+	_profile_name_title.add_theme_font_size_override("font_size", int(fh * 0.034))
+	_profile_name_title.add_theme_constant_override("outline_size", maxi(2, int(fh * 0.006)))
+	_profile_name_title.position = Vector2(nb_x, row_cy - nb_h * 0.5 - fh * 0.042)
+	_profile_name_title.size = Vector2(nb_w, fh * 0.042)
+	_profile_name_edit.add_theme_font_size_override("font_size", int(nb_h * 0.56))
+	_profile_name_edit.position = Vector2(nb_x + nb_w * 0.05, row_cy - nb_h * 0.34)
+	_profile_name_edit.size = Vector2(nb_w * 0.9, nb_h * 0.68)
 	_profile_edit_btn.position = Vector2(nb_x + nb_w, row_cy - eb_s * 0.5)
 	_profile_edit_btn.size = Vector2(eb_s, eb_s)
-	# frame selezione
-	var sf_w := fw * 0.90
+	# frame selezione icone: ABBASSATO
+	var sf_w := fw * 0.88
 	var sf_h := sf_w * 1504.0 / 1856.0
 	var sf_x := (fw - sf_w) * 0.5
-	var sf_y := fh * 0.26
+	var sf_y := fh * 0.31
 	_profile_selframe.position = Vector2(sf_x, sf_y)
 	_profile_selframe.size = Vector2(sf_w, sf_h)
 	var pad := sf_w * 0.07
@@ -902,7 +931,7 @@ func _layout_profile() -> void:
 	# cancel / confirm
 	var bw := fw * 0.38
 	var bh := bw * 320.0 / 896.0
-	var by := fh * 0.90 - bh * 0.5
+	var by := fh * 0.895 - bh * 0.5
 	_profile_cancel.position = Vector2(fw * 0.265 - bw * 0.5, by)
 	_profile_cancel.size = Vector2(bw, bh)
 	_profile_confirm.position = Vector2(fw * 0.735 - bw * 0.5, by)
@@ -976,54 +1005,235 @@ func _update_coin_count() -> void:
 func _on_leaderboard_pressed() -> void:
 	settings.button_feedback()
 	if _leader_menu:
+		_populate_leader()
+		_layout_leader()
 		_leader_menu.visible = true
 
 
+# ============================ CLASSIFICA (leaderboard) =========================
 func _build_leader_menu() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 15   # sopra la nav bar (10)
+	add_child(layer)
 	_leader_menu = Control.new()
 	_leader_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_leader_menu.z_index = 960
 	_leader_menu.visible = false
-	add_child(_leader_menu)
-	var dim := ColorRect.new()
-	dim.color = Color(0.07, 0.13, 0.22, 0.98)
-	dim.offset_left = -600.0
-	dim.offset_top = -600.0
-	dim.offset_right = 1400.0
-	dim.offset_bottom = 2000.0
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(_on_leader_dim_input)
-	_leader_menu.add_child(dim)
-	var t := Label.new()
-	t.text = "CLASSIFICA"
-	t.add_theme_font_override("font", MODE_FONT)
-	t.add_theme_font_size_override("font_size", 70)
-	t.add_theme_color_override("font_color", Color(1, 1, 1))
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.offset_left = 38.0
-	t.offset_right = 538.0
-	t.offset_top = 380.0
-	t.offset_bottom = 470.0
-	_leader_menu.add_child(t)
-	var s := Label.new()
-	s.text = "PROSSIMAMENTE\n(tocca per chiudere)"
-	s.add_theme_font_override("font", MODE_FONT)
-	s.add_theme_font_size_override("font_size", 30)
-	s.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	s.offset_left = 38.0
-	s.offset_right = 538.0
-	s.offset_top = 478.0
-	s.offset_bottom = 580.0
-	_leader_menu.add_child(s)
+	layer.add_child(_leader_menu)
+	# sfondo blu + pannello scuro (stessa base delle missioni)
+	_leader_bg = ColorRect.new()
+	_leader_bg.color = Color(5.0 / 255.0, 120.0 / 255.0, 236.0 / 255.0, 1.0)
+	_leader_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_leader_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_leader_menu.add_child(_leader_bg)
+	_leader_panel = ColorRect.new()
+	_leader_panel.color = Color(0.0, 79.0 / 255.0, 135.0 / 255.0, 1.0)
+	_leader_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_leader_menu.add_child(_leader_panel)
+	# tasto chiudi (X) in alto a sinistra
+	_leader_close = TextureButton.new()
+	_leader_close.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x.png")
+	_leader_close.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_leader_close.ignore_texture_size = true
+	_leader_close.stretch_mode = TextureButton.STRETCH_SCALE
+	_leader_close.position = Vector2(24, 108)
+	_leader_close.size = Vector2(72, 72)
+	_leader_close.pressed.connect(_close_leader)
+	_leader_menu.add_child(_leader_close)
+	# titolo TOP CRASHER (stesso livello della X, centrato)
+	_leader_title = Label.new()
+	_leader_title.text = "TOP CRASHER"
+	_leader_title.add_theme_font_override("font", MODE_FONT)
+	_leader_title.add_theme_font_size_override("font_size", 42)
+	_leader_title.add_theme_color_override("font_color", Color(1, 0.93, 0.5))
+	_leader_title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_leader_title.add_theme_constant_override("outline_size", 8)
+	_leader_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_leader_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_leader_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_leader_menu.add_child(_leader_title)
+	# striscia TAB classic/speedrun
+	_leader_tabs = TextureRect.new()
+	_leader_tabs.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_leader_tabs.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_leader_tabs.stretch_mode = TextureRect.STRETCH_SCALE
+	_leader_tabs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_leader_tabs.texture = load(LB_DIR + "tabs_classic.png")
+	_leader_menu.add_child(_leader_tabs)
+	_tab_classic_btn = _make_tab_button(func() -> void: _select_leader_tab("classic"), _leader_menu)
+	_tab_speed_btn = _make_tab_button(func() -> void: _select_leader_tab("speedrun"), _leader_menu)
+	# timer "Nuova classifica tra:"
+	_leader_timer = Label.new()
+	_leader_timer.add_theme_font_override("font", MODE_FONT)
+	_leader_timer.add_theme_font_size_override("font_size", 20)
+	_leader_timer.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
+	_leader_timer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_leader_menu.add_child(_leader_timer)
+	# lista scorrevole
+	_leader_scroll = ScrollContainer.new()
+	_leader_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_leader_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_leader_scroll.clip_contents = true
+	_leader_menu.add_child(_leader_scroll)
+	_leader_list = VBoxContainer.new()
+	_leader_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_leader_list.add_theme_constant_override("separation", 8)
+	_leader_scroll.add_child(_leader_list)
 
 
-func _on_leader_dim_input(event: InputEvent) -> void:
-	var tap: bool = (event is InputEventMouseButton and not event.pressed) \
-		or (event is InputEventScreenTouch and not event.pressed)
-	if tap:
-		settings.button_feedback()
-		_leader_menu.visible = false
+func _close_leader() -> void:
+	settings.button_feedback()
+	_leader_menu.visible = false
+
+func _select_leader_tab(tab: String) -> void:
+	settings.button_feedback()
+	_leader_tab = tab
+	if _leader_tabs:
+		_leader_tabs.texture = load(LB_DIR + ("tabs_classic.png" if tab == "classic" else "tabs_speedrun.png"))
+	_populate_leader()
+
+func _leader_refresh_text() -> String:
+	# la classifica si rinnova ogni 7 giorni (settimana unix corrente)
+	var wk := 604800
+	var now := int(Time.get_unix_time_from_system())
+	var left := wk - (now % wk)
+	return "Nuova classifica tra: %dg %02dh" % [left / 86400, (left % 86400) / 3600]
+
+func _layout_leader() -> void:
+	if not _leader_tabs:
+		return
+	var view := get_viewport_rect().size
+	var nav_h := minf(view.x, NAV_MAX_W) * (NAV_TEX.y / NAV_TEX.x)
+	if _leader_title:
+		_leader_title.position = Vector2(0, 116.0)
+		_leader_title.size = Vector2(view.x, 56.0)
+	var tabs_y := 200.0
+	var th := view.x * 94.0 / 576.0
+	_leader_tabs.position = Vector2(0, tabs_y)
+	_leader_tabs.size = Vector2(view.x, th)
+	_tab_classic_btn.position = Vector2(0, tabs_y)
+	_tab_classic_btn.size = Vector2(view.x * 0.5, th)
+	_tab_speed_btn.position = Vector2(view.x * 0.5, tabs_y)
+	_tab_speed_btn.size = Vector2(view.x * 0.5, th)
+	var panel_top := tabs_y + th - 6.0
+	_leader_panel.position = Vector2(0, panel_top)
+	_leader_panel.size = Vector2(view.x, maxf(60.0, view.y - panel_top))
+	_leader_timer.position = Vector2(0, panel_top + 12.0)
+	_leader_timer.size = Vector2(view.x, 28.0)
+	var scroll_top := panel_top + 50.0
+	_leader_scroll.position = Vector2(32.0, scroll_top)
+	_leader_scroll.size = Vector2(view.x - 64.0, maxf(120.0, view.y - scroll_top))
+
+func _populate_leader() -> void:
+	if not _leader_list:
+		return
+	for c in _leader_list.get_children():
+		c.queue_free()
+	if _leader_tabs:
+		_leader_tabs.texture = load(LB_DIR + ("tabs_classic.png" if _leader_tab == "classic" else "tabs_speedrun.png"))
+	_leader_timer.text = _leader_refresh_text()
+	# padding in alto
+	var head := Control.new()
+	head.custom_minimum_size = Vector2(0, 20)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_leader_list.add_child(head)
+	for e in _gen_leaderboard(_leader_tab):
+		_leader_list.add_child(_make_leader_row(e))
+	var tail := Control.new()
+	tail.custom_minimum_size = Vector2(0, 180)
+	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_leader_list.add_child(tail)
+
+func _player_score(mode: String) -> int:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://save.cfg") == OK:
+		if mode == "speedrun":
+			return int(cfg.get_value("scores", "speedrun_best", 0))
+		return int(cfg.get_value("scores", "high_score", 0))
+	return 0
+
+func _fmt_score(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	var cnt := 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		cnt += 1
+		if cnt % 3 == 0 and i > 0:
+			out = "." + out
+	return out
+
+func _gen_leaderboard(mode: String) -> Array:
+	var week := int(Time.get_unix_time_from_system()) / 604800
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(hash(mode)) + week * 7919
+	var names := ["Kirry", "Marco", "Luna", "Rex", "Nova", "Zed", "Milo", "Ivy", "Ace", "Kai",
+		"Bree", "Neo", "Skye", "Jax", "Vera", "Oro", "Pip", "Rux", "Tila", "Enzo",
+		"Gwen", "Dax", "Remy", "Suki", "Bolt", "Coco", "Fenn", "Lux", "Mira", "Nix"]
+	var top_score: int = 6000000 if mode == "classic" else 45000
+	var entries: Array = []
+	var s := top_score
+	for i in range(120):
+		var nm: String = names[rng.randi() % names.size()] + str(rng.randi_range(1, 999))
+		entries.append({"name": nm, "score": s, "icon": 0, "is_player": false})
+		s = int(float(s) * rng.randf_range(0.90, 0.985)) - rng.randi_range(50, 500)
+		if s < 100:
+			s = 100
+	var pscore := _player_score(mode)
+	if pscore > 0:
+		entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true})
+	entries.sort_custom(func(a, b): return a["score"] > b["score"])
+	entries = entries.slice(0, 100)
+	for i in entries.size():
+		entries[i]["rank"] = i + 1
+	return entries
+
+func _make_leader_row(e: Dictionary) -> Control:
+	var rank: int = e["rank"]
+	var bar: String = "bar_other.png"
+	if rank == 1:
+		bar = "bar_1.png"
+	elif rank == 2:
+		bar = "bar_2.png"
+	elif rank == 3:
+		bar = "bar_3.png"
+	var row := Control.new()
+	row.custom_minimum_size = Vector2(LB_ROW_W, LB_ROW_H)
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# se è la TUA riga: contorno verde (copia della barra tinta di verde, dietro e più grande)
+	if e.get("is_player", false):
+		var outline := _miss_tex(LB_DIR + bar, Vector2(-4, -4), Vector2(LB_ROW_W + 8, LB_ROW_H + 8))
+		outline.modulate = Color(0.15, 1.0, 0.2)
+		row.add_child(outline)
+	# barra di sfondo
+	row.add_child(_miss_tex(LB_DIR + bar, Vector2.ZERO, Vector2(LB_ROW_W, LB_ROW_H)))
+	var txt_col := Color(0.10, 0.06, 0.0) if rank <= 3 else Color(1, 1, 1)
+	# posizione (numero) a sinistra
+	row.add_child(_lb_label(str(rank), 30, txt_col, Vector2(LB_ROW_W * 0.02, 0), Vector2(LB_ROW_W * 0.12, LB_ROW_H), HORIZONTAL_ALIGNMENT_CENTER))
+	# icona profilo (un po' più piccola)
+	var ic := LB_ROW_H * 0.62
+	row.add_child(_miss_tex(PROFILE_ICONS[clampi(int(e["icon"]), 0, PROFILE_ICONS.size() - 1)], Vector2(LB_ROW_W * 0.16, (LB_ROW_H - ic) * 0.5), Vector2(ic, ic), true))
+	# nome
+	row.add_child(_lb_label(str(e["name"]), 24, txt_col, Vector2(LB_ROW_W * 0.30, 0), Vector2(LB_ROW_W * 0.34, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT))
+	# punteggio agganciato a destra: giallo chiaro + stroke nero
+	var sc := _lb_label(_fmt_score(int(e["score"])), 24, Color(1, 0.93, 0.5), Vector2(LB_ROW_W * 0.60, 0), Vector2(LB_ROW_W * 0.36, LB_ROW_H), HORIZONTAL_ALIGNMENT_RIGHT)
+	sc.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	sc.add_theme_constant_override("outline_size", 5)
+	row.add_child(sc)
+	return row
+
+func _lb_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, halign: int) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_override("font", MODE_FONT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.horizontal_alignment = halign
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.position = pos
+	l.size = sz
+	return l
 
 
 # --- Sottomenu scelta modalità -------------------------------------------------
@@ -1263,7 +1473,7 @@ func _build_missions_menu() -> void:
 
 
 # Tasto trasparente per un tab (posizione/size in _layout).
-func _make_tab_button(cb: Callable) -> Button:
+func _make_tab_button(cb: Callable, parent: Node = null) -> Button:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
 	var empty := StyleBoxEmpty.new()
@@ -1272,7 +1482,7 @@ func _make_tab_button(cb: Callable) -> Button:
 	b.add_theme_stylebox_override("pressed", empty)
 	b.add_theme_stylebox_override("focus", empty)
 	b.pressed.connect(cb)
-	_missions_menu.add_child(b)
+	(parent if parent != null else _missions_menu).add_child(b)
 	return b
 
 
@@ -1320,6 +1530,11 @@ func _populate_missions() -> void:
 	if _missions_tabs:
 		_missions_tabs.texture = load(MISS + ("tabs_weekly.png" if _missions_tab == "weekly" else "tabs_daily.png"))
 	_missions_timer_label.text = _refresh_text()
+	# padding in alto: spazio così il badge della prima riga non viene tagliato
+	var head := Control.new()
+	head.custom_minimum_size = Vector2(0, 26)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_missions_list.add_child(head)
 	var is_weekly := _missions_tab == "weekly"
 	var arr: Array = missions.weekly if is_weekly else missions.missions
 	for i in arr.size():
@@ -1331,6 +1546,7 @@ func _populate_missions() -> void:
 	tail.custom_minimum_size = Vector2(0, 180)
 	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_missions_list.add_child(tail)
+	_update_mission_badges()
 
 
 const ROW_W := 488.0
@@ -1446,6 +1662,10 @@ func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Co
 		prog.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 		content.add_child(prog)
 
+	# badge "completata" in alto a destra della riga (solo se completa e non riscossa)
+	if done:
+		content.add_child(_miss_tex(MISS + "mission_done_badge.png", Vector2(ROW_W - 38.0, -14.0), Vector2(44.0, 44.0), true))
+
 	# tasto: ogni missione è pressabile (affonda); se completa riscuote
 	var btn := Button.new()
 	btn.focus_mode = Control.FOCUS_NONE
@@ -1495,6 +1715,24 @@ func _animate_coin_gain(from_v: int, to_v: int) -> void:
 		tc.tween_property(_missions_coin_bar, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 
 
+func _has_completed_missions() -> bool:
+	for arr in [missions.missions, missions.weekly]:
+		for m in arr:
+			if not m["claimed"] and missions.is_complete(m):
+				return true
+	return false
+
+func _update_mission_badges() -> void:
+	if _nav_badge:
+		_nav_badge.visible = _has_completed_missions()
+
+func _apply_nav_badge_pos() -> void:
+	if _nav_badge:
+		# quando la pagina missioni è attiva il tab si alza: il badge lo segue
+		var up := _nav_badge_raise if _tab == "missions" else 0.0
+		_nav_badge.position = _nav_badge_base - Vector2(0, up)
+
+
 # --- Menu bar in basso (missioni / home / shop) --------------------------------
 func _build_nav_bar() -> void:
 	_nav_textures = {
@@ -1532,12 +1770,25 @@ func _build_nav_bar() -> void:
 		b.pressed.connect(_select_tab.bind(tabs[i]))
 		_nav_bar.add_child(b)
 		_nav_btns.append(b)
+	# badge "missioni completate" (sopra il tab missioni)
+	_nav_badge = TextureRect.new()
+	_nav_badge.texture = load("res://CORE/Assets/Art/UI/Missions/mission_done_badge.png")
+	_nav_badge.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_nav_badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_nav_badge.stretch_mode = TextureRect.STRETCH_SCALE
+	_nav_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_nav_badge.visible = false
+	layer.add_child(_nav_badge)
+	_update_mission_badges()
 
 
 func _select_tab(tab: String, feedback: bool = true) -> void:
 	if feedback:
 		settings.button_feedback()
 	_tab = tab
+	_apply_nav_badge_pos()
+	if _leader_menu:
+		_leader_menu.visible = false
 	if _nav_bar:
 		_nav_bar.texture = _nav_textures.get(tab, _nav_textures["home"])
 	if _missions_menu:

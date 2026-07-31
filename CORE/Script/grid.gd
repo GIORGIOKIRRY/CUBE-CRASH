@@ -15,6 +15,7 @@ extends Node2D
 # prendi per trascinarli si rimpiccioliscono alla dimensione della griglia.
 const BOTTOM_PIECE_SCALE := 1.35
 const GRID_PIECE_SCALE := 1.0
+const DRAG_LIFT := 100.0   # il cubo preso col dito si alza sopra il dito (vedi dove lo posizioni)
 const CELL_SPRITE_SCALE := 0.734694   # scala sprite dei cubi = dimensione cella
 const POP_FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
@@ -40,8 +41,8 @@ const BALANCE_COOLDOWN := 3             # minimo mosse tra due bilanciamenti
 # Combo: la sparizione di cubi è RARA e "fortunata", legata alle catene lunghe.
 const COMBO_REWARD_MIN_CHAIN := 3      # servono almeno 3 combo di fila per avere spazio
 const COMBO_MAX_BONUS := 2             # max cubi bonus rimossi (raro)
-const IDLE_HINT_MS := 5000             # suggerimenti dopo 5s di inattività
-const HINT_REPEAT_MS := 5000           # intervallo tra suggerimenti ripetuti
+const IDLE_HINT_MS := 10000            # suggerimenti dopo 10s di inattività
+const HINT_REPEAT_MS := 10000          # intervallo tra suggerimenti ripetuti
 @export var spawn_rows_above: int = 1       # quante "righe" sopra la griglia fanno partire la caduta
 @export var enable_empty_fall_fx: bool = true
 
@@ -196,7 +197,7 @@ var dragging_piece: Node = null
 var dragging_from_slot: int = -1
 var drag_start_pos: Vector2 = Vector2.ZERO
 var _multi_drags: Dictionary = {}   # speedrun: indice-dito -> pezzo trascinato (multi-touch)
-var _placement_preview: Polygon2D = null   # fantasma della cella dove verrà piazzato
+var _placement_preview: Sprite2D = null   # fantasma del blocco dove verrà piazzato (opacità bassa)
 var _preview_fade_tween: Tween = null       # dissolvenza della preview
 var _drag_scale_tween: Tween = null         # tween di scala del cubo trascinato
 var _explo_frames: SpriteFrames = null      # frame dell'animazione di esplosione
@@ -205,6 +206,7 @@ var _combo_fx: Dictionary = {}              # livello -> SpriteFrames effetto a 
 var _active_combo_fx: CanvasLayer = null    # effetto full-screen attualmente in corso
 var _active_combo_num: AnimatedSprite2D = null   # numero COMBO attualmente in corso
 var _special_beam_frames: Dictionary = {}        # colore -> SpriteFrames beam V/O per colore
+var _beam_clip: Control = null                    # maschera: clippa i beam dentro la griglia
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
 var _last_shown_score: int = -1             # per l'animazione pop del punteggio
 var _score_pop_tween: Tween = null
@@ -266,18 +268,33 @@ func _ready() -> void:
 	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else 1.0
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
+	# SPEEDRUN: griglia e sfondo dedicati
+	if _is_speedrun:
+		var gnode := get_node_or_null("Grid") as TextureRect
+		if gnode:
+			gnode.texture = load("res://CORE/Assets/Art/Game/griglia_speedrun.svg")
+		var sfnode := get_node_or_null("../Sfondo") as TextureRect
+		if sfnode:
+			sfnode.texture = load("res://CORE/Assets/Art/Game/sfondo_speedrun.svg")
+	# icona uscita (in alto a destra): X per la classica, freccia per le altre
+	var back_btn := get_node_or_null("../UI/BackButton") as TextureButton
+	if back_btn:
+		if _mode == "mode_c" and not _is_speedrun:
+			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x.png")
+		else:
+			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_arrow.png")
 	_build_plus_pools()
 	current_moves = max_moves
 	# mode_b: niente contatore mosse a schermo.
 	# mode_c: riusa quel contatore per le COMBO totali fatte.
 	if not _moves_enabled:
+		# COMBO e HighScore rimossi dalla zona sopra la griglia (nascosti in gameplay)
 		var mv = get_node_or_null("../UI/MOOVES")
 		if mv:
-			if _is_mode_c:
-				mv.text = "COMBO:"
-				_update_combo_counter()
-			else:
-				mv.visible = false
+			mv.visible = false
+		var hs0 = get_node_or_null("../UI/HighScore")
+		if hs0:
+			hs0.visible = false
 	if _is_speedrun:
 		_setup_speedrun_ui()
 	all_pieces = make_2d_array()
@@ -497,6 +514,7 @@ func _spawn_bottom_pieces() -> void:
 			# Etichetta per distinguere logica (non serve modificare lo script del pezzo)
 			piece.set_meta("origin", "bottom")
 			piece.set_meta("slot_idx", s)
+			_apply_select_look(piece)
 			bottom_pieces[s] = piece
 
 func _replenish_bottom_slot(slot_idx: int) -> void:
@@ -507,7 +525,33 @@ func _replenish_bottom_slot(slot_idx: int) -> void:
 		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
 		piece.set_meta("origin", "bottom")
 		piece.set_meta("slot_idx", slot_idx)
+		_apply_select_look(piece)
 		bottom_pieces[slot_idx] = piece
+
+# I 3 cubi in basso (tray) usano la grafica SELECT del loro colore; sulla griglia tornano normali.
+func _select_name(col: String) -> String:
+	if col == "blue":
+		return "BLU"
+	if col == "yellow":
+		return "YELLO"
+	return col.to_upper()
+
+func _apply_select_look(piece: Node) -> void:
+	if _get_piece_mooves(piece) != 0:
+		return   # solo cubi NORMALI (gli speciali V/O/bomba hanno la loro grafica)
+	var spr := piece.get_node_or_null("Sprite2D") as Sprite2D
+	if spr == null:
+		return
+	if not piece.has_meta("normal_tex"):
+		piece.set_meta("normal_tex", spr.texture)
+	var path := "res://CORE/Assets/Art/Game/Select/%s.svg" % _select_name(str(piece.get("color")))
+	if ResourceLoader.exists(path):
+		spr.texture = load(path)
+
+func _restore_normal_look(piece: Node) -> void:
+	var spr := piece.get_node_or_null("Sprite2D") as Sprite2D
+	if spr and piece.has_meta("normal_tex"):
+		spr.texture = piece.get_meta("normal_tex")
 
 # =========================================================
 # 3) Match detection
@@ -722,7 +766,14 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 			settings.play_destroy()    # V/O: suono del match
 		else:
 			settings.play_explosion()  # bomba / mode_b
-		settings.vibrate(60)
+		if val == 3:
+			settings.vibrate(500)      # BOMBA: vibrazione fortissima
+		elif is_beam:
+			# V/O: due vibrazioni di intensità crescente, un po' più lunghe
+			settings.vibrate(130)
+			get_tree().create_timer(0.16).timeout.connect(func() -> void: settings.vibrate(260))
+		else:
+			settings.vibrate(60)
 	return cleared
 
 # Animazione BEAM dei cubi speciali: verticale per V (colonna), ruotata 90° per O (riga).
@@ -745,22 +796,35 @@ func _get_special_beam_frames(color: String) -> SpriteFrames:
 		_special_beam_frames[color] = sf
 	return _special_beam_frames[color]
 
+# Maschera che clippa i beam DENTRO l'area della griglia (l'effetto non esce fuori).
+func _ensure_beam_clip() -> void:
+	if _beam_clip != null and is_instance_valid(_beam_clip):
+		return
+	_beam_clip = Control.new()
+	_beam_clip.clip_contents = true
+	_beam_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_beam_clip.z_index = 150   # sopra i cubi, sotto le combo (numero z=200)
+	_beam_clip.position = Vector2(x_start - offset * 0.5, y_start - offset * (float(height) - 0.5))
+	_beam_clip.size = Vector2(offset * float(width), offset * float(height))
+	add_child(_beam_clip)
+
 func _spawn_special_beam(center: Vector2i, horizontal: bool, color: String = "red") -> void:
 	var frames := _get_special_beam_frames(color)
 	if frames == null or frames.get_frame_count("b") == 0:
 		return
+	_ensure_beam_clip()
 	var asp := AnimatedSprite2D.new()
 	asp.sprite_frames = frames
 	asp.animation = "b"
 	asp.centered = true
-	asp.position = grid_to_pixel(center.x, center.y)   # centrato sul cubo speciale
+	# posizione RELATIVA alla maschera (il beam viene clippato all'area griglia)
+	asp.position = grid_to_pixel(center.x, center.y) - _beam_clip.position
 	var tex0 := frames.get_frame_texture("b", 0)
 	asp.scale = Vector2.ONE * (offset / float(tex0.get_width()))   # larghezza beam = una cella
 	if horizontal:
 		asp.rotation = PI / 2.0   # O: beam orizzontale (ruotato di 90°)
 	asp.speed_scale = 1.5
-	asp.z_index = 150   # sopra i cubi ma SOTTO le animazioni combo (numero z=200, effetto su CanvasLayer)
-	add_child(asp)
+	_beam_clip.add_child(asp)
 	asp.animation_finished.connect(asp.queue_free)
 	asp.play("b")
 
@@ -989,6 +1053,7 @@ func _cancel_drag() -> void:
 		if dragging_from_slot >= 0:
 			dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
 			_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
+			_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
 		if dragging_piece is CanvasItem:
 			dragging_piece.z_index = 0
 		dragging_piece = null
@@ -1081,6 +1146,7 @@ func _input(event: InputEvent) -> void:
 			var clicked := _get_bottom_piece_under_mouse()
 			if clicked != null:
 				dragging_piece = clicked
+				_restore_normal_look(clicked)   # preso col dito: grafica cubo normale
 				dragging_from_slot = int(clicked.get_meta("slot_idx"))
 				drag_start_pos = clicked.global_position
 				# porta sopra gli altri mentre trascini
@@ -1092,18 +1158,19 @@ func _input(event: InputEvent) -> void:
 		
 		# Durante drag
 		if dragging_piece != null and event is InputEventMouseMotion:
-			dragging_piece.global_position = get_global_mouse_position()
+			dragging_piece.global_position = get_global_mouse_position() + Vector2(0, -DRAG_LIFT)
 			_update_placement_preview()
 
 		# Fine drag
 		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and dragging_piece != null:
-			var target_grid := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+			var target_grid := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y - DRAG_LIFT)
 
 			if is_in_grid(target_grid) \
 			and all_pieces[target_grid.x][target_grid.y] == null \
 			and (not _moves_enabled or current_moves > 0):
 				# Inserimento dalla BottomGrid: se spot vuoto, rimane anche senza match
 				dragging_piece.set_meta("origin", "grid")
+				_restore_normal_look(dragging_piece)   # sulla griglia: grafica cubo normale
 				# ferma il tween di scala del drag: altrimenti combatte con il pop di dim()
 				if _drag_scale_tween != null and _drag_scale_tween.is_valid():
 					_drag_scale_tween.kill()
@@ -1153,6 +1220,7 @@ func _input(event: InputEvent) -> void:
 				# Ritorna allo slot originale se non valido
 				dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
 				_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
+				_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
 				# posto valido ma niente mosse -> scuoti "MOOVES" per farlo capire
 				if current_moves <= 0 and is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null:
 					_shake_moves_label()
@@ -1218,6 +1286,7 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 	var target_grid := pixel_to_grid(world_pos.x, world_pos.y)
 	if is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null and (not _moves_enabled or current_moves > 0):
 		piece.set_meta("origin", "grid")
+		_restore_normal_look(piece)   # sulla griglia: grafica cubo normale
 		piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 		piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 		all_pieces[target_grid.x][target_grid.y] = piece
@@ -1252,6 +1321,7 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 	else:
 		piece.global_position = _bottom_slot_pixel(slot)
 		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		_apply_select_look(piece)   # tornato nel tray: grafica SELECT
 	if piece is CanvasItem:
 		piece.z_index = 0
 
@@ -1266,6 +1336,7 @@ func _handle_multitouch(event: InputEvent) -> void:
 			var clicked := _bottom_piece_at(wp)
 			if clicked != null and not _multi_drags.values().has(clicked):
 				_multi_drags[event.index] = clicked
+				_restore_normal_look(clicked)   # preso col dito: grafica cubo normale
 				if clicked is CanvasItem:
 					clicked.z_index = 999
 				clicked.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
@@ -1273,10 +1344,10 @@ func _handle_multitouch(event: InputEvent) -> void:
 		elif _multi_drags.has(event.index):
 			var piece: Node = _multi_drags[event.index]
 			_multi_drags.erase(event.index)
-			_place_dragged_piece(piece, int(piece.get_meta("slot_idx")), wp)
+			_place_dragged_piece(piece, int(piece.get_meta("slot_idx")), wp - Vector2(0, DRAG_LIFT))
 	elif event is InputEventScreenDrag and _multi_drags.has(event.index):
 		var piece2: Node = _multi_drags[event.index]
-		piece2.global_position = get_global_transform_with_canvas().affine_inverse() * event.position
+		piece2.global_position = (get_global_transform_with_canvas().affine_inverse() * event.position) - Vector2(0, DRAG_LIFT)
 
 
 func update_moves_label() -> void:
@@ -1825,28 +1896,33 @@ func _show_points_gain_popup(amount: int) -> void:
 func _ensure_placement_preview() -> void:
 	if _placement_preview != null:
 		return
-	var half := 41.14   # metà della cella (= metà passo griglia)
-	var poly := Polygon2D.new()
-	poly.polygon = PackedVector2Array([
-		Vector2(-half, -half), Vector2(half, -half),
-		Vector2(half, half), Vector2(-half, half)])
-	poly.color = Color(0, 0, 0, 0.14)   # nero molto leggero
-	poly.z_index = 1                     # sopra la griglia, sotto il pezzo trascinato
-	poly.visible = false
-	add_child(poly)
-	_placement_preview = poly
+	var spr := Sprite2D.new()
+	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	spr.z_index = 1                     # sopra la griglia, sotto il pezzo trascinato
+	spr.visible = false
+	add_child(spr)
+	_placement_preview = spr
+
+const PREVIEW_ALPHA := 0.35   # opacità bassa del fantasma
 
 func _update_placement_preview() -> void:
 	if dragging_piece == null:
 		_hide_placement_preview()
 		return
-	var g := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+	var g := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y - DRAG_LIFT)
 	if is_in_grid(g) and all_pieces[g.x][g.y] == null and current_moves > 0:
 		_ensure_placement_preview()
 		if _preview_fade_tween != null and _preview_fade_tween.is_valid():
 			_preview_fade_tween.kill()
+		# fantasma del pezzo (texture NORMALE del cubo, non la grafica SELECT del tray)
+		var dspr := dragging_piece.get_node_or_null("Sprite2D") as Sprite2D
+		if dragging_piece.has_meta("normal_tex"):
+			_placement_preview.texture = dragging_piece.get_meta("normal_tex")
+		elif dspr:
+			_placement_preview.texture = dspr.texture
+		_placement_preview.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
 		_placement_preview.position = grid_to_pixel(g.x, g.y)
-		_placement_preview.modulate.a = 1.0
+		_placement_preview.modulate = Color(1, 1, 1, PREVIEW_ALPHA)
 		_placement_preview.visible = true
 	else:
 		_hide_placement_preview()

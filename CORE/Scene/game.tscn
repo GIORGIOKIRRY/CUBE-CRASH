@@ -2,11 +2,13 @@
 
 [ext_resource type="Script" uid="uid://buqel5irtexms" path="res://CORE/Script/game.gd" id="1_6amic"]
 [ext_resource type="Script" uid="uid://vj6y1mo74g4s" path="res://CORE/Script/grid.gd" id="1_qj7w4"]
-[ext_resource type="Texture2D" uid="uid://bg8yosx6ixwsg" path="res://CORE/Assets/Art/UI/Game/Board.svg" id="1_r4a0w"]
+[ext_resource type="Texture2D" path="res://CORE/Assets/Art/Game/griglia_new.svg" id="1_r4a0w"]
+[ext_resource type="Texture2D" path="res://CORE/Assets/Art/Game/sfondo_gameplay.svg" id="13_sfondo"]
 [ext_resource type="Texture2D" uid="uid://b1hlk0w6qoqe1" path="res://CORE/Assets/Art/UI/Game/Top_Board.svg" id="2_qj7w4"]
 [ext_resource type="Texture2D" uid="uid://dqoaydpga4kcb" path="res://CORE/Assets/Art/UI/Menu/Back.svg" id="4_bq6fg"]
 [ext_resource type="Script" uid="uid://bdgror8l8dhfu" path="res://CORE/Script/Game_ui.gd" id="4_mwq41"]
-[ext_resource type="Texture2D" uid="uid://ogbtgcl6552n" path="res://CORE/Assets/Art/UI/Menu/Settings.svg" id="5_pxjbb"]
+[ext_resource type="Texture2D" path="res://CORE/Assets/Art/UI/Menu/settings_new.png" id="5_pxjbb"]
+[ext_resource type="Texture2D" path="res://CORE/Assets/Art/UI/Game/exit_arrow.png" id="14_exit"]
 [ext_resource type="FontFile" uid="uid://gq80lnfikflh" path="res://CORE/Assets/Font/Jersey10-Regular.ttf" id="6_pxjbb"]
 [ext_resource type="PackedScene" uid="uid://bebf65fodfnno" path="res://CORE/Scene/settings_menu.tscn" id="9_kdr7y"]
 [ext_resource type="PackedScene" uid="uid://45sco3qeamed" path="res://CORE/Scene/game_over_screen.tscn" id="10_h8mkk"]
@@ -30,6 +32,15 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.08627451, 0.41568628, 0.59607846, 1)
 
+[node name="Sfondo" type="TextureRect" parent="."]
+offset_left = -20.0
+offset_top = -120.0
+offset_right = 596.0
+offset_bottom = 1144.0
+texture = ExtResource("13_sfondo")
+expand_mode = 1
+stretch_mode = 6
+
 [node name="grid" type="Node2D" parent="."]
 unique_name_in_owner = true
 script = ExtResource("1_qj7w4")
@@ -47,6 +58,7 @@ offset_bottom = 814.0
 texture = ExtResource("1_r4a0w")
 
 [node name="TopGrid" type="TextureRect" parent="grid/Grid"]
+visible = false
 layout_mode = 0
 offset_top = -56.0
 offset_right = 576.0
@@ -62,16 +74,22 @@ script = ExtResource("4_mwq41")
 [node name="BackButton" type="TextureButton" parent="UI"]
 layout_mode = 0
 offset_left = 36.0
-offset_right = 98.0
-offset_bottom = 62.0
-texture_normal = ExtResource("4_bq6fg")
+offset_right = 110.0
+offset_top = -6.0
+offset_bottom = 68.0
+texture_normal = ExtResource("14_exit")
+ignore_texture_size = true
+stretch_mode = 0
 
 [node name="SettingsButton" type="TextureButton" parent="UI"]
 layout_mode = 0
-offset_left = 478.0
-offset_right = 540.0
-offset_bottom = 62.0
+offset_left = 470.0
+offset_right = 544.0
+offset_top = -6.0
+offset_bottom = 68.0
 texture_normal = ExtResource("5_pxjbb")
+ignore_texture_size = true
+stretch_mode = 0
 
 [node name="PointLabel" type="Label" parent="UI"]
 layout_mode = 0

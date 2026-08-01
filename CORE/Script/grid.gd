@@ -1600,6 +1600,10 @@ func _trigger_game_over(reason := "no_space") -> void:
 	# Salva su disco
 	_save_scores()
 
+	# Classifica online: a fine partita i record sono definitivi
+	leaderboard.submit_best("classic", high_score)
+	leaderboard.submit_best("speedrun", _speedrun_best)
+
 	# Aggiorna UI
 	_update_point_label()
 	_update_high_score_labels_everywhere()

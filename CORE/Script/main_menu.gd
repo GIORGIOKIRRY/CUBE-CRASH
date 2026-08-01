@@ -862,11 +862,26 @@ func _current_profile_icon_path() -> String:
 	var i := clampi(_profile_icon_index, 0, PROFILE_ICONS.size() - 1)
 	return PROFILE_ICONS[i]
 
+# Nome di default "PLAYER"+cifre casuali, generato una volta e salvato:
+# evita che in classifica online ci siano tanti "PLAYER" identici.
+func _default_player_name() -> String:
+	var cfg := ConfigFile.new()
+	cfg.load(PROFILE_CFG)
+	var d := str(cfg.get_value("profile", "default_name", ""))
+	if d.is_empty():
+		randomize()
+		d = "PLAYER%04d" % randi_range(0, 9999)
+		cfg.set_value("profile", "default_name", d)
+		cfg.save(PROFILE_CFG)
+	return d
+
 func _load_player_name() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(PROFILE_CFG) == OK:
-		_player_name = str(cfg.get_value("profile", "name", "PLAYER"))
+		_player_name = str(cfg.get_value("profile", "name", ""))
 		_profile_icon_index = int(cfg.get_value("profile", "icon", 0))
+	if _player_name.strip_edges().is_empty() or _player_name == "PLAYER":
+		_player_name = _default_player_name()
 	_profile_icon_index = clampi(_profile_icon_index, 0, PROFILE_ICONS.size() - 1)
 	_profile_sel_index = _profile_icon_index
 
@@ -874,16 +889,21 @@ func _save_player_name() -> void:
 	if _name_edit:
 		var n := _name_edit.text.strip_edges()
 		if n == "":
-			n = "PLAYER"
+			n = _default_player_name()
 			_name_edit.text = n
 		_player_name = n
 	_write_profile_cfg()
 
 func _write_profile_cfg() -> void:
 	var cfg := ConfigFile.new()
+	# non sovrascrivere le altre chiavi (es. lb_id della classifica online)
+	cfg.load(PROFILE_CFG)
 	cfg.set_value("profile", "name", _player_name)
 	cfg.set_value("profile", "icon", _profile_icon_index)
 	cfg.save(PROFILE_CFG)
+	# aggiorna nome/icona anche sulla classifica online
+	leaderboard.submit_best("classic", _player_score("classic"))
+	leaderboard.submit_best("speedrun", _player_score("speedrun"))
 
 
 # ======================= SCHERMATA EDIT PROFILE ================================
@@ -1119,7 +1139,7 @@ func _confirm_profile() -> void:
 	# nome
 	var n := _profile_name_edit.text.strip_edges()
 	if n == "":
-		n = "PLAYER"
+		n = _default_player_name()
 	_player_name = n
 	if _name_edit:
 		_name_edit.text = _player_name   # aggiorna la home
@@ -1287,25 +1307,53 @@ func _layout_leader() -> void:
 	_leader_scroll.position = Vector2(32.0, scroll_top)
 	_leader_scroll.size = Vector2(view.x - 64.0, maxf(120.0, view.y - scroll_top))
 
+var _leader_req := 0   # scarta le risposte in ritardo (cambio tab durante il fetch)
+
 func _populate_leader() -> void:
 	if not _leader_list:
 		return
-	for c in _leader_list.get_children():
-		c.queue_free()
 	if _leader_tabs:
 		_leader_tabs.texture = load(LB_DIR + ("tabs_classic.png" if _leader_tab == "classic" else "tabs_speedrun.png"))
 	_leader_timer.text = _leader_refresh_text()
+	_leader_req += 1
+	var req := _leader_req
+	var mode := _leader_tab
+	# Classifica reale da Firebase (solo giocatori veri, niente bot).
+	var entries: Array = await leaderboard.fetch_top(mode)
+	if req != _leader_req or not is_instance_valid(_leader_list):
+		return   # nel frattempo l'utente ha cambiato tab / riaperto
+	if entries.is_empty():
+		# offline o settimana appena iniziata: almeno la propria riga
+		var pscore := _player_score(mode)
+		if pscore > 0:
+			entries = [{"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true, "rank": 1}]
+	else:
+		entries = _rank_real_entries(entries, mode)
+	for c in _leader_list.get_children():
+		c.queue_free()
 	# padding in alto
 	var head := Control.new()
 	head.custom_minimum_size = Vector2(0, 20)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_leader_list.add_child(head)
-	for e in _gen_leaderboard(_leader_tab):
+	for e in entries:
 		_leader_list.add_child(_make_leader_row(e))
 	var tail := Control.new()
 	tail.custom_minimum_size = Vector2(0, 180)
 	tail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_leader_list.add_child(tail)
+
+# Rank alle voci reali + riga "100+" se il giocatore è fuori dalla top 100
+func _rank_real_entries(entries: Array, mode: String) -> Array:
+	var has_player := false
+	for i in entries.size():
+		entries[i]["rank"] = i + 1
+		if entries[i].get("is_player", false):
+			has_player = true
+	var pscore := _player_score(mode)
+	if not has_player and pscore > 0:
+		entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true, "rank": 0, "rank_text": "100+"})
+	return entries
 
 func _player_score(mode: String) -> int:
 	var cfg := ConfigFile.new()
@@ -1325,39 +1373,6 @@ func _fmt_score(n: int) -> String:
 		if cnt % 3 == 0 and i > 0:
 			out = "." + out
 	return out
-
-func _gen_leaderboard(mode: String) -> Array:
-	var week := int(Time.get_unix_time_from_system()) / 604800
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(hash(mode)) + week * 7919
-	var names := ["Kirry", "Marco", "Luna", "Rex", "Nova", "Zed", "Milo", "Ivy", "Ace", "Kai",
-		"Bree", "Neo", "Skye", "Jax", "Vera", "Oro", "Pip", "Rux", "Tila", "Enzo",
-		"Gwen", "Dax", "Remy", "Suki", "Bolt", "Coco", "Fenn", "Lux", "Mira", "Nix"]
-	var top_score: int = 6000000 if mode == "classic" else 45000
-	var entries: Array = []
-	var s := top_score
-	for i in range(120):
-		var nm: String = names[rng.randi() % names.size()] + str(rng.randi_range(1, 999))
-		entries.append({"name": nm, "score": s, "icon": 0, "is_player": false})
-		s = int(float(s) * rng.randf_range(0.90, 0.985)) - rng.randi_range(50, 500)
-		if s < 100:
-			s = 100
-	var pscore := _player_score(mode)
-	if pscore > 0:
-		entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true})
-	entries.sort_custom(func(a, b): return a["score"] > b["score"])
-	# rank reale del giocatore (anche oltre la top 100)
-	var player_rank := -1
-	for i in entries.size():
-		if entries[i].get("is_player", false):
-			player_rank = i + 1
-	var top: Array = entries.slice(0, 100)
-	for i in top.size():
-		top[i]["rank"] = i + 1
-	# se sei fuori dalla top 100, aggiungi la tua riga in fondo con "100+"
-	if pscore > 0 and player_rank > 100:
-		top.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true, "rank": 0, "rank_text": "100+"})
-	return top
 
 func _make_leader_row(e: Dictionary) -> Control:
 	var rank: int = int(e.get("rank", 0))

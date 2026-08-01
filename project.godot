@@ -36,6 +36,7 @@ settings="*res://settings.gd"
 transition="*res://transition.gd"
 missions="*res://missions.gd"
 ads="*res://ads.gd"
+leaderboard="*res://leaderboard.gd"
 
 [display]
 

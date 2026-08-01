@@ -64,6 +64,8 @@ var _deck_world_size := Vector2.ZERO
 var _deck_pressing := false
 var _deck_menu: Control
 var _play_base_pos := Vector2.ZERO           # posizione base (non premuta) per il sink idempotente
+var _play_base_scale := Vector2.ONE          # scala base del tasto play (per il rimbalzo)
+var _play_bounce_tween: Tween                 # rimbalzo periodico "invito a giocare"
 var _deck_base_pos := Vector2.ZERO
 
 # Barra in alto a destra: coin count + classifica + impostazioni
@@ -83,6 +85,7 @@ const PROFILE_CFG := "user://profile.cfg"
 const PROFILE_DIR := "res://CORE/Assets/Art/Home/Profile/"
 const PROFILE_ICONS := [   # icone profilo selezionabili (se ne aggiungeranno altre)
 	"res://CORE/Assets/Art/Home/Profile/icon_king_cube.png",
+	"res://CORE/Assets/Art/Home/Profile/icon_trophy.png",
 ]
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
@@ -168,6 +171,7 @@ var _nav_btns: Array = []
 var _nav_textures := {}
 var _tab := "home"
 var _shop_menu: Control
+var _shop_coins_label: Label
 
 var _art_pos := CAMERA_CENTER
 
@@ -187,6 +191,7 @@ func _ready() -> void:
 	_build_top_right()
 	_build_profile_menu()
 	_build_nav_bar()
+	_apply_press_fx_all(self)    # affondamento + vibrazione su tutti i tasti restanti
 	_layout()
 	get_viewport().size_changed.connect(_layout)
 	_select_tab("home", false)
@@ -223,6 +228,14 @@ func _layout() -> void:
 			_nav_badge_raise = nav_h * 0.14
 			_nav_badge_base = Vector2(bar_left + bar_w / 3.0 - bs * 0.35, nav_top - bs * 0.05)
 			_apply_nav_badge_pos()
+	# coin bar missioni (su CanvasLayer = schermo puro): allineala alla coin bar della home,
+	# che sta sul canvas della Camera2D e si sposta di cam_shift su schermi alti.
+	var cam_shift := view_size.y * 0.5 - CAMERA_CENTER.y
+	if _missions_coin_bar:
+		_missions_coin_bar.position = Vector2(360.0, 4.0 + cam_shift)
+	if _missions_coins_label:
+		_missions_coins_label.position = Vector2(406.0, 4.0 + cam_shift)
+
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
 		var tabs_y := 200.0
@@ -257,14 +270,6 @@ func _layout() -> void:
 			s.position = _art_pos
 			s.scale = Vector2(ART_SCALE, ART_SCALE)
 
-	# ombra: larga quanto lo schermo, bordo inferiore allineato al fondo schermo
-	if _home_shadow and _home_shadow.texture:
-		var stex := _home_shadow.texture.get_size()
-		var ssc := view_size.x / stex.x
-		_home_shadow.scale = Vector2(ssc, ssc)
-		var screen_bottom := CAMERA_CENTER.y + view_size.y * 0.5
-		_home_shadow.position = Vector2(CAMERA_CENTER.x, screen_bottom - stex.y * ssc * 0.5)
-
 	_position_play_button()
 	_position_arrows()
 	if _mode_screen:
@@ -281,14 +286,32 @@ func _layout() -> void:
 
 # --- Sfondo + cabinato animato -------------------------------------------------
 func _build_scene() -> void:
-	# (lo sfondo di riempimento è già in scena: SkyBG z=-6 + FloorBG z=-5)
+	# nuovo sfondo home a schermo pieno: nascondi i riempimenti blu della scena
+	var sky := get_node_or_null("SkyBG")
+	if sky:
+		sky.visible = false
+	var floor_bg := get_node_or_null("FloorBG")
+	if floor_bg:
+		floor_bg.visible = false
+
+	# Sfondo home (vignetta) su CanvasLayer DIETRO al contenuto (layer -2 < 0), riempie lo schermo
+	var bg_layer := CanvasLayer.new()
+	bg_layer.layer = -2
+	add_child(bg_layer)
+	var bg_rect := TextureRect.new()
+	bg_rect.texture = load("res://CORE/Assets/Art/Home/home_bg.png")
+	bg_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg_layer.add_child(bg_rect)
+
 	_background = Sprite2D.new()
 	_background.texture = load("res://CORE/Assets/Art/Home/background.png")
 	_background.z_index = -4
-	_background.visible = false   # sfondo home = blu pieno (SkyBG); backdrop nascosto
+	_background.visible = false   # backdrop art nascosto (usiamo lo sfondo su CanvasLayer)
 	add_child(_background)
-
-	# (ombra home rimossa)
 
 	# Cabinato STATICO (immagine unica, niente animazione)
 	_cabinet = Sprite2D.new()
@@ -296,6 +319,16 @@ func _build_scene() -> void:
 	_cabinet.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_cabinet.z_index = -2
 	add_child(_cabinet)
+
+	# Ombra AGGANCIATA al cabinato: figlia del cabinato, DIETRO di esso (show_behind_parent),
+	# centrata e in scala col canvas art (stessa cornice, texture a risoluzione maggiore).
+	_home_shadow = Sprite2D.new()
+	_home_shadow.texture = load("res://CORE/Assets/Art/Home/cabinet_shadow.png")
+	_home_shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_home_shadow.show_behind_parent = true
+	var shsc := ART_SIZE.x / _home_shadow.texture.get_size().x   # texture -> canvas art (locale al cabinato)
+	_home_shadow.scale = Vector2(shsc, shsc)
+	_cabinet.add_child(_home_shadow)
 
 
 # --- Tasto PLAY + scintille ----------------------------------------------------
@@ -305,11 +338,34 @@ func _build_play_button() -> void:
 
 	# Tasto PLAY (nuova grafica), centrato. Input a mano in _input().
 	_play_base = Sprite2D.new()
-	_play_base.texture = load("res://CORE/Assets/Art/Home/play_button_new.png")
+	_play_base.texture = load("res://CORE/Assets/Art/Home/tasto_play_r.png")
 	_play_base.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_play_base.z_index = 0
 	add_child(_play_base)
 	# (Cube Deck rimosso)
+
+	# rimbalzo periodico del tasto PLAY per invitare a giocare
+	var bt := Timer.new()
+	bt.wait_time = 5.0
+	bt.one_shot = false
+	bt.autostart = true
+	add_child(bt)
+	bt.timeout.connect(_play_bounce)
+
+
+# Fa "rimbalzare" il tasto PLAY (solo in home, quando non è premuto): piccolo hop + atterraggio molleggiato.
+func _play_bounce() -> void:
+	if _play_base == null or not _play_base.visible or _play_pressing:
+		return
+	if _play_bounce_tween != null and _play_bounce_tween.is_valid():
+		return
+	var bp := _play_base_pos
+	var bs := _play_base_scale
+	_play_bounce_tween = create_tween()
+	_play_bounce_tween.tween_property(_play_base, "position:y", bp.y - 22.0, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_play_bounce_tween.parallel().tween_property(_play_base, "scale", bs * 1.06, 0.16)
+	_play_bounce_tween.tween_property(_play_base, "position:y", bp.y, 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	_play_bounce_tween.parallel().tween_property(_play_base, "scale", bs, 0.30)
 
 
 func _make_pixel_texture() -> ImageTexture:
@@ -357,6 +413,7 @@ func _position_play_button() -> void:
 	_play_base.position = _art_to_world(Vector2(DECK_ROW_CENTER_ART.x, y))
 	_play_base.scale = Vector2(s, s)
 	_play_base_pos = _play_base.position
+	_play_base_scale = Vector2(s, s)
 	_play_world_center = _play_base.position
 	_play_world_size = PLAY_NEW_TEX * s
 
@@ -580,6 +637,10 @@ func _input(event: InputEvent) -> void:
 
 func _on_play_down() -> void:
 	settings.button_feedback()
+	# ferma un eventuale rimbalzo in corso e ripristina la scala base
+	if _play_bounce_tween != null and _play_bounce_tween.is_valid():
+		_play_bounce_tween.kill()
+	_play_base.scale = _play_base_scale
 	_play_base.modulate = Color(0.85, 0.85, 0.85)
 	_play_base.position = _play_base_pos + Vector2(0, PRESS_SINK)   # affonda un filo
 	_sparkles.emitting = false
@@ -712,11 +773,13 @@ func _build_top_right() -> void:
 	pbtn.add_theme_stylebox_override("pressed", pe)
 	pbtn.add_theme_stylebox_override("focus", pe)
 	pbtn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pbtn.set_meta("pfx", true)
 	pbtn.pressed.connect(_open_profile)
 	_profile_pic_base = _profile_pic.position
 	pbtn.button_down.connect(func() -> void:
 		_profile_pic.position = _profile_pic_base + Vector2(0, PRESS_SINK)
 		_profile_pic.modulate = Color(0.85, 0.85, 0.85)
+		settings.vibrate(15)
 		if _name_frame:
 			_name_frame.position = _name_frame_base + Vector2(0, PRESS_SINK)
 		if _name_edit:
@@ -743,6 +806,36 @@ func _build_top_right() -> void:
 	_name_frame.size = Vector2(nf_w, nf_h)
 	_name_frame_base = _name_frame.position
 	add_child(_name_frame)
+
+	# anche il FRAME NOME apre il profilo (stesso affondamento di pic+frame).
+	# Bottone-overlay figlio diretto del menu, sopra frame e nome (z_index alto), così
+	# riceve sempre il tocco (il frame ha mouse_filter IGNORE).
+	var nbtn := Button.new()
+	nbtn.focus_mode = Control.FOCUS_NONE
+	var nbe := StyleBoxEmpty.new()
+	nbtn.add_theme_stylebox_override("normal", nbe)
+	nbtn.add_theme_stylebox_override("hover", nbe)
+	nbtn.add_theme_stylebox_override("pressed", nbe)
+	nbtn.add_theme_stylebox_override("focus", nbe)
+	nbtn.position = _name_frame.position
+	nbtn.size = _name_frame.size
+	nbtn.z_index = 5
+	nbtn.set_meta("pfx", true)
+	nbtn.pressed.connect(_open_profile)
+	nbtn.button_down.connect(func() -> void:
+		_profile_pic.position = _profile_pic_base + Vector2(0, PRESS_SINK)
+		_profile_pic.modulate = Color(0.85, 0.85, 0.85)
+		settings.vibrate(15)
+		_name_frame.position = _name_frame_base + Vector2(0, PRESS_SINK)
+		if _name_edit:
+			_name_edit.position = _name_edit_base + Vector2(0, PRESS_SINK))
+	nbtn.button_up.connect(func() -> void:
+		_profile_pic.position = _profile_pic_base
+		_profile_pic.modulate = Color(1, 1, 1)
+		_name_frame.position = _name_frame_base
+		if _name_edit:
+			_name_edit.position = _name_edit_base)
+	add_child(nbtn)
 
 	# nome in SOLA LETTURA (si modifica solo in EDIT PROFILE), allineato a sinistra, più grande
 	_name_edit = LineEdit.new()
@@ -816,12 +909,29 @@ func _ptbtn(path: String, cb: Callable) -> TextureButton:
 
 # animazione pressione riutilizzabile: il tasto si abbassa e scurisce mentre è premuto
 func _add_press_sink(b: BaseButton) -> void:
+	b.set_meta("pfx", true)
 	b.button_down.connect(func() -> void:
 		b.position.y += PRESS_SINK
-		b.modulate = Color(0.85, 0.85, 0.85))
+		b.modulate = Color(0.85, 0.85, 0.85)
+		settings.vibrate(15))
 	b.button_up.connect(func() -> void:
 		b.position.y -= PRESS_SINK
 		b.modulate = Color(1, 1, 1))
+
+
+# Applica affondamento + vibrazione a TUTTI i BaseButton discendenti che non hanno già
+# un feedback dedicato (meta "pfx"). Usato per coprire nav bar, menu modi, shop, ecc.
+func _apply_press_fx_all(node: Node) -> void:
+	for c in node.get_children():
+		if c is BaseButton and not c.has_meta("pfx"):
+			var b := c as BaseButton
+			b.set_meta("pfx", true)
+			b.button_down.connect(func() -> void:
+				b.position.y += PRESS_SINK
+				settings.vibrate(15))
+			b.button_up.connect(func() -> void:
+				b.position.y -= PRESS_SINK)
+		_apply_press_fx_all(c)
 
 func _build_profile_menu() -> void:
 	var layer := CanvasLayer.new()
@@ -835,11 +945,16 @@ func _build_profile_menu() -> void:
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	# tap nella zona nera attorno al frame -> esci dall'edit profile (come CANCELLA)
+	dim.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and e.pressed:
+			_close_profile())
 	_profile_menu.add_child(dim)
 	_profile_frame = Control.new()
 	_profile_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_profile_menu.add_child(_profile_frame)
 	_profile_bg = _ptex(PROFILE_DIR + "frame_bg.png")
+	_profile_bg.mouse_filter = Control.MOUSE_FILTER_STOP   # i tap sul frame NON chiudono
 	_profile_frame.add_child(_profile_bg)
 	# header
 	_profile_title = Label.new()
@@ -960,8 +1075,8 @@ func _layout_profile() -> void:
 	for b in _profile_icon_btns:
 		b.custom_minimum_size = Vector2(cell, cell)
 	# cancel / confirm
-	var bw := fw * 0.38
-	var bh := bw * 320.0 / 896.0
+	var bw := fw * 0.42
+	var bh := bw * 576.0 / 1472.0   # aspect nuovi tasti (1472x576)
 	var by := fh * 0.895 - bh * 0.5
 	_profile_cancel.position = Vector2(fw * 0.265 - bw * 0.5, by)
 	_profile_cancel.size = Vector2(bw, bh)
@@ -1025,11 +1140,13 @@ func _make_icon_button(path: String, pos: Vector2, sz: float) -> TextureButton:
 	b.position = pos
 	b.size = Vector2(sz, sz)
 	add_child(b)
-	# animazione pressione: si abbassa leggermente + scurisce
+	# animazione pressione: si abbassa leggermente + scurisce + vibra
+	b.set_meta("pfx", true)
 	var base := pos
 	b.button_down.connect(func() -> void:
 		b.position = base + Vector2(0, PRESS_SINK)
-		b.modulate = Color(0.85, 0.85, 0.85))
+		b.modulate = Color(0.85, 0.85, 0.85)
+		settings.vibrate(15))
 	b.button_up.connect(func() -> void:
 		b.position = base
 		b.modulate = Color(1, 1, 1))
@@ -1037,8 +1154,13 @@ func _make_icon_button(path: String, pos: Vector2, sz: float) -> TextureButton:
 
 
 func _update_coin_count() -> void:
+	var c := str(missions.coins)
 	if _coin_count_label:
-		_coin_count_label.text = str(missions.coins)
+		_coin_count_label.text = c
+	if _missions_coins_label:
+		_missions_coins_label.text = c
+	if _shop_coins_label:
+		_shop_coins_label.text = c
 
 
 func _on_leaderboard_pressed() -> void:
@@ -1476,8 +1598,8 @@ func _build_missions_menu() -> void:
 	coinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	coinbar.stretch_mode = TextureRect.STRETCH_SCALE
 	coinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	coinbar.position = Vector2(356, 132)
-	coinbar.size = Vector2(196, 196.0 * 176.0 / 792.0)
+	coinbar.position = Vector2(360.0, 4.0)
+	coinbar.size = Vector2(192.0, 192.0 * 176.0 / 792.0)
 	coinbar.pivot_offset = coinbar.size * 0.5
 	_missions_menu.add_child(coinbar)
 	_missions_coin_bar = coinbar
@@ -1487,8 +1609,8 @@ func _build_missions_menu() -> void:
 	_missions_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
 	_missions_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_missions_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_missions_coins_label.position = Vector2(406, 132)
-	_missions_coins_label.size = Vector2(140, 44)
+	_missions_coins_label.position = Vector2(406.0, 4.0)
+	_missions_coins_label.size = Vector2(140.0, 43.0)
 	_missions_menu.add_child(_missions_coins_label)
 
 	# striscia TAB (weekly / daily): texture full-width, posizionata in _layout
@@ -1737,20 +1859,64 @@ func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Co
 	btn.button_down.connect(func() -> void: content.position = Vector2(0, MISS_SINK))
 	btn.button_up.connect(func() -> void: content.position = Vector2.ZERO)
 	if done:
-		btn.pressed.connect(_claim_mission.bind(index, is_weekly))
+		btn.pressed.connect(_claim_mission.bind(index, is_weekly, row))
 	row.add_child(btn)
 	return row
 
 
-func _claim_mission(index: int, is_weekly: bool = false) -> void:
+func _claim_mission(index: int, is_weekly: bool = false, src: Control = null) -> void:
 	var before := missions.coins
+	# posizione di partenza delle monete (riga riscattata), prima che _populate_missions la rimuova
+	var src_pos := Vector2(288.0, 520.0)
+	if is_instance_valid(src):
+		src_pos = src.global_position + Vector2(src.size.x * 0.82, src.size.y * 0.5)  # zona ricompensa (destra)
 	var got := missions.claim_weekly(index) if is_weekly else missions.claim(index)
 	if got > 0:
 		settings.button_feedback()
 		_update_coin_label()
 		_update_coin_count()
 		_populate_missions()
-		_animate_coin_gain(before, missions.coins)
+		_fly_coins_to_counter(src_pos, before, missions.coins)
+
+
+# Monete che volano dalla riga riscattata dentro il contatore in alto a destra.
+func _fly_coins_to_counter(src_pos: Vector2, from_v: int, to_v: int) -> void:
+	if _missions_coin_bar == null:
+		_animate_coin_gain(from_v, to_v)
+		return
+	var target := _missions_coin_bar.global_position + Vector2(_missions_coin_bar.size.x * 0.13, _missions_coin_bar.size.y * 0.5)
+	var layer := CanvasLayer.new()
+	layer.layer = 30   # sopra il menu missioni (5) e la nav bar (10)
+	add_child(layer)
+	var tex: Texture2D = load(MISS + "coin_icon.png")
+	var n := 12
+	var cs := Vector2(36.0, 36.0)
+	for i in n:
+		var c := TextureRect.new()
+		c.texture = tex
+		c.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		c.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		c.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		c.size = cs
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var jitter := Vector2(randf_range(-34.0, 34.0), randf_range(-26.0, 26.0))
+		c.position = src_pos + jitter - cs * 0.5
+		layer.add_child(c)
+		var delay := float(i) * 0.045
+		var tw := create_tween()
+		tw.tween_interval(delay)
+		# piccola "presa d'aria" prima di partire
+		tw.tween_property(c, "position", c.position - Vector2(0, 18.0), 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(c, "position", target - cs * 0.5, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(c, "scale", Vector2(0.6, 0.6), 0.42)
+		tw.tween_callback(c.queue_free)
+	# conteggio + rimbalzo quando le monete iniziano ad arrivare
+	var t := create_tween()
+	t.tween_interval(float(n) * 0.045 + 0.35)
+	t.tween_callback(func() -> void: _animate_coin_gain(from_v, to_v))
+	var cl := create_tween()
+	cl.tween_interval(float(n) * 0.045 + 1.0)
+	cl.tween_callback(layer.queue_free)
 
 
 # Monete che salgono (conteggio) + rimbalzo quando si riscatta una missione.
@@ -1901,6 +2067,25 @@ func _build_shop_menu() -> void:
 	bg.offset_right = 1400.0
 	bg.offset_bottom = 2000.0
 	_shop_menu.add_child(bg)
+	# coin counter in alto a destra, STESSA posizione di home e missioni
+	var scoinbar := TextureRect.new()
+	scoinbar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
+	scoinbar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	scoinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	scoinbar.stretch_mode = TextureRect.STRETCH_SCALE
+	scoinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scoinbar.position = Vector2(360.0, 4.0)
+	scoinbar.size = Vector2(192.0, 192.0 * 176.0 / 792.0)
+	_shop_menu.add_child(scoinbar)
+	_shop_coins_label = Label.new()
+	_shop_coins_label.add_theme_font_override("font", MODE_FONT)
+	_shop_coins_label.add_theme_font_size_override("font_size", 30)
+	_shop_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_shop_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shop_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_shop_coins_label.position = Vector2(406.0, 4.0)
+	_shop_coins_label.size = Vector2(140.0, 43.0)
+	_shop_menu.add_child(_shop_coins_label)
 	var t := Label.new()
 	t.text = "SHOP"
 	t.add_theme_font_override("font", MODE_FONT)

@@ -47,10 +47,10 @@ texture_normal = ExtResource("3_wkf3q")
 
 [node name="CloseButton" type="TextureButton" parent="Items"]
 layout_mode = 0
-offset_left = 210.0
-offset_top = -492.0
-offset_right = 272.0
-offset_bottom = -430.0
+offset_left = 204.0
+offset_top = -498.0
+offset_right = 278.0
+offset_bottom = -424.0
 texture_normal = ExtResource("4_jd77q")
 
 [node name="L_GameOver" type="Label" parent="Items"]

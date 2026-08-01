@@ -130,7 +130,10 @@ theme_override_font_sizes/font_size = 26
 text = "HighScore: 0"
 horizontal_alignment = 2
 
-[node name="SettingsMenu" parent="." instance=ExtResource("9_kdr7y")]
+[node name="SettingsLayer" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="SettingsMenu" parent="SettingsLayer" instance=ExtResource("9_kdr7y")]
 unique_name_in_owner = true
 visible = false
 z_index = 1000
@@ -152,5 +155,5 @@ stream = ExtResource("11_qcf4v")
 [connection signal="MenuOpen" from="UI" to="grid" method="_on_ui_menu_open"]
 [connection signal="pressed" from="UI/BackButton" to="UI" method="_on_back_button_pressed"]
 [connection signal="pressed" from="UI/SettingsButton" to="UI" method="_on_settings_button_pressed"]
-[connection signal="MenuClosed" from="SettingsMenu" to="grid" method="_on_settings_menu_menu_closed"]
+[connection signal="MenuClosed" from="SettingsLayer/SettingsMenu" to="grid" method="_on_settings_menu_menu_closed"]
 [connection signal="timeout" from="DestroyTimer" to="grid" method="_on_destroy_timer_timeout"]

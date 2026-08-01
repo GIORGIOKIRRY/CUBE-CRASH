@@ -47,6 +47,19 @@ func _ready() -> void:
 	_update_all_buttons()
 	_build_more_page()
 	_build_subpages()
+	_apply_press_fx_all(self)   # affondamento + vibrazione su tutti i tasti
+
+func _apply_press_fx_all(node: Node) -> void:
+	for c in node.get_children():
+		if c is BaseButton and not c.has_meta("pfx"):
+			var b := c as BaseButton
+			b.set_meta("pfx", true)
+			b.button_down.connect(func() -> void:
+				b.position.y += 5.0
+				settings.vibrate(15))
+			b.button_up.connect(func() -> void:
+				b.position.y -= 5.0)
+		_apply_press_fx_all(c)
 
 # ==========================
 # Pulsanti audio/vibrazione

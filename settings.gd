@@ -27,7 +27,7 @@ const APPSTORE_URL := "https://apps.apple.com/app/cubecrash"
 var _music_players: Array[AudioStreamPlayer] = []
 var _active_music: int = 0
 var _current_stream: AudioStream = null
-const MUSIC_FADE := 0.8
+const MUSIC_FADE := 1.2
 const MUSIC_VOL_DB := 0.0
 const SILENCE_DB := -60.0
 
@@ -137,6 +137,12 @@ func _fade_out_stop(player: AudioStreamPlayer, dur: float) -> void:
 	var tw := create_tween()
 	tw.tween_property(player, "volume_db", SILENCE_DB, dur)
 	tw.tween_callback(player.stop)
+
+# Spegne con dissolvenza la musica corrente (es. quando la gestisce direttamente una scena).
+func fade_out_music() -> void:
+	_current_stream = null
+	for p in _music_players:
+		_fade_out_stop(p, MUSIC_FADE)
 
 # ============================================================
 # SFX (play once, no overlap)

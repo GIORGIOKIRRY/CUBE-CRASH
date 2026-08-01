@@ -88,6 +88,10 @@ var _timer_label: Label = null
 var _speedrun_best: int = 0                   # record dedicato alla modalità speedrun
 var _prev_speedrun_best: int = 0             # record speedrun PRIMA di questa partita
 var _speedrun_started: bool = false          # il timer parte solo dopo il countdown 3-2-1-GO
+# musica speedrun caricata in modo ASINCRONO (mai bloccante): il path è solo una stringa,
+# nessuna dipendenza pesante su grid.gd -> non appesantisce il caricamento della scena.
+const SR_MUSIC_PATH := "res://CORE/Assets/Music&Sound/speedrun.mp3"
+var _sr_music_pending: bool = false
 const MODE_C_COLOR_ORDER := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
 const MODE_C_START_COLORS := 5           # colori a inizio partita (facili le combo)
 const MODE_C_COLORS_PER_STEP := 2        # +1 colore ogni N livelli (colori più in fretta = match più duri prima)
@@ -276,6 +280,10 @@ func _ready() -> void:
 		var sfnode := get_node_or_null("../Sfondo") as TextureRect
 		if sfnode:
 			sfnode.texture = load("res://CORE/Assets/Art/Game/sfondo_speedrun.svg")
+		# musica speedrun: SOLO avvio caricamento in background (non bloccante). La riproduce
+		# _process quando è pronta -> _ready finisce subito e la board si genera regolarmente.
+		ResourceLoader.load_threaded_request(SR_MUSIC_PATH)
+		_sr_music_pending = true
 	# icona uscita: speedrun = freccia ROSSA, classic = X, altre = freccia
 	var back_btn := get_node_or_null("../UI/BackButton") as TextureButton
 	if back_btn:
@@ -1070,6 +1078,24 @@ func _cancel_drag() -> void:
 # Input: swipe per swap nella griglia + drag&drop dei pezzi dal BottomGrid
 # =========================================================
 func _process(_delta: float) -> void:
+	# musica speedrun pronta? riproducila DIRETTAMENTE sull'AudioStreamPlayer della scena
+	# (spegnendo la musica dei settings), caricata in background = mai bloccante.
+	if _sr_music_pending:
+		var st := ResourceLoader.load_threaded_get_status(SR_MUSIC_PATH)
+		if st == ResourceLoader.THREAD_LOAD_LOADED:
+			_sr_music_pending = false
+			var srm := ResourceLoader.load_threaded_get(SR_MUSIC_PATH)
+			if srm is AudioStreamMP3:
+				(srm as AudioStreamMP3).loop = true
+			var sfp := get_node_or_null("../AudioStreamPlayer2D") as AudioStreamPlayer
+			if sfp:
+				settings.fade_out_music()      # spegni la musica dei settings (gameplay/home)
+				sfp.stream = srm
+				sfp.volume_db = 0.0
+				if settings.music_enabled:
+					sfp.play()
+		elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+			_sr_music_pending = false
 	if is_game_over:
 		return
 	# speedrun: il timer 5 min parte solo dopo il countdown 3-2-1-GO; a 0 finisce la partita
@@ -1351,10 +1377,13 @@ func _handle_multitouch(event: InputEvent) -> void:
 		elif _multi_drags.has(event.index):
 			var piece: Node = _multi_drags[event.index]
 			_multi_drags.erase(event.index)
+			_hide_placement_preview()
 			_place_dragged_piece(piece, int(piece.get_meta("slot_idx")), wp - Vector2(0, DRAG_LIFT))
 	elif event is InputEventScreenDrag and _multi_drags.has(event.index):
 		var piece2: Node = _multi_drags[event.index]
-		piece2.global_position = (get_global_transform_with_canvas().affine_inverse() * event.position) - Vector2(0, DRAG_LIFT)
+		var fw2: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
+		piece2.global_position = fw2 - Vector2(0, DRAG_LIFT)
+		_show_preview_for(piece2, fw2)   # fantasma di piazzamento anche in speedrun
 
 
 func update_moves_label() -> void:
@@ -1655,8 +1684,8 @@ func _show_game_over_screen() -> void:
 			screen.set_session_stats(_last_session_stats)
 		if screen.has_method("set_end_bonus"):
 			screen.set_end_bonus(score, _end_moves, END_MOVE_POINTS)
-		# speedrun: niente layout viola "record"; titolo "SPEEDRUN" + record dedicato
-		var rec: bool = _is_new_record and not _is_speedrun
+		# nuovo record -> layout viola "record" in TUTTE le modalità (anche speedrun)
+		var rec: bool = _is_new_record
 		if screen.has_method("show_result"):
 			screen.show_result(rec)
 		else:
@@ -1705,7 +1734,7 @@ func _update_timer_label() -> void:
 	var s := int(ceil(_speedrun_time_left))
 	_timer_label.text = "%d:%02d" % [s / 60, s % 60]
 	if _speedrun_time_left <= 30.0:
-		_timer_label.add_theme_color_override("font_color", Color(0.95, 0.25, 0.25))  # rosso: ultimi 30s
+		_timer_label.add_theme_color_override("font_color", Color(0.42, 0.03, 0.03))  # rosso scuro: ultimi 30s
 		_timer_label.add_theme_color_override("font_outline_color", Color(1, 1, 1))   # stroke bianco
 		_timer_label.add_theme_constant_override("outline_size", 12)
 	else:
@@ -1916,18 +1945,23 @@ func _ensure_placement_preview() -> void:
 const PREVIEW_ALPHA := 0.35   # opacità bassa del fantasma
 
 func _update_placement_preview() -> void:
-	if dragging_piece == null:
+	_show_preview_for(dragging_piece, get_global_mouse_position())
+
+# Mostra il fantasma di piazzamento per un pezzo qualsiasi (usato anche dal multi-touch
+# della speedrun, dove i pezzi trascinati non sono `dragging_piece` ma stanno in _multi_drags).
+func _show_preview_for(piece: Node, world_pos: Vector2) -> void:
+	if piece == null:
 		_hide_placement_preview()
 		return
-	var g := pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y - DRAG_LIFT)
-	if is_in_grid(g) and all_pieces[g.x][g.y] == null and current_moves > 0:
+	var g := pixel_to_grid(world_pos.x, world_pos.y - DRAG_LIFT)
+	if is_in_grid(g) and all_pieces[g.x][g.y] == null and (not _moves_enabled or current_moves > 0):
 		_ensure_placement_preview()
 		if _preview_fade_tween != null and _preview_fade_tween.is_valid():
 			_preview_fade_tween.kill()
 		# fantasma del pezzo (texture NORMALE del cubo, non la grafica SELECT del tray)
-		var dspr := dragging_piece.get_node_or_null("Sprite2D") as Sprite2D
-		if dragging_piece.has_meta("normal_tex"):
-			_placement_preview.texture = dragging_piece.get_meta("normal_tex")
+		var dspr := piece.get_node_or_null("Sprite2D") as Sprite2D
+		if piece.has_meta("normal_tex"):
+			_placement_preview.texture = piece.get_meta("normal_tex")
 		elif dspr:
 			_placement_preview.texture = dspr.texture
 		_placement_preview.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)

@@ -26,17 +26,25 @@ signal MenuClosed
 # ==========================
 # More settings / pagine
 # ==========================
-const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back.svg")
+const BACK_ICON := preload("res://CORE/Assets/Art/UI/Settings/back_icon.png")
 const DIVIDER := preload("res://CORE/Assets/Art/UI/Settings/Divider.svg")
 const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
+# Nuovo design
+const SETTINGS_FRAME := preload("res://CORE/Assets/Art/UI/Settings/settings_frame.png")
+const CLOSE_ICON := preload("res://CORE/Assets/Art/UI/Settings/close_icon.png")
+const TOGGLE_ON := preload("res://CORE/Assets/Art/UI/Settings/toggle_on.png")
+const TOGGLE_OFF := preload("res://CORE/Assets/Art/UI/Settings/toggle_off.png")
+const SUBPAGE_BG := preload("res://CORE/Assets/Art/UI/Settings/subpage_bg.png")
+const ARROW_BTN := preload("res://CORE/Assets/Art/UI/Settings/arrow_setting.png")
 
 const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🕹️ NUOVA HOME ARCADE\n🎯 Cabinato + tasto PLAY, scegli la modalità con le frecce\n📱 Menu in basso: Missioni · Home · Shop (ottimizzata per tablet/iPad)\n\n🧩 MODALITÀ\n💥 CLASSIC — combo a raffica + bombe (durata ribilanciata)\n⏱️ SPEEDRUN — più punti in 5 minuti (countdown 3-2-1-GO!)\n\n👤 PROFILO\n🖼️ Schermata EDIT PROFILE: scegli icona e nome personalizzati\n\n🏆 CLASSIFICA (TOP CRASHER)\n📊 Top 1-100 per Classic e Speedrun, si rinnova ogni 7 giorni\n🟢 La tua posizione evidenziata\n\n🎯 MISSIONI\n✅ GIORNALIERE (24h) e ⭐ SETTIMANALI (7 giorni)\n🪙 200 monete a missione giornaliera, 1000 a settimanale\n🔔 Badge quando hai ricompense da riscuotere\n✨ Monete e punteggio animati (contatore che sale)\n\n🔗 COMBO fino a 11 con animazioni a schermo intero\n💠 Abilità speciali con beam colorato per colore\n🎵 Nuova musica in home + nuova grafica gameplay\n\n⚡ PRESTAZIONI\n🚀 Avvio partita più veloce + animazioni combo più leggere\n👆 Tocco più preciso nel piazzare i cubi\n🐛 Fix crash e vari bug\n\n🛒 Shop in arrivo!\n\n📱 Grazie per aver provato questa build!"
 
 const CONTACT_EMAIL := "cubecrash.game@gmail.com"
-const PRIVACY_TEXT := "La tua privacy è importante.\nCube Crash non richiede account, non raccoglie dati personali e salva i progressi solo sul tuo dispositivo."
-const TERMS_TEXT := "Usando Cube Crash accetti i termini di servizio del gioco."
+const PRIVACY_TEXT := "PRIVACY POLICY\nUltimo aggiornamento: 2026\n\nCube Crash (\"il Gioco\") rispetta la tua privacy. Questa policy spiega quali dati vengono trattati.\n\n1. DATI CHE NON RACCOGLIAMO\nNon richiediamo registrazione né account. Non raccogliamo nome reale, email, contatti o posizione. I progressi (punteggi, monete, profilo) sono salvati SOLO sul tuo dispositivo.\n\n2. CLASSIFICA ONLINE\nSe usi la classifica, vengono inviati solo il nome che scegli e il punteggio, per mostrarli nella classifica pubblica. Non sono dati identificativi.\n\n3. PUBBLICITÀ (AdMob)\nIl Gioco mostra annunci tramite Google AdMob. Google può raccogliere identificatori del dispositivo e dati d'uso per fornire annunci. Consulta la Privacy Policy di Google: https://policies.google.com/privacy\nPuoi limitare gli annunci personalizzati dalle impostazioni del dispositivo.\n\n4. MINORI\nIl Gioco è adatto a tutti. Non raccogliamo consapevolmente dati personali da minori.\n\n5. CONTATTI\nPer domande: cubecrash.game@gmail.com"
+const TERMS_TEXT := "TERMS OF SERVICE\nUltimo aggiornamento: 2026\n\nBenvenuto in Cube Crash. Usando il Gioco accetti questi termini.\n\n1. LICENZA\nTi concediamo una licenza personale, non esclusiva e non trasferibile per giocare a Cube Crash per uso personale e non commerciale.\n\n2. USO CORRETTO\nNon puoi copiare, modificare, decompilare o distribuire il Gioco, né usare cheat, bot o exploit che alterino punteggi e classifiche.\n\n3. CONTENUTI E PROGRESSI\nI progressi sono salvati sul dispositivo. Aggiornamenti o disinstallazioni possono azzerarli. Non garantiamo il recupero dei dati.\n\n4. PUBBLICITÀ E ACQUISTI\nIl Gioco può mostrare annunci di terze parti. Eventuali acquisti futuri sono soggetti alle regole dello store.\n\n5. NESSUNA GARANZIA\nIl Gioco è fornito \"così com'è\", senza garanzie. Non siamo responsabili per eventuali danni derivanti dall'uso.\n\n6. MODIFICHE\nPossiamo aggiornare questi termini; l'uso continuato implica l'accettazione.\n\n7. CONTATTI\ncubecrash.game@gmail.com"
 
 var _more_root: Control = null
+var _more_back: TextureButton = null   # freccia per tornare alla pagina 1 dei settings
 var _subpages: Dictionary = {}   # nome -> Control
 var _opened_from_home: bool = false   # thanks aperto direttamente dalla home
 
@@ -44,10 +52,118 @@ var _opened_from_home: bool = false   # thanks aperto direttamente dalla home
 # Ready
 # ==========================
 func _ready() -> void:
+	_apply_new_design()
 	_update_all_buttons()
 	_build_more_page()
 	_build_subpages()
 	_apply_press_fx_all(self)   # affondamento + vibrazione su tutti i tasti
+
+# Nuovo design: frame, titolo, X, toggle, padding, tap-fuori-per-chiudere
+func _apply_new_design() -> void:
+	# frame nuovo (settings_frame.png), aspect 2496:3392 = 0.736 -> 440x598
+	if _menu:
+		_menu.texture = SETTINGS_FRAME
+		_menu.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_menu.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_menu.stretch_mode = TextureRect.STRETCH_SCALE
+		_menu.mouse_filter = Control.MOUSE_FILTER_STOP
+		_menu.offset_left = -250.0
+		_menu.offset_right = 250.0
+		_menu.offset_top = -339.5
+		_menu.offset_bottom = 339.5
+	var bg := get_node_or_null("Menu/BG")
+	if bg:
+		bg.visible = false
+	# titolo SETTINGS in alto
+	if _title:
+		_title.add_theme_font_size_override("font_size", 44)
+		_title.add_theme_color_override("font_color", Color(1, 1, 1))
+		_title.add_theme_color_override("font_outline_color", Color(0, 0.06, 0.2))
+		_title.add_theme_constant_override("outline_size", 6)
+		_title.offset_left = -130.0
+		_title.offset_right = 130.0
+		_title.offset_top = 46.0     # centro verticale allineato alla X (centro ~73)
+		_title.offset_bottom = 100.0
+		_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# X vicino al testo SETTINGS, un po' più in basso, staccata dal bordo
+	if _close_btn:
+		_close_btn.texture_normal = CLOSE_ICON
+		_close_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_close_btn.ignore_texture_size = true
+		_close_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+		_close_btn.offset_left = 402.0
+		_close_btn.offset_top = 40.0
+		_close_btn.offset_right = 468.0
+		_close_btn.offset_bottom = 106.0
+	# toggle on/off + tasti freccia (More/Share e righe): stessa grafica
+	sound_on_texture = TOGGLE_ON
+	sound_off_texture = TOGGLE_OFF
+	music_on_texture = TOGGLE_ON
+	music_off_texture = TOGGLE_OFF
+	vibration_on_texture = TOGGLE_ON
+	vibration_off_texture = TOGGLE_OFF
+	for b in [sound_button, music_button, vibration_button]:
+		_style_right_button(b, null)
+	_style_right_button(get_node_or_null("Menu/Control/MoreSettings/MoreButton"), ARROW_BTN)
+	_style_right_button(get_node_or_null("Menu/Control/ShareSettings/ShareButton"), ARROW_BTN)
+	# righe con più PADDING tra le sezioni
+	var rows := ["SoundSettings", "MusicSettings", "VibrationSettings", "MoreSettings", "ShareSettings"]
+	var divs := ["Divider1", "Divider2", "Divider3", "Divider4"]
+	var lbl_names := {"SoundSettings": "Sound", "MusicSettings": "Music", "VibrationSettings": "Vibration", "MoreSettings": "More", "ShareSettings": "Share"}
+	var y0 := 54.0      # più spazio tra la zona titolo/X e le sezioni
+	var step := 100.0   # padding tra sezioni (leggermente aumentato)
+	var row_h := 73.0
+	for i in rows.size():
+		var r := get_node_or_null("Menu/Control/" + rows[i]) as Control
+		if r:
+			r.offset_left = 0.0
+			r.offset_right = 440.0
+			r.offset_top = y0 + i * step
+			r.offset_bottom = y0 + i * step + row_h
+			var lb := r.get_node_or_null(str(lbl_names[rows[i]])) as Label
+			if lb:
+				lb.add_theme_font_size_override("font_size", 38)
+				lb.offset_left = 83.0
+				lb.offset_right = 340.0
+	# nascondi i vecchi divider e metti linee blu scuro a tutta sezione tra una e l'altra
+	for i in divs.size():
+		var d := get_node_or_null("Menu/Control/" + divs[i]) as Control
+		if d:
+			d.visible = false
+	if _options:
+		for i in range(rows.size() - 1):
+			var line := ColorRect.new()
+			line.color = Color(0.03, 0.09, 0.24, 1.0)   # blu scuro
+			line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			line.position = Vector2(12.0, y0 + i * step + row_h + (step - row_h) * 0.5 - 2.0)
+			line.size = Vector2(416.0, 4.0)
+			_options.add_child(line)
+		_options.offset_left = -220.0
+		_options.offset_right = 220.0
+		_options.offset_top = -260.0
+		_options.offset_bottom = 320.0
+	# tap FUORI dal frame (zona scura) -> chiudi (come edit profile)
+	var dim := get_node_or_null("ColorRect")
+	if dim:
+		dim.mouse_filter = Control.MOUSE_FILTER_STOP
+		dim.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and e.pressed:
+				_on_close_button_pressed())
+
+# Stile comune per i tasti a destra delle righe (toggle o freccia)
+func _style_right_button(b: TextureButton, tex: Texture2D) -> void:
+	if b == null:
+		return
+	if tex != null:
+		b.texture_normal = tex
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	b.offset_left = 352.0    # far right: più lontano dal testo
+	b.offset_top = 14.0
+	b.offset_right = 434.0
+	b.offset_bottom = 65.0   # ~82x51, aspect 1.6
 
 func _apply_press_fx_all(node: Node) -> void:
 	for c in node.get_children():
@@ -108,15 +224,35 @@ func _show_more(on: bool) -> void:
 	# cambiano solo le righe elencate sotto (niente titolo "More Settings" separato).
 	_more_root.visible = on
 	_options.visible = not on
+	if _title:
+		_title.text = "MORE" if on else "SETTINGS"
+	if _more_back:
+		_more_back.visible = on
 
 func _build_more_page() -> void:
 	# Stessa area interna delle righe delle impostazioni (dentro il box Menu),
 	# così la box è identica/alta come nella schermata precedente.
 	_more_root = Control.new()
-	_more_root.position = Vector2(16, 98)
-	_more_root.size = Vector2(363, 377)
+	_more_root.position = Vector2(30, 133)
+	_more_root.size = Vector2(440, 540)
 	_more_root.visible = false
 	_menu.add_child(_more_root)
+
+	# freccia indietro (a sinistra del titolo MORE) -> torna alla pagina 1 dei settings
+	_more_back = TextureButton.new()
+	_more_back.texture_normal = BACK_ICON
+	_more_back.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_more_back.ignore_texture_size = true
+	_more_back.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	_more_back.offset_left = 32.0
+	_more_back.offset_top = 40.0
+	_more_back.offset_right = 98.0
+	_more_back.offset_bottom = 106.0
+	_more_back.visible = false
+	_more_back.pressed.connect(func() -> void:
+		settings.button_feedback()
+		_show_more(false))
+	_menu.add_child(_more_back)
 
 	var entries := [
 		{"text": "CONTACT US", "cb": Callable(self, "_on_contact")},
@@ -125,27 +261,40 @@ func _build_more_page() -> void:
 		{"text": "PRIVACY POLICY", "cb": Callable(self, "_open_privacy")},
 		{"text": "THANKS", "cb": Callable(self, "_open_thanks")},
 	]
-	var row_h := 75.0
+	var row_h := 100.0   # stesso passo delle righe di SETTINGS
 	for i in entries.size():
 		var y := i * row_h
 
 		var lbl := Label.new()
 		lbl.text = entries[i]["text"]
 		lbl.position = Vector2(24, y)
-		lbl.size = Vector2(315, row_h)
+		lbl.size = Vector2(300, 73.0)
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.add_theme_font_override("font", FONT)
-		lbl.add_theme_font_size_override("font_size", 30)
+		lbl.add_theme_font_size_override("font_size", 38)   # stessa grandezza di SETTINGS
 		lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		_more_root.add_child(lbl)
 
+		# freccia a destra della riga (stessa posizione/dimensione dei toggle)
+		var arr := TextureRect.new()
+		arr.texture = ARROW_BTN
+		arr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		arr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		arr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		arr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		arr.position = Vector2(352, y + 14.0)
+		arr.size = Vector2(82, 51)
+		_more_root.add_child(arr)
+
 		_more_root.add_child(_make_invisible_button(
-			Vector2(0, y), Vector2(363, row_h), entries[i]["cb"]))
+			Vector2(0, y), Vector2(440, 73.0), entries[i]["cb"]))
 
 		if i < entries.size() - 1:
-			var d := TextureRect.new()
-			d.texture = DIVIDER
-			d.position = Vector2(19, y + row_h - 1.0)
+			var d := ColorRect.new()
+			d.color = Color(0.03, 0.09, 0.24, 1.0)   # blu scuro
+			d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			d.position = Vector2(12, y + 87.0)
+			d.size = Vector2(416, 4)
 			_more_root.add_child(d)
 
 func _make_invisible_button(pos: Vector2, sz: Vector2, cb: Callable) -> Button:
@@ -240,40 +389,59 @@ func _hide_subpages() -> void:
 
 func _make_subpage(title: String, content: Control) -> Control:
 	var page := Control.new()
+	page.set_anchors_preset(Control.PRESET_FULL_RECT)
 	page.visible = false
 	page.z_index = 50
+	page.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(page)
 
-	# sfondo blu a tutto schermo
-	var bg := ColorRect.new()
-	bg.color = Color(0.08627451, 0.41568628, 0.59607846, 1)
-	bg.position = Vector2(-900, -900)
-	bg.size = Vector2(2400, 2800)
+	# sfondo dedicato (subpage_bg) a tutto schermo
+	var bg := TextureRect.new()
+	bg.texture = SUBPAGE_BG
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	page.add_child(bg)
 
-	# tasto indietro: stessa posizione dell'icona Link nella home (36, 0), 62x62
+	# shift camera: la home è sul canvas della Camera2D (si sposta su schermi alti);
+	# così la freccia cade dove sta l'icona profilo della home.
+	var vh := 1024.0
+	var vp := get_viewport()
+	if vp:
+		vh = vp.get_visible_rect().size.y
+	var cam_shift := maxf(0.0, vh * 0.5 - 512.0)
+
+	# freccia indietro nella posizione dell'icona profilo della home
 	var back := TextureButton.new()
 	back.texture_normal = BACK_ICON
-	back.position = Vector2(36, 0)
-	back.size = Vector2(62, 62)
+	back.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	back.ignore_texture_size = true
+	back.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	back.position = Vector2(24, 74 + cam_shift)
+	back.size = Vector2(78, 78)
 	back.pressed.connect(_on_subpage_back)
 	page.add_child(back)
 
 	# titolo
 	var lbl := Label.new()
 	lbl.text = title
-	lbl.position = Vector2(0, 150)
-	lbl.size = Vector2(576, 90)
+	lbl.position = Vector2(0, 168 + cam_shift)
+	lbl.size = Vector2(576, 70)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_override("font", FONT)
-	lbl.add_theme_font_size_override("font_size", 52)
+	lbl.add_theme_font_size_override("font_size", 50)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0.06, 0.2))
+	lbl.add_theme_constant_override("outline_size", 6)
 	page.add_child(lbl)
 
-	# contenuto
-	content.position = Vector2(40, 260)
-	content.size = Vector2(496, 640)
+	# contenuto (scrollabile, fino in fondo) sotto il titolo
+	var cy := 258.0 + cam_shift
+	content.position = Vector2(40, cy)
+	content.size = Vector2(496, maxf(300.0, vh - cy - 30.0))
 	page.add_child(content)
 
 	return page
@@ -297,15 +465,24 @@ func _make_text(txt: String, color: Color, size: int) -> Label:
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return l
 
+func _scrollable_text(txt: String) -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER   # niente barra laterale
+	scroll.clip_contents = true
+	scroll.size = Vector2(496, 700)
+	var lbl := _make_text(txt, Color(1, 1, 1), 26)
+	lbl.custom_minimum_size = Vector2(496, 0)
+	# spazio in fondo così l'ultima riga si legge tutta
+	lbl.add_theme_constant_override("line_spacing", 4)
+	scroll.add_child(lbl)
+	return scroll
+
 func _terms_content() -> Control:
-	var c := _make_text(TERMS_TEXT, Color(1, 1, 1), 30)
-	c.custom_minimum_size = Vector2(496, 0)
-	return c
+	return _scrollable_text(TERMS_TEXT)
 
 func _privacy_content() -> Control:
-	var c := _make_text(PRIVACY_TEXT, Color(1, 1, 1), 30)
-	c.custom_minimum_size = Vector2(496, 0)
-	return c
+	return _scrollable_text(PRIVACY_TEXT)
 
 func _thanks_content() -> Control:
 	var vb := VBoxContainer.new()
@@ -321,9 +498,8 @@ func _thanks_content() -> Control:
 # ==========================
 func _on_close_button_pressed() -> void:
 	settings.button_feedback()
-	if _more_root != null and _more_root.visible:
-		_show_more(false)
-		return
+	# la X chiude SEMPRE tutto (dalla pagina 1 o da MORE); per tornare a pagina 1 c'è la freccia
+	_show_more(false)
 	visible = false
 	MenuClosed.emit()
 

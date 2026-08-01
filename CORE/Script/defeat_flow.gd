@@ -8,7 +8,7 @@ extends Node2D
 signal finished          # vai alla schermata finale
 signal revive_requested  # l'utente vuole continuare (pubblicità)
 
-const REVIVE_BTN := preload("res://CORE/Assets/Art/GameOver/revive_button.svg")
+const REVIVE_BTN := preload("res://CORE/Assets/Art/GameOver/revive_button.png")
 const FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
 const COUNT_FRAMES := 125
@@ -68,6 +68,10 @@ func _build() -> void:
 	# --- tasto revive (fase 2): più in basso ---
 	_revive_btn = TextureButton.new()
 	_revive_btn.texture_normal = REVIVE_BTN
+	_revive_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_revive_btn.ignore_texture_size = true
+	_revive_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	_revive_btn.size = Vector2(474, 185)   # aspect 1472:576
 	_revive_btn.position = Vector2(288 - 237, 760)
 	_revive_btn.visible = false
 	_revive_btn.pressed.connect(_on_revive)

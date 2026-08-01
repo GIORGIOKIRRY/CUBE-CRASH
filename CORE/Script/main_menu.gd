@@ -141,6 +141,9 @@ var _mode_screen_sub: Label
 var _screen_anim: AnimatedSprite2D
 var _mode_anims := {}                       # mode -> SpriteFrames (animazione a schermo)
 var _screen_title: Sprite2D                 # scritta (es. CLASSIC) sopra l'animazione
+var _screen_fx: AnimatedSprite2D            # overlay effetti schermo (TV on / cambio modalità)
+var _modesel_frames: SpriteFrames = null    # frame flash cambio modalità (cache)
+const SCREEN_FX_TEX_W := 512.0              # larghezza texture degli overlay fx
 var _mode_titles := {}                      # mode -> Texture2D (scritta a schermo)
 
 # Missioni (tastino TEMPORANEO + pannello, design provvisorio)
@@ -151,6 +154,8 @@ var _missions_list: VBoxContainer
 var _missions_scroll: ScrollContainer
 var _missions_coins_label: Label
 var _missions_coin_bar: TextureRect
+var _missions_record_label: Label
+var _missions_record_bar: TextureRect
 var _missions_timer_label: Label
 var _missions_tabs: TextureRect
 var _missions_panel: ColorRect
@@ -228,13 +233,18 @@ func _layout() -> void:
 			_nav_badge_raise = nav_h * 0.14
 			_nav_badge_base = Vector2(bar_left + bar_w / 3.0 - bs * 0.35, nav_top - bs * 0.05)
 			_apply_nav_badge_pos()
-	# coin bar missioni (su CanvasLayer = schermo puro): allineala alla coin bar della home,
-	# che sta sul canvas della Camera2D e si sposta di cam_shift su schermi alti.
+	# contatori missioni (su CanvasLayer = schermo puro): allineali a quelli della home,
+	# che stanno sul canvas della Camera2D e si spostano di cam_shift su schermi alti.
 	var cam_shift := view_size.y * 0.5 - CAMERA_CENTER.y
+	var ccy := COUNTER_Y + cam_shift
 	if _missions_coin_bar:
-		_missions_coin_bar.position = Vector2(360.0, 4.0 + cam_shift)
+		_missions_coin_bar.position = Vector2(COIN_X, ccy)
 	if _missions_coins_label:
-		_missions_coins_label.position = Vector2(406.0, 4.0 + cam_shift)
+		_missions_coins_label.position = Vector2(COIN_X + COIN_W * COIN_ICON_FRAC, ccy)
+	if _missions_record_bar:
+		_missions_record_bar.position = Vector2(RECORD_X, ccy)
+	if _missions_record_label:
+		_missions_record_label.position = Vector2(RECORD_X + RECORD_W * RECORD_ICON_FRAC, ccy)
 
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
@@ -494,6 +504,14 @@ func _build_screen_anim() -> void:
 	_screen_title.centered = true
 	add_child(_screen_title)
 
+	# overlay effetti schermo (TV on all'avvio, flash al cambio modalità): SOPRA tutto lo schermo
+	_screen_fx = AnimatedSprite2D.new()
+	_screen_fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_screen_fx.z_index = -3
+	_screen_fx.centered = true
+	_screen_fx.visible = false
+	add_child(_screen_fx)
+
 	# CLASSIC (gameplay mode_c) e SPEEDRUN hanno animazione + scritta a schermo
 	_mode_anims["mode_c"] = _load_screen_frames("classic")
 	_mode_titles["mode_c"] = load("res://CORE/Assets/Art/Home/screen_title_classic.png")
@@ -579,7 +597,9 @@ func _update_mode_screen() -> void:
 
 func _cycle_mode(dir: int) -> void:
 	_mode_index = (_mode_index + dir + MODES.size()) % MODES.size()
-	_update_mode_screen()
+	# flash "cambio modalità" sullo schermo del cabinato (copre lo stacco); il contenuto
+	# viene aggiornato al picco del flash da _play_mode_select_fx().
+	_play_mode_select_fx()
 
 
 # Input a mano: press/release testati sul rettangolo-mondo del tasto (mouse + touch).
@@ -723,28 +743,58 @@ func _on_deck_dim_input(event: InputEvent) -> void:
 
 
 # --- Barra in alto a destra (coin count + classifica + impostazioni) -----------
-func _build_top_right() -> void:
-	# COIN COUNT (barra con moneta a sx + numero) SOPRA le due icone
-	_coin_bar = TextureRect.new()
-	_coin_bar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
-	_coin_bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_coin_bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_coin_bar.stretch_mode = TextureRect.STRETCH_SCALE
-	_coin_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_coin_bar.position = Vector2(360.0, 4.0)
-	_coin_bar.size = Vector2(192.0, 192.0 * 176.0 / 792.0)
-	add_child(_coin_bar)
+# ---- Contatori in alto: MONETE a destra (coin_count) + RECORD a sinistra (record_count) ----
+const COUNTER_H := 44.0
+const COIN_W := 161.0            # 44 * 704/192
+const RECORD_W := 272.0          # 44 * 1188/192
+const COIN_X := 391.0            # destra (552 - 161)
+const RECORD_X := 20.0           # sinistra
+const COUNTER_Y := 4.0
+const COIN_ICON_FRAC := 0.28
+const RECORD_ICON_FRAC := 0.17
+const COIN_TEX := "res://CORE/Assets/Art/UI/Menu/coin_count.png"
+const RECORD_TEX := "res://CORE/Assets/Art/UI/Menu/record_count.png"
+var _record_labels: Array = []
 
-	_coin_count_label = Label.new()
-	_coin_count_label.add_theme_font_override("font", MODE_FONT)
-	_coin_count_label.add_theme_font_size_override("font_size", 30)
-	_coin_count_label.add_theme_color_override("font_color", Color(1, 1, 1))
-	_coin_count_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_coin_count_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_coin_count_label.position = Vector2(406.0, 4.0)
-	_coin_count_label.size = Vector2(140.0, 43.0)
-	add_child(_coin_count_label)
+# Crea un contatore (frame + numero centrato nella zona scura). Ritorna [bar, label].
+func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float, icon_frac: float) -> Array:
+	var bar := TextureRect.new()
+	bar.texture = load(tex_path)
+	bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bar.stretch_mode = TextureRect.STRETCH_SCALE
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.position = Vector2(x, y)
+	bar.size = Vector2(w, COUNTER_H)
+	parent.add_child(bar)
+	var lbl := Label.new()
+	lbl.add_theme_font_override("font", MODE_FONT)
+	lbl.add_theme_font_size_override("font_size", 26)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.position = Vector2(x + w * icon_frac, y)
+	lbl.size = Vector2(w * (1.0 - icon_frac), COUNTER_H)
+	parent.add_child(lbl)
+	return [bar, lbl]
+
+func _update_record_labels() -> void:
+	var rec := _fmt_score(_player_score("classic"))
+	for l in _record_labels:
+		if is_instance_valid(l):
+			(l as Label).text = rec
+
+func _build_top_right() -> void:
+	# MONETE a destra
+	var cc := _make_counter(self, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
+	_coin_bar = cc[0] as TextureRect
+	_coin_count_label = cc[1] as Label
+	# RECORD (punteggio più alto) a sinistra, stessa altezza
+	var rc := _make_counter(self, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
+	_record_labels.append(rc[1])
 	_update_coin_count()
+	_update_record_labels()
 
 	# CLASSIFICA (trofeo) a SINISTRA delle impostazioni — più grandi e alzate
 	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(388.0, 74.0), 78.0)
@@ -1606,27 +1656,15 @@ func _build_missions_menu() -> void:
 	_missions_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_missions_menu.add_child(_missions_panel)
 
-	# coin counter in ALTO A DESTRA (nella fascia trasparente sopra i tab)
-	var coinbar := TextureRect.new()
-	coinbar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
-	coinbar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	coinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	coinbar.stretch_mode = TextureRect.STRETCH_SCALE
-	coinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	coinbar.position = Vector2(360.0, 4.0)
-	coinbar.size = Vector2(192.0, 192.0 * 176.0 / 792.0)
-	coinbar.pivot_offset = coinbar.size * 0.5
-	_missions_menu.add_child(coinbar)
-	_missions_coin_bar = coinbar
-	_missions_coins_label = Label.new()
-	_missions_coins_label.add_theme_font_override("font", MODE_FONT)
-	_missions_coins_label.add_theme_font_size_override("font_size", 30)
-	_missions_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
-	_missions_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_missions_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_missions_coins_label.position = Vector2(406.0, 4.0)
-	_missions_coins_label.size = Vector2(140.0, 43.0)
-	_missions_menu.add_child(_missions_coins_label)
+	# contatori in alto: MONETE a destra + RECORD a sinistra (posizioni finali in _layout)
+	var mcc := _make_counter(_missions_menu, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
+	_missions_coin_bar = mcc[0] as TextureRect
+	_missions_coin_bar.pivot_offset = _missions_coin_bar.size * 0.5
+	_missions_coins_label = mcc[1] as Label
+	var mrc := _make_counter(_missions_menu, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
+	_missions_record_bar = mrc[0] as TextureRect
+	_missions_record_label = mrc[1] as Label
+	_record_labels.append(_missions_record_label)
 
 	# striscia TAB (weekly / daily): texture full-width, posizionata in _layout
 	_missions_tabs = TextureRect.new()
@@ -1753,15 +1791,20 @@ func _miss_tex(path: String, pos: Vector2, sz: Vector2, keep: bool = false) -> T
 	return t
 
 func _mission_icon_path(m: Dictionary) -> String:
-	var color := "red"
+	# icone dedicate per tipo; break_color usa il cubo del colore richiesto
 	match m["type"]:
-		"break_color": color = str(m["param"])
-		"score": color = "yellow"
-		"break_total": color = "blue"
-		"combo": color = "purple"
-		"play": color = "green"
-	var cap := color.capitalize()
-	return "res://CORE/Assets/Art/Game/Cubes/%s/%s.svg" % [cap, cap]
+		"score":
+			return "res://CORE/Assets/Art/UI/Missions/icon_score.png"
+		"break_total":
+			return "res://CORE/Assets/Art/UI/Missions/icon_break_total.png"
+		"combo":
+			return "res://CORE/Assets/Art/UI/Missions/icon_combo.png"
+		"play":
+			return "res://CORE/Assets/Art/UI/Missions/icon_play.png"
+		"break_color":
+			var cap := str(m["param"]).capitalize()
+			return "res://CORE/Assets/Art/Game/Cubes/%s/%s.svg" % [cap, cap]
+	return "res://CORE/Assets/Art/Game/Cubes/Red/Red.svg"
 
 func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, halign: int) -> Label:
 	var l := Label.new()
@@ -2037,6 +2080,7 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 	if _leader_menu:
 		_leader_menu.visible = false
 	_update_coin_count()
+	_update_record_labels()
 	_set_home_visible(tab == "home")
 	if tab == "missions":
 		missions._maybe_refresh()
@@ -2066,7 +2110,69 @@ func _set_home_visible(v: bool) -> void:
 	if _arrow_r_sparkles:
 		_arrow_r_sparkles.emitting = v
 	if v:
+		# alla prima apertura del gioco: intro "TV on" sullo schermo del cabinato + suono
+		if not settings.home_intro_played:
+			_play_home_intro()
+		else:
+			_update_mode_screen()
+
+
+# Intro "accensione TV" sullo schermo del cabinato (una volta per sessione).
+# Intro "TV on": la mode classica/selezionata è GIÀ sotto, l'overlay TV-on (opaco->trasparente)
+# la rivela accendendo lo schermo. Una volta per sessione.
+func _play_home_intro() -> void:
+	settings.home_intro_played = true
+	_update_mode_screen()   # animazione modalità (classica) SOTTO
+	var tf := _load_fx_frames("tvon", 17, 22.0)
+	if tf == null:
+		return
+	settings.play_tvon()
+	_start_screen_fx(tf)
+
+# Flash "cambio modalità": copre lo schermo mentre cambia la modalità sotto.
+func _play_mode_select_fx() -> void:
+	if _modesel_frames == null:
+		_modesel_frames = _load_fx_frames("modesel", 19, 26.0)
+	if _modesel_frames == null:
 		_update_mode_screen()
+		return
+	_start_screen_fx(_modesel_frames)
+	# scambia il contenuto al PICCO del flash (schermo coperto) così non si vede lo stacco
+	var tw := create_tween()
+	tw.tween_interval(0.28)
+	tw.tween_callback(_update_mode_screen)
+
+func _start_screen_fx(frames: SpriteFrames) -> void:
+	if _screen_fx == null:
+		return
+	_screen_fx.sprite_frames = frames
+	_position_screen_fx()
+	_screen_fx.visible = true
+	if not _screen_fx.animation_finished.is_connected(_on_screen_fx_done):
+		_screen_fx.animation_finished.connect(_on_screen_fx_done, CONNECT_ONE_SHOT)
+	_screen_fx.play("a")
+
+func _position_screen_fx() -> void:
+	if _screen_fx == null:
+		return
+	_screen_fx.position = _art_to_world(SCREEN_ANIM_CENTER_ART)
+	var sc := (SCREEN_ANIM_WIDTH_ART / SCREEN_FX_TEX_W) * ART_SCALE
+	_screen_fx.scale = Vector2(sc, sc)
+
+func _on_screen_fx_done() -> void:
+	if _screen_fx:
+		_screen_fx.visible = false
+
+func _load_fx_frames(prefix: String, count: int, fps: float) -> SpriteFrames:
+	var sf := SpriteFrames.new()
+	sf.add_animation("a")
+	sf.set_animation_loop("a", false)
+	sf.set_animation_speed("a", fps)
+	for i in count:
+		var t: Texture2D = load("res://CORE/Assets/Art/Home/Screen/%s_%02d.png" % [prefix, i])
+		if t:
+			sf.add_frame("a", t)
+	return sf if sf.get_frame_count("a") > 0 else null
 
 
 func _build_shop_menu() -> void:
@@ -2082,25 +2188,11 @@ func _build_shop_menu() -> void:
 	bg.offset_right = 1400.0
 	bg.offset_bottom = 2000.0
 	_shop_menu.add_child(bg)
-	# coin counter in alto a destra, STESSA posizione di home e missioni
-	var scoinbar := TextureRect.new()
-	scoinbar.texture = load("res://CORE/Assets/Art/UI/Menu/coin_count.png")
-	scoinbar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	scoinbar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	scoinbar.stretch_mode = TextureRect.STRETCH_SCALE
-	scoinbar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	scoinbar.position = Vector2(360.0, 4.0)
-	scoinbar.size = Vector2(192.0, 192.0 * 176.0 / 792.0)
-	_shop_menu.add_child(scoinbar)
-	_shop_coins_label = Label.new()
-	_shop_coins_label.add_theme_font_override("font", MODE_FONT)
-	_shop_coins_label.add_theme_font_size_override("font_size", 30)
-	_shop_coins_label.add_theme_color_override("font_color", Color(1, 1, 1))
-	_shop_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_shop_coins_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_shop_coins_label.position = Vector2(406.0, 4.0)
-	_shop_coins_label.size = Vector2(140.0, 43.0)
-	_shop_menu.add_child(_shop_coins_label)
+	# contatori in alto: MONETE a destra + RECORD a sinistra (come home/missioni)
+	var scc := _make_counter(_shop_menu, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
+	_shop_coins_label = scc[1] as Label
+	var src := _make_counter(_shop_menu, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
+	_record_labels.append(src[1])
 	var t := Label.new()
 	t.text = "SHOP"
 	t.add_theme_font_override("font", MODE_FONT)

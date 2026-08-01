@@ -1086,7 +1086,7 @@ func _process(_delta: float) -> void:
 			_sr_music_pending = false
 			var srm := ResourceLoader.load_threaded_get(SR_MUSIC_PATH)
 			if srm is AudioStreamMP3:
-				(srm as AudioStreamMP3).loop = true
+				(srm as AudioStreamMP3).loop = false   # niente loop: una volta a partita
 			var sfp := get_node_or_null("../AudioStreamPlayer2D") as AudioStreamPlayer
 			if sfp:
 				settings.fade_out_music()      # spegni la musica dei settings (gameplay/home)

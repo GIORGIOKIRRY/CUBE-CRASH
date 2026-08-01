@@ -39,6 +39,8 @@ var _sfx_disappear: AudioStreamPlayer   # cubo casuale che scompare
 var _sfx_pickup: AudioStreamPlayer      # prendi un cubo dalla scorta
 var _sfx_place: AudioStreamPlayer       # posizioni un cubo
 var _sfx_playbtn: AudioStreamPlayer     # bottone play
+var _sfx_tvon: AudioStreamPlayer        # accensione schermo cabinato (intro home)
+var home_intro_played: bool = false     # intro "TV on" già mostrata in questa sessione
 var _sfx_toggle_on: AudioStreamPlayer
 var _sfx_toggle_off: AudioStreamPlayer
 var _sfx_error: AudioStreamPlayer       # motivo sconfitta (no space / no moves)
@@ -77,6 +79,7 @@ func _setup_sfx_players() -> void:
 	_sfx_pickup = _make_sfx(SFX_DIR + "pickup_cube.mp3")
 	_sfx_place = _make_sfx(SFX_DIR + "place_cube.mp3")
 	_sfx_playbtn = _make_sfx(SFX_DIR + "play_button.mp3")
+	_sfx_tvon = _make_sfx(SFX_DIR + "tv_on.mp3")
 	_sfx_toggle_on = _make_sfx(SFX_DIR + "toggle_on.mp3")
 	_sfx_toggle_off = _make_sfx(SFX_DIR + "toggle_off.mp3")
 	_sfx_error = _make_sfx(SFX_DIR + "error.mp3")
@@ -167,6 +170,9 @@ func play_place() -> void:          # posizioni un cubo
 
 func play_playbutton() -> void:     # bottone play
 	_play_sfx(_sfx_playbtn)
+
+func play_tvon() -> void:            # accensione schermo cabinato
+	_play_sfx(_sfx_tvon)
 
 func play_toggle(on: bool) -> void: # toggle impostazioni on/off
 	_play_sfx(_sfx_toggle_on if on else _sfx_toggle_off)

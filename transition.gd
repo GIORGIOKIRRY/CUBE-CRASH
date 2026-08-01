@@ -8,9 +8,9 @@ extends CanvasLayer
 # ============================================================
 
 const FRAME_DIR := "res://CORE/Assets/Art/UI/Transition/"
-const COVER_FRAMES := 14      # frame 0..13  -> copertura
-const TOTAL_FRAMES := 28      # frame 0..27  -> copertura + scopertura
-const FPS := 42.0             # velocità wipe (originale 25 fps, più scattante)
+const COVER_FRAMES := 14      # frame 0..13  -> copertura (piena dal 7)
+const TOTAL_FRAMES := 23      # frame 0..22  -> copertura + scopertura (nuova animazione)
+const FPS := 36.0             # velocità wipe
 
 var _sprite: AnimatedSprite2D
 var _busy := false
@@ -87,8 +87,10 @@ func change_scene(path: String) -> void:
 		get_tree().change_scene_to_packed(packed)
 	else:
 		get_tree().change_scene_to_file(path)   # fallback
-	await get_tree().process_frame
-	await get_tree().process_frame
+	# lascia renderizzare qualche frame alla nuova scena (board/gameplay pronti) PRIMA di
+	# scoprire, così durante lo "scopri" non si vede un frame non ancora pronto sotto.
+	for _i in 6:
+		await get_tree().process_frame
 	_sprite.play("reveal")
 	await _sprite.animation_finished
 	_sprite.visible = false

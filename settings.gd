@@ -46,6 +46,10 @@ var _sfx_toggle_off: AudioStreamPlayer
 var _sfx_error: AudioStreamPlayer       # motivo sconfitta (no space / no moves)
 var _sfx_gameover: AudioStreamPlayer    # sconfitta senza record
 var _sfx_highscore: AudioStreamPlayer   # record battuto
+var _sfx_bomb: AudioStreamPlayer        # esplosione bombe (+3 / X / angoli)
+var _sfx_arrow: AudioStreamPlayer       # frecce cambio modalità (home)
+var _sfx_coin: AudioStreamPlayer        # animazione monete che salgono
+var _sfx_mission: AudioStreamPlayer     # riscossione missione completata
 var _sfx_combo: Array[AudioStreamPlayer] = []   # combo 1..5
 
 const SFX_DIR := "res://CORE/Assets/Music&Sound/SFX/"
@@ -85,6 +89,10 @@ func _setup_sfx_players() -> void:
 	_sfx_error = _make_sfx(SFX_DIR + "error.mp3")
 	_sfx_gameover = _make_sfx(SFX_DIR + "game_over.mp3")
 	_sfx_highscore = _make_sfx(SFX_DIR + "new_high_score.mp3")
+	_sfx_bomb = _make_sfx(SFX_DIR + "bomb_explode.mp3")
+	_sfx_arrow = _make_sfx(SFX_DIR + "arrow.mp3")
+	_sfx_coin = _make_sfx(SFX_DIR + "coin.mp3")
+	_sfx_mission = _make_sfx(SFX_DIR + "mission.mp3")
 	for i in range(1, 6):
 		_sfx_combo.append(_make_sfx(SFX_DIR + "combo%d.mp3" % i))
 
@@ -161,6 +169,18 @@ func play_newmove() -> void:        # mossa guadagnata
 
 func play_explosion() -> void:      # cubo casuale che scompare
 	_play_sfx(_sfx_disappear)
+
+func play_bomb() -> void:            # esplosione bombe (+3 / X / angoli)
+	_play_sfx(_sfx_bomb)
+
+func play_arrow() -> void:           # frecce cambio modalità (home)
+	_play_sfx(_sfx_arrow)
+
+func play_coin() -> void:            # monete che salgono (contatore)
+	_play_sfx(_sfx_coin)
+
+func play_mission() -> void:         # missione completata riscossa
+	_play_sfx(_sfx_mission)
 
 func play_pickup() -> void:         # prendi un cubo dalla scorta
 	_play_sfx(_sfx_pickup)

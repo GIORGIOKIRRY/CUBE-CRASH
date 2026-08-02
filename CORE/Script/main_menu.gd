@@ -88,8 +88,12 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Profile/profile_blue.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_red.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_green.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_fire.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_trophy.png",
 ]
+# icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
+# Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
+const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy"}
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
 var _profile_menu: Control
@@ -489,7 +493,7 @@ func _position_arrows() -> void:
 
 
 func _arrow_down(base: Sprite2D, pressed: Sprite2D, spk: CPUParticles2D) -> void:
-	settings.button_feedback()
+	settings.button_feedback()   # suono UI
 	base.visible = false
 	pressed.visible = true
 	pressed.position = base.position + Vector2(0, PRESS_SINK)   # affonda di qualche pixel
@@ -610,6 +614,7 @@ func _update_mode_screen() -> void:
 
 func _cycle_mode(dir: int) -> void:
 	_mode_index = (_mode_index + dir + MODES.size()) % MODES.size()
+	settings.play_tvon()   # cambio modalità: suono TV (oltre al suono UI della freccia)
 	# flash "cambio modalità" sullo schermo del cabinato (copre lo stacco); il contenuto
 	# viene aggiornato al picco del flash da _play_mode_select_fx().
 	_play_mode_select_fx()
@@ -1097,7 +1102,11 @@ func _build_profile_menu() -> void:
 	_profile_grid.columns = 4
 	_profile_scroll.add_child(_profile_grid)
 	for i in PROFILE_ICONS.size():
-		var b := _ptbtn(PROFILE_ICONS[i], _select_profile_icon.bind(i))
+		# icone bloccate: mostra la versione B/N finché non sono sbloccate
+		var locked := _is_profile_icon_locked(i)
+		var tex_path: String = _profile_icon_bw(i) if locked else PROFILE_ICONS[i]
+		var b := _ptbtn(tex_path, _select_profile_icon.bind(i))
+		b.disabled = locked   # bloccata: non cliccabile
 		_profile_grid.add_child(b)
 		_profile_icon_btns.append(b)
 	# cancel / confirm
@@ -1186,7 +1195,20 @@ func _close_profile() -> void:
 	settings.button_feedback()
 	_profile_menu.visible = false
 
+# icona profilo bloccata? (missione mensile non ancora riscossa)
+func _is_profile_icon_locked(i: int) -> bool:
+	if not PROFILE_ICON_LOCK.has(i):
+		return false
+	return not missions.is_icon_unlocked(str(PROFILE_ICON_LOCK[i]))
+
+func _profile_icon_bw(i: int) -> String:
+	return PROFILE_ICONS[i].replace(".png", "_bw.png")
+
 func _select_profile_icon(i: int) -> void:
+	if _is_profile_icon_locked(i):
+		# bloccata: non selezionabile finché non completi la missione mensile
+		settings.vibrate(20)
+		return
 	settings.button_feedback()
 	_profile_sel_index = i
 	_update_profile_selection()
@@ -1194,7 +1216,14 @@ func _select_profile_icon(i: int) -> void:
 func _update_profile_selection() -> void:
 	for k in _profile_icon_btns.size():
 		var b: TextureButton = _profile_icon_btns[k]
-		b.modulate = Color(1, 1, 1) if k == _profile_sel_index else Color(0.5, 0.5, 0.5)
+		var locked := _is_profile_icon_locked(k)
+		# aggiorna la texture: B/N se bloccata, a colori se (nel frattempo) sbloccata
+		b.texture_normal = load(_profile_icon_bw(k) if locked else PROFILE_ICONS[k])
+		b.disabled = locked   # bloccata: non cliccabile
+		if locked:
+			b.modulate = Color(0.6, 0.6, 0.6)   # bloccata: spenta
+		else:
+			b.modulate = Color(1, 1, 1) if k == _profile_sel_index else Color(0.5, 0.5, 0.5)
 	if _profile_prev:
 		_profile_prev.texture = load(PROFILE_ICONS[clampi(_profile_sel_index, 0, PROFILE_ICONS.size() - 1)])
 
@@ -1801,11 +1830,18 @@ func _populate_missions() -> void:
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_missions_list.add_child(head)
 	var is_weekly := _missions_tab == "weekly"
+	# nel tab SETTIMANALE: ENTRAMBE le missioni MENSILI (icone) IN ALTO.
+	# Restano finché non vengono completate/riscosse (non scadono).
+	if is_weekly:
+		for j in missions.monthly.size():
+			if not missions.monthly[j]["claimed"]:
+				_missions_list.add_child(_make_mission_row(j, missions.monthly[j], "monthly"))
 	var arr: Array = missions.weekly if is_weekly else missions.missions
+	var kind := "weekly" if is_weekly else "daily"
 	for i in arr.size():
 		if arr[i]["claimed"]:
 			continue   # riscosse: spariscono
-		_missions_list.add_child(_make_mission_row(i, arr[i], is_weekly))
+		_missions_list.add_child(_make_mission_row(i, arr[i], kind))
 	# spazio in fondo: abbastanza da far salire l'ultima riga sopra la nav bar
 	var tail := Control.new()
 	tail.custom_minimum_size = Vector2(0, 180)
@@ -1842,6 +1878,10 @@ func _mission_icon_path(m: Dictionary) -> String:
 			return "res://CORE/Assets/Art/UI/Missions/icon_play.png"
 		"break_color":
 			return "res://CORE/Assets/Art/UI/Missions/icon_cube_%s.png" % str(m["param"])
+		"streak":
+			return "res://CORE/Assets/Art/UI/Missions/icon_play.png"   # controller
+		"score_classic":
+			return "res://CORE/Assets/Art/UI/Missions/icon_score.png"
 	return "res://CORE/Assets/Art/UI/Missions/icon_cube_red.png"
 
 func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, halign: int) -> Label:
@@ -1860,7 +1900,7 @@ func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, 
 
 const MISS_SINK := 4.0
 
-func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Control:
+func _make_mission_row(index: int, m: Dictionary, kind: String = "daily") -> Control:
 	var done: bool = missions.is_complete(m) and not m["claimed"]
 	var bg_tex: String = "mission_bg_done.png" if done else "mission_bg.png"
 	var icon_tex: String = "icon_frame_done.png" if done else "icon_frame.png"
@@ -1896,12 +1936,18 @@ func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Co
 	var ry := iy
 	content.add_child(_miss_tex(MISS + rew_tex, Vector2(rx, ry), Vector2(rw, rh)))
 	content.add_child(_miss_label("RICOMPENSE", 16, txt_col, Vector2(rx, ry + 3), Vector2(rw, 20), HORIZONTAL_ALIGNMENT_CENTER))
-	var coinS := rh * 0.40
-	var coinX := rx + rw * 0.10
-	var coinY := ry + rh * 0.42
-	content.add_child(_miss_tex(MISS + "coin_icon.png", Vector2(coinX, coinY), Vector2(coinS, coinS), true))
-	var amt_col: Color = Color(1, 1, 1) if done else Color(1, 0.86, 0.12)
-	content.add_child(_miss_label(str(m["reward"]), 22, amt_col, Vector2(coinX + coinS + 4, coinY), Vector2(rw * 0.55, coinS), HORIZONTAL_ALIGNMENT_LEFT))
+	if str(m.get("reward_type", "coins")) == "icon":
+		# ricompensa = ICONA profilo sbloccabile
+		var ric := rh * 0.58
+		var icp := "res://CORE/Assets/Art/Home/Profile/profile_%s.png" % str(m["reward_icon"])
+		content.add_child(_miss_tex(icp, Vector2(rx + (rw - ric) * 0.5, ry + rh * 0.34), Vector2(ric, ric), true))
+	else:
+		var coinS := rh * 0.40
+		var coinX := rx + rw * 0.10
+		var coinY := ry + rh * 0.42
+		content.add_child(_miss_tex(MISS + "coin_icon.png", Vector2(coinX, coinY), Vector2(coinS, coinS), true))
+		var amt_col: Color = Color(1, 1, 1) if done else Color(1, 0.86, 0.12)
+		content.add_child(_miss_label(str(m["reward"]), 22, amt_col, Vector2(coinX + coinS + 4, coinY), Vector2(rw * 0.55, coinS), HORIZONTAL_ALIGNMENT_LEFT))
 
 	# CENTRO: testo (ALLINEATO A SINISTRA) + barra progresso
 	var cl := ix + iw + ROW_W * 0.03
@@ -1955,20 +2001,28 @@ func _make_mission_row(index: int, m: Dictionary, is_weekly: bool = false) -> Co
 	btn.button_down.connect(func() -> void: content.position = Vector2(0, MISS_SINK))
 	btn.button_up.connect(func() -> void: content.position = Vector2.ZERO)
 	if done:
-		btn.pressed.connect(_claim_mission.bind(index, is_weekly, row))
+		btn.pressed.connect(_claim_mission.bind(index, kind, row))
 	row.add_child(btn)
 	return row
 
 
-func _claim_mission(index: int, is_weekly: bool = false, src: Control = null) -> void:
+func _claim_mission(index: int, kind: String = "daily", src: Control = null) -> void:
+	# MENSILE: ricompensa = icona profilo sbloccata (niente monete volanti)
+	if kind == "monthly":
+		var icon_id := missions.claim_monthly(index)
+		if icon_id != "":
+			settings.play_mission()   # missione completata riscossa
+			_populate_missions()
+			_update_mission_badges()
+		return
 	var before := missions.coins
 	# posizione di partenza delle monete (riga riscattata), prima che _populate_missions la rimuova
 	var src_pos := Vector2(288.0, 520.0)
 	if is_instance_valid(src):
 		src_pos = src.global_position + Vector2(src.size.x * 0.82, src.size.y * 0.5)  # zona ricompensa (destra)
-	var got := missions.claim_weekly(index) if is_weekly else missions.claim(index)
+	var got := missions.claim_weekly(index) if kind == "weekly" else missions.claim(index)
 	if got > 0:
-		settings.button_feedback()
+		settings.play_mission()   # missione completata riscossa
 		_populate_missions()   # ricostruisce la lista (rimuove la riga riscattata)
 		# NON aggiornare ancora i contatori: il valore cambia SOLO quando le
 		# monete volanti arrivano nel contatore (più naturale). Tieni il vecchio valore.
@@ -2024,6 +2078,7 @@ func _fly_coins_to_counter(src_pos: Vector2, from_v: int, to_v: int) -> void:
 func _animate_coin_gain(from_v: int, to_v: int) -> void:
 	if _missions_coins_label == null:
 		return
+	settings.play_coin()   # suono delle monete che salgono
 	_missions_coins_label.pivot_offset = _missions_coins_label.size * 0.5
 	var t := create_tween()
 	t.tween_method(func(v: float) -> void: _missions_coins_label.set_text(str(int(round(v)))), float(from_v), float(to_v), 0.6)\
@@ -2039,7 +2094,7 @@ func _animate_coin_gain(from_v: int, to_v: int) -> void:
 
 
 func _has_completed_missions() -> bool:
-	for arr in [missions.missions, missions.weekly]:
+	for arr in [missions.missions, missions.weekly, missions.monthly]:
 		for m in arr:
 			if not m["claimed"] and missions.is_complete(m):
 				return true
@@ -2258,3 +2313,4 @@ func _build_shop_menu() -> void:
 	s.offset_top = 476.0
 	s.offset_bottom = 520.0
 	_shop_menu.add_child(s)
+

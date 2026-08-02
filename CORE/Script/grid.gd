@@ -839,10 +839,12 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		if crater:
 			cell_active[c.x][c.y] = false   # buco: spazio vuoto e duraturo da riempire
 	if cleared > 0:
-		if is_beam or (_is_mode_c and val != 3 and val != 4 and val != 5):
-			settings.play_destroy()    # V/O: suono del match
+		if val == 3 or val == 4 or val == 5:
+			settings.play_bomb()       # tutte e 3 le bombe: suono dedicato
+		elif is_beam:
+			settings.play_arrow()      # blocchi V (colonna) / O (riga)
 		else:
-			settings.play_explosion()  # bomba / mode_b
+			settings.play_explosion()  # mode_b
 		if val == 3 or val == 4 or val == 5:
 			settings.vibrate(500)      # BOMBA: vibrazione fortissima
 		elif is_beam:
@@ -1651,6 +1653,9 @@ func _trigger_game_over(reason := "no_space") -> void:
 	# missioni: punteggio raggiunto in questa partita + una partita giocata
 	missions.report_score(score)
 	missions.report_play()
+	# missione MENSILE: 500.000 punti in CLASSIC (mode_c, non speedrun)
+	if _mode == "mode_c" and not _is_speedrun:
+		missions.report_score_classic(score)
 
 	# Nuovo record? (sul punteggio finale, bonus incluso)
 	if _is_speedrun:
@@ -1746,10 +1751,10 @@ func _show_game_over_screen() -> void:
 	# Il suono finale (Game Over / New High Score) parte SOLO dopo che
 	# l'adv e' chiusa e si torna sulla schermata del punteggio. Se non c'e'
 	# adv da mostrare, il suono parte subito.
-	if ads.show_interstitial():
-		ads.interstitial_closed.connect(_play_gameover_sound, CONNECT_ONE_SHOT)
-	else:
-		_play_gameover_sound()
+	# suono finale + coriandoli (se record) SOLO dopo la chiusura dell'adv
+	var _showed_ad: bool = ads.show_interstitial()
+	if _showed_ad:
+		ads.interstitial_closed.connect(_on_gameover_after_ad, CONNECT_ONE_SHOT)
 	var screen = get_node_or_null("%GameOverScreen")
 	if screen:
 		if screen.has_method("set_session_stats"):
@@ -1766,15 +1771,22 @@ func _show_game_over_screen() -> void:
 			screen.set_speedrun_mode(_speedrun_best, _is_new_record)
 		if screen is CanvasItem:
 			screen.z_index = 99999
+	# se non c'era adv, esegui subito (dopo aver mostrato lo schermo)
+	if not _showed_ad:
+		_on_gameover_after_ad()
 
 
-# Suono finale: record battuto -> New High Score, altrimenti Game Over.
-# Chiamato DOPO la chiusura dell'interstitial (o subito se non c'e' adv).
-func _play_gameover_sound() -> void:
+# Suono finale + coriandoli (se record). Chiamato DOPO la chiusura dell'interstitial
+# (o subito se non c'e' adv), così i coriandoli appaiono al ritorno sullo schermo.
+func _on_gameover_after_ad() -> void:
 	if _is_new_record:
 		settings.play_highscore()
 	else:
 		settings.play_gameover()
+	if _is_new_record:
+		var s = get_node_or_null("%GameOverScreen")
+		if s and s.has_method("play_confetti"):
+			s.play_confetti()
 
 
 # Speedrun: punteggio più piccolo in alto + TIMER grande sotto; nasconde COMBO/HighScore.
@@ -2158,24 +2170,28 @@ func _combo_refill_bias() -> float:
 	var t := float(difficulty_level) / float(max_difficulty_level)
 	# Mode C: combo ancora più frequenti (obiettivo: una combo ogni 1-2 azioni).
 	if _is_mode_c:
-		var b := lerpf(0.50, 0.34, t)
 		if _is_speedrun:
-			# Curva difficoltà combo SPEEDRUN (bilanciata):
-			#   fino a ~3 = FACILE, ~7 = MEDIO, ~10 = COMPLESSO, ~15 = DIFFICILE, 20 = SUPER RARO.
+			# SPEEDRUN: le combo NON sono automatiche. Cadenza: si "alimentano" solo ~1
+			# piazzamento su 3 (non ogni mossa); nelle altre mosse quasi zero bias.
 			var c := _last_combo_shown
+			var combo_move := (_stat_placements % 3 == 0)
+			var bs := (0.50 if combo_move else 0.04)
+			# falloff crescente: ~7 medio, ~10 tosto, ~15 difficile, 20 super raro
 			if c >= 18:
-				b *= 0.05     # verso la 20: super raro
+				bs *= 0.05
 			elif c >= 13:
-				b *= 0.12     # 15: difficile
+				bs *= 0.12
 			elif c >= 9:
-				b *= 0.28     # 10: complesso
+				bs *= 0.25
 			elif c >= 6:
-				b *= 0.55     # 7: medio
-			# c < 6: bias pieno -> le prime combo (fino a 3-5) restano facili
-			return b
-		# classic (non speedrun): la 2 e la 3 sono comuni, la 4+ più rara
+				bs *= 0.45
+			elif c >= 3:
+				bs *= 0.70
+			return bs
+		# classic (non speedrun): combo un filo più probabili
+		var b := lerpf(0.56, 0.40, t)
 		if _last_combo_shown >= 3:
-			b *= 0.4
+			b *= 0.5
 		return b
 	return lerpf(0.46, 0.16, t)
 
@@ -2224,12 +2240,12 @@ func _mode_c_active_count() -> int:
 	if _is_speedrun:
 		var elapsed := 300.0 - _speedrun_time_left   # secondi giocati
 		if elapsed < 60.0:
-			return 3        # 1° minuto: 3 colori
+			return 4        # 1° minuto: 4 colori (con 3 le combo partivano da sole)
 		elif elapsed < 120.0:
-			return 4        # 2° minuto: 4 colori
+			return 5        # 2° minuto: 5 colori
 		elif elapsed < 180.0:
-			return 5        # 3° minuto: 5 colori
-		return MODE_C_COLOR_ORDER.size()   # dal 4° minuto: TUTTI i colori
+			return 6        # 3° minuto: 6 colori
+		return MODE_C_COLOR_ORDER.size()   # dal 4° minuto: TUTTI i colori (7)
 	return clampi(MODE_C_START_COLORS + difficulty_level / MODE_C_COLORS_PER_STEP,
 		MODE_C_START_COLORS, MODE_C_COLOR_ORDER.size())
 
@@ -2251,8 +2267,8 @@ func _pick_plus_scene() -> PackedScene:
 	if _is_mode_c:
 		# Mode C: i +N sono power-up (non mosse). La bomba 3x3 è ESCLUSIVA (rarissima), così
 		# la board resta piena e si può perdere; anche +1/+2 un po' più rare di prima.
-		# +1 colonna 58%, +2 riga 40%, +3 bomba 3x3 2% (esclusiva).
-		w1 = 0.58; w2 = 0.40
+		# +1 colonna 62.3%, +2 riga 37.5%, +3 bomba 3x3 ~0.2% (rarissima).
+		w1 = 0.623; w2 = 0.375
 		# quando la tavola è quasi piena la bomba diventa un filo più probabile (respiro):
 		# a tavola completamente piena +3 sale ~2% -> ~12% (a scapito di +1/+2).
 		var fullness := float(_count_occupied()) / float(width * height)
@@ -2293,9 +2309,9 @@ func _pick_plus_scene() -> PackedScene:
 	# BOMBA X: molto RARA di base, ma diventa più probabile quando la tavola si riempie
 	# troppo (libera spazio con le due diagonali -> allunga il gameplay). Sostituisce lo speciale.
 	var xfull := float(_count_occupied()) / float(width * height)
-	var xprob := 0.015
-	if xfull >= 0.70:
-		xprob = lerpf(0.015, 0.35, clampf((xfull - 0.70) / 0.30, 0.0, 1.0))
+	var xprob := 0.0035
+	if xfull >= 0.75:
+		xprob = lerpf(0.0035, 0.20, clampf((xfull - 0.75) / 0.25, 0.0, 1.0))
 	xprob *= sr_bomb   # speedrun: X bomb più rara (all'inizio quasi nulla)
 	if randf() < xprob:
 		v = 4
@@ -2305,9 +2321,9 @@ func _pick_plus_scene() -> PackedScene:
 	for cc in [Vector2i(0, 0), Vector2i(width - 1, 0), Vector2i(0, height - 1), Vector2i(width - 1, height - 1)]:
 		if is_in_grid(cc) and all_pieces[cc.x][cc.y] != null:
 			corners_occ += 1
-	var aprob := 0.008
-	if corners_occ >= 2:
-		aprob = lerpf(0.008, 0.28, clampf(float(corners_occ - 1) / 3.0, 0.0, 1.0))
+	var aprob := 0.0025
+	if corners_occ >= 3:
+		aprob = lerpf(0.0025, 0.16, clampf(float(corners_occ - 2) / 2.0, 0.0, 1.0))
 	aprob *= sr_bomb   # speedrun: bomba angoli più rara (all'inizio quasi nulla)
 	if randf() < aprob:
 		v = 5

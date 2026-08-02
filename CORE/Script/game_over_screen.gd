@@ -172,6 +172,7 @@ func show_result(is_new_record: bool) -> void:
 		cb.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	if is_new_record:
 		_apply_new_record_layout()
+		# NB: i coriandoli partono da grid.gd DOPO la chiusura dell'adv (play_confetti())
 	else:
 		# sconfitta normale: stesso sfondo del gameplay (classic = blu #00478E) + tasto
 		# "gioca ancora". In speedrun set_speedrun_mode() sovrascrive con rosso + PLAY AGAIN.
@@ -294,3 +295,42 @@ func _share_score_screenshot() -> void:
 	# Apre la condivisione: su iOS la condivisione nativa (UIActivityViewController)
 	# richiede un plugin nativo; qui salviamo il PNG e ne apriamo il percorso.
 	OS.shell_open(ProjectSettings.globalize_path(path))
+
+
+# --- Coriandoli PIXELATI che scendono dall'alto (schermata nuovo record) --------
+var _confetti_done := false
+func play_confetti() -> void:
+	if _confetti_done:
+		return
+	_confetti_done = true
+	# contenitore dietro al testo (dopo il BG dentro Items)
+	var cont := Control.new()
+	cont.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$Items.add_child(cont)
+	$Items.move_child(cont, 1)   # subito dopo BG -> dietro il punteggio/testo
+	var cols := [
+		Color(1.0, 0.86, 0.15), Color(1.0, 0.35, 0.45), Color(0.35, 0.8, 1.0),
+		Color(0.45, 1.0, 0.45), Color(1.0, 0.55, 0.9), Color(1.0, 0.6, 0.12),
+		Color(1.0, 1.0, 1.0),
+	]
+	# 110 coriandoli, con ritardi fino a ~7s: pioggia LUNGA (~10s totali)
+	for i in 110:
+		var c := ColorRect.new()
+		c.color = cols[i % cols.size()]
+		var sz := roundf(randf_range(12.0, 22.0))   # quadrati pixel
+		c.size = Vector2(sz, sz)
+		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		c.pivot_offset = Vector2(sz, sz) * 0.5
+		var sx := randf_range(-300.0, 340.0)   # copre la larghezza (Items è centrato)
+		c.position = Vector2(sx, -560.0)       # parte sopra il bordo alto
+		c.rotation = randf_range(0.0, TAU)
+		cont.add_child(c)
+		var delay := randf_range(0.0, 7.0)          # spalmati nel tempo
+		var dur := randf_range(2.6, 4.2)            # caduta più lenta
+		var tw := c.create_tween()
+		tw.tween_interval(delay)
+		tw.tween_property(c, "position:y", 660.0, dur).set_trans(Tween.TRANS_LINEAR)
+		tw.parallel().tween_property(c, "position:x", sx + randf_range(-70.0, 70.0), dur)\
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.parallel().tween_property(c, "rotation", c.rotation + randf_range(-8.0, 8.0), dur)
+		tw.tween_callback(c.queue_free)

@@ -475,9 +475,11 @@ func _make_subpage(title: String, content: Control, bg_tex: Texture2D = SUBPAGE_
 	# shift camera: la home è sul canvas della Camera2D (si sposta su schermi alti);
 	# così la freccia cade dove sta l'icona profilo della home.
 	var vh := 1024.0
+	var vw := 576.0
 	var vp := get_viewport()
 	if vp:
 		vh = vp.get_visible_rect().size.y
+		vw = vp.get_visible_rect().size.x   # larghezza reale (su iPad > 576)
 	var cam_shift := maxf(0.0, vh * 0.5 - 512.0)
 
 	# freccia indietro nella posizione dell'icona profilo della home
@@ -491,12 +493,11 @@ func _make_subpage(title: String, content: Control, bg_tex: Texture2D = SUBPAGE_
 	back.pressed.connect(_on_subpage_back)
 	page.add_child(back)
 
-	# titolo: CENTRATO orizzontalmente e alla STESSA ALTEZZA della freccia back.
-	var left_x := 24.0
+	# titolo: CENTRATO su tutta la larghezza (anche iPad) e alla stessa altezza della freccia.
 	var lbl := Label.new()
 	lbl.text = title
 	lbl.position = Vector2(0, 74 + cam_shift)
-	lbl.size = Vector2(576, 78)
+	lbl.size = Vector2(vw, 78)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_override("font", FONT)
@@ -506,10 +507,11 @@ func _make_subpage(title: String, content: Control, bg_tex: Texture2D = SUBPAGE_
 	lbl.add_theme_constant_override("outline_size", 6)
 	page.add_child(lbl)
 
-	# contenuto (scrollabile, fino in fondo) sotto il titolo, allineato a sinistra
+	# contenuto CENTRATO orizzontalmente (blocco largo 528, centrato su vw) sotto il titolo
 	var cy := 200.0 + cam_shift
-	content.position = Vector2(left_x, cy)
-	content.size = Vector2(576 - left_x - 24.0, maxf(300.0, vh - cy - 30.0))
+	var content_w := 528.0
+	content.position = Vector2((vw - content_w) * 0.5, cy)
+	content.size = Vector2(content_w, maxf(300.0, vh - cy - 30.0))
 	page.add_child(content)
 
 	return page

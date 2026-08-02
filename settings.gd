@@ -28,7 +28,7 @@ var _music_players: Array[AudioStreamPlayer] = []
 var _active_music: int = 0
 var _current_stream: AudioStream = null
 const MUSIC_FADE := 1.2
-const MUSIC_VOL_DB := 0.0
+const MUSIC_VOL_DB := -8.0   # musica come sottofondo: gli effetti sonori restano in evidenza
 const SILENCE_DB := -60.0
 
 # --- SFX ---
@@ -110,7 +110,7 @@ func _make_sfx(path: String) -> AudioStreamPlayer:
 # ============================================================
 # MUSICA (crossfade)
 # ============================================================
-func play_music(stream: AudioStream) -> void:
+func play_music(stream: AudioStream, fade: float = MUSIC_FADE) -> void:
 	if stream == null:
 		return
 	# già in riproduzione? niente da fare
@@ -128,7 +128,7 @@ func play_music(stream: AudioStream) -> void:
 	new_player.volume_db = SILENCE_DB
 	if music_enabled:
 		new_player.play()
-		_fade(new_player, MUSIC_VOL_DB, MUSIC_FADE)
+		_fade(new_player, MUSIC_VOL_DB, fade)
 	_fade_out_stop(old_player, MUSIC_FADE)
 
 func _ensure_loop(stream: AudioStream) -> void:

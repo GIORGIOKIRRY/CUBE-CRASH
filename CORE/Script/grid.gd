@@ -305,6 +305,26 @@ func _ready() -> void:
 	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.5 if _is_speedrun else 1.0)
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
+	# Sfondo gameplay a TUTTO SCHERMO (adattivo su iPad/schermi grandi): CanvasLayer dietro tutto.
+	# (il vecchio Sfondo aveva dimensione fissa e non copriva gli schermi larghi.)
+	var _bg_path := "res://CORE/Assets/Art/Game/sfondo_speedrun.svg" if _is_speedrun else "res://CORE/Assets/Art/Game/sfondo_gameplay.png"
+	var _bg_layer := CanvasLayer.new()
+	_bg_layer.layer = -10
+	add_child(_bg_layer)
+	var _bgr := TextureRect.new()
+	_bgr.texture = load(_bg_path)
+	_bgr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_bgr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_bgr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_bgr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_bgr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg_layer.add_child(_bgr)
+	var _old_sfondo := get_node_or_null("../Sfondo")
+	if _old_sfondo:
+		_old_sfondo.visible = false   # sostituito dal CanvasLayer full-screen
+	var _old_bg := get_node_or_null("../BG")   # ColorRect teal a tutto schermo che copriva il nuovo sfondo
+	if _old_bg:
+		_old_bg.visible = false
 	# SPEEDRUN: griglia e sfondo dedicati
 	if _is_speedrun:
 		var gnode := get_node_or_null("Grid") as TextureRect
@@ -1155,7 +1175,7 @@ func _process(_delta: float) -> void:
 			if sfp:
 				settings.fade_out_music()      # spegni la musica dei settings (gameplay/home)
 				sfp.stream = srm
-				sfp.volume_db = 0.0
+				sfp.volume_db = -8.0           # musica speedrun come sottofondo (SFX in evidenza)
 				if settings.music_enabled:
 					sfp.play()
 		elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:

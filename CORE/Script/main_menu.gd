@@ -70,6 +70,7 @@ var _deck_base_pos := Vector2.ZERO
 
 # Barra in alto a destra: coin count + classifica + impostazioni
 var _coin_bar: TextureRect
+var _record_bar: TextureRect
 var _coin_count_label: Label
 var _leader_btn: TextureButton
 var _news_btn: TextureButton
@@ -188,8 +189,12 @@ var _shop_coins_label: Label
 var _art_pos := CAMERA_CENTER
 
 
+var _intro_pending_music := false   # true finché l'intro TV-on non fa partire la musica
+
 func _ready() -> void:
-	settings.play_music(music_player.stream)
+	# alla PRIMA apertura la musica parte a fine intro TV-on; al ritorno in home subito
+	if settings.home_intro_played:
+		settings.play_music(music_player.stream)
 	# Android 13+: chiede il permesso notifiche (iOS lo gestisce il file nativo CCNotify)
 	if OS.get_name() == "Android":
 		OS.request_permission("android.permission.POST_NOTIFICATIONS")
@@ -250,22 +255,25 @@ func _layout() -> void:
 			_nav_badge_raise = nav_h * 0.14
 			_nav_badge_base = Vector2(bar_left + bar_w / 3.0 - bs * 0.35, nav_top - bs * 0.05)
 			_apply_nav_badge_pos()
-	# contatori missioni (su CanvasLayer = schermo puro): allineali a quelli della home,
-	# che stanno sul canvas della Camera2D e si spostano di cam_shift su schermi alti.
-	var cam_shift := view_size.y * 0.5 - CAMERA_CENTER.y
-	var ccy := COUNTER_Y + cam_shift
+	# contatori missioni allineati 1:1 alla HOME. I contatori della home sono nel canvas della
+	# Camera2D (traslati), i missioni su CanvasLayer: applico la STESSA traslazione camera (x e y),
+	# così combaciano su ogni schermo (iPhone alti e iPad larghi). Zoom camera = 1.
+	var cam_dx := view_size.x * 0.5 - CAMERA_CENTER.x
+	var cam_dy := view_size.y * 0.5 - CAMERA_CENTER.y
 	if _missions_coin_bar:
-		_missions_coin_bar.position = Vector2(COIN_X, ccy)
+		_missions_coin_bar.position = Vector2(COIN_X + cam_dx, COUNTER_Y + cam_dy)
 	if _missions_coins_label:
-		_missions_coins_label.position = Vector2(COIN_X + COIN_W * COIN_ICON_FRAC, ccy)
+		_missions_coins_label.position = Vector2(COIN_X + COIN_W * COIN_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
 	if _missions_record_bar:
-		_missions_record_bar.position = Vector2(RECORD_X, ccy)
+		_missions_record_bar.position = Vector2(RECORD_X + cam_dx, COUNTER_Y + cam_dy)
 	if _missions_record_label:
-		_missions_record_label.position = Vector2(RECORD_X + RECORD_W * RECORD_ICON_FRAC, ccy)
+		_missions_record_label.position = Vector2(RECORD_X + RECORD_W * RECORD_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
 
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
-		var tabs_y := 200.0
+		# frame missioni SEMPRE subito sotto i contatori (record/monete): segue la stessa
+		# traslazione camera dei contatori -> non si sovrappone su nessun dispositivo.
+		var tabs_y := COUNTER_Y + (view_size.y * 0.5 - CAMERA_CENTER.y) + 82.0
 		var th := view_size.x * 94.0 / 576.0
 		_missions_tabs.position = Vector2(0, tabs_y)
 		_missions_tabs.size = Vector2(view_size.x, th)
@@ -431,9 +439,9 @@ func _make_sparkles(radius: float, amount: int, vmin: float, vmax: float, smin: 
 func _position_play_button() -> void:
 	if not _play_base:
 		return
-	# PLAY da solo, centrato
+	# PLAY da solo, centrato (alzato un po': non troppo vicino alla nav bar)
 	var s := (DECK_BTN_H_ART / PLAY_NEW_TEX.y) * ART_SCALE
-	var y := DECK_ROW_CENTER_ART.y
+	var y := DECK_ROW_CENTER_ART.y - 32.0
 
 	_deck_world_size = Vector2.ZERO   # deck rimosso: nessuna hit-area
 
@@ -814,6 +822,7 @@ func _build_top_right() -> void:
 	_coin_count_label = cc[1] as Label
 	# RECORD (punteggio più alto) a sinistra, stessa altezza
 	var rc := _make_counter(self, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
+	_record_bar = rc[0] as TextureRect
 	_record_labels.append(rc[1])
 	_update_coin_count()
 	_update_record_labels()
@@ -2221,11 +2230,32 @@ func _set_home_visible(v: bool) -> void:
 func _play_home_intro() -> void:
 	settings.home_intro_played = true
 	_update_mode_screen()   # animazione modalità (classica) SOTTO
+	# 1) schermo del cabinato NERO per ~1.5s
+	_set_screen_dark(true)
+	await get_tree().create_timer(1.5).timeout
+	if not is_inside_tree():
+		return
+	# 2) animazione "accensione TV" (rivela lo schermo)
 	var tf := _load_fx_frames("tvon", 17, 22.0)
+	_set_screen_dark(false)   # ripristina i colori (coperti dal frame opaco del TV-on)
 	if tf == null:
+		_start_intro_music()
 		return
 	settings.play_tvon()
+	_intro_pending_music = true
 	_start_screen_fx(tf)
+
+# Oscura/ripristina lo schermo del cabinato (animazione modalità + eventuale titolo).
+func _set_screen_dark(dark: bool) -> void:
+	var c := Color(0, 0, 0) if dark else Color(1, 1, 1)
+	if _screen_anim:
+		_screen_anim.modulate = c
+	if _screen_title:
+		_screen_title.modulate = c
+
+# Musica della home con dissolvenza molto rapida (parte a fine intro TV-on).
+func _start_intro_music() -> void:
+	settings.play_music(music_player.stream, 0.25)
 
 # Flash "cambio modalità": copre lo schermo mentre cambia la modalità sotto.
 func _play_mode_select_fx() -> void:
@@ -2260,6 +2290,10 @@ func _position_screen_fx() -> void:
 func _on_screen_fx_done() -> void:
 	if _screen_fx:
 		_screen_fx.visible = false
+	# fine intro TV-on: parte la musica (dissolvenza rapida)
+	if _intro_pending_music:
+		_intro_pending_music = false
+		_start_intro_music()
 
 func _load_fx_frames(prefix: String, count: int, fps: float) -> SpriteFrames:
 	var sf := SpriteFrames.new()

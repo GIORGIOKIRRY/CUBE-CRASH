@@ -46,6 +46,8 @@ var _rewarded: RewardedAd = null
 var _rewarded_loader := RewardedAdLoader.new()
 
 func _ready() -> void:
+	if OS.has_feature("web"):
+		return   # su WEB niente AdMob (build di test layout su browser)
 	_request_consent()
 
 # ============================================================

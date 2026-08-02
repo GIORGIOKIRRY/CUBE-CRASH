@@ -84,9 +84,11 @@ var _player_name: String = "PLAYER"
 const PROFILE_CFG := "user://profile.cfg"
 # Schermata EDIT PROFILE
 const PROFILE_DIR := "res://CORE/Assets/Art/Home/Profile/"
-const PROFILE_ICONS := [   # icone profilo selezionabili (se ne aggiungeranno altre)
-	"res://CORE/Assets/Art/Home/Profile/icon_king_cube.png",
-	"res://CORE/Assets/Art/Home/Profile/icon_trophy.png",
+const PROFILE_ICONS := [   # icone profilo selezionabili
+	"res://CORE/Assets/Art/Home/Profile/profile_blue.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_red.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_green.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_trophy.png",
 ]
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)

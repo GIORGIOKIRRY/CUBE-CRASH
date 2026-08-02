@@ -638,6 +638,13 @@ func _input(event: InputEvent) -> void:
 		return
 	if _leader_menu and _leader_menu.visible:
 		return
+	# EDIT PROFILE aperto: il tap su "cancella" non deve raggiungere il PLAY dietro
+	if _profile_menu and _profile_menu.visible:
+		return
+	if _missions_menu and _missions_menu.visible:
+		return
+	if _shop_menu and _shop_menu.visible:
+		return
 	# blocca PLAY/frecce/deck quando le impostazioni o una sotto-pagina (thanks, ecc.) sono aperte
 	var sm := get_node_or_null("%SettingsMenu")
 	if sm and sm.visible:
@@ -1439,6 +1446,9 @@ func _populate_leader() -> void:
 	_leader_req += 1
 	var req := _leader_req
 	var mode := _leader_tab
+	# invia SEMPRE il proprio miglior punteggio online prima di leggere la classifica,
+	# così la posizione è aggiornata (prima si inviava solo al salvataggio profilo).
+	leaderboard.submit_best(mode, _player_score(mode))
 	# Classifica reale da Firebase (solo giocatori veri, niente bot).
 	var entries: Array = await leaderboard.fetch_top(mode)
 	if req != _leader_req or not is_instance_valid(_leader_list):
@@ -1466,14 +1476,26 @@ func _populate_leader() -> void:
 
 # Rank alle voci reali + riga "100+" se il giocatore è fuori dalla top 100
 func _rank_real_entries(entries: Array, mode: String) -> Array:
+	var pscore := _player_score(mode)
 	var has_player := false
+	for e in entries:
+		if e.get("is_player", false):
+			has_player = true
+			break
+	if not has_player and pscore > 0:
+		# se il punteggio del giocatore rientrerebbe nella top 100 (o la lista non è piena),
+		# lo INSERISCO alla posizione GIUSTA per punteggio; solo se è davvero fuori mostro "100+".
+		var lowest: int = int(entries[-1]["score"]) if entries.size() > 0 else 0
+		if entries.size() < 100 or pscore > lowest:
+			entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true})
+			entries.sort_custom(func(a, b): return int(a["score"]) > int(b["score"]))
+		else:
+			for i in entries.size():
+				entries[i]["rank"] = i + 1
+			entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true, "rank": 0, "rank_text": "100+"})
+			return entries
 	for i in entries.size():
 		entries[i]["rank"] = i + 1
-		if entries[i].get("is_player", false):
-			has_player = true
-	var pscore := _player_score(mode)
-	if not has_player and pscore > 0:
-		entries.append({"name": _player_name, "score": pscore, "icon": _profile_icon_index, "is_player": true, "rank": 0, "rank_text": "100+"})
 	return entries
 
 func _player_score(mode: String) -> int:

@@ -28,8 +28,13 @@ func _on_back_button_pressed() -> void:
 
 func _on_settings_button_pressed() -> void:
 	settings.button_feedback()
+	# il menu e l'audio devono funzionare anche a gioco in pausa
+	SettingsMenu.process_mode = Node.PROCESS_MODE_ALWAYS
+	settings.process_mode = Node.PROCESS_MODE_ALWAYS
 	SettingsMenu.visible = true
 	MenuOpen.emit()
+	# METTE IN PAUSA il gameplay (timer speedrun, cadute, ecc.) finché le impostazioni sono aperte
+	get_tree().paused = true
 
 
 # --- Popup conferma uscita dalla partita ---------------------------------------

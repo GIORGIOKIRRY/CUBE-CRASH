@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://djpm8clk6dwl4"
-path="res://.godot/imported/effect8_009.png-50d58c03a391bfa2d0408b53f20f4074.ctex"
+path.s3tc="res://.godot/imported/effect8_009.png-50d58c03a391bfa2d0408b53f20f4074.s3tc.ctex"
+path.etc2="res://.godot/imported/effect8_009.png-50d58c03a391bfa2d0408b53f20f4074.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://CORE/Assets/Art/Game/Combo/effect8_009.png"
-dest_files=["res://.godot/imported/effect8_009.png-50d58c03a391bfa2d0408b53f20f4074.ctex"]
+dest_files=["res://.godot/imported/effect8_009.png-50d58c03a391bfa2d0408b53f20f4074.s3tc.ctex", "res://.godot/imported/effect8_009.png-50d58c03a391bfa2d0408b53f20f4074.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

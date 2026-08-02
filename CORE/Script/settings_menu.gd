@@ -42,6 +42,13 @@ const BACK_THANKS := preload("res://CORE/Assets/Art/UI/Settings/back_thanks.png"
 const FOLLOW_ME := preload("res://CORE/Assets/Art/UI/Settings/follow_me.png")
 const NAME_BOX := preload("res://CORE/Assets/Art/UI/Settings/name_box.png")
 const SEND_BTN := preload("res://CORE/Assets/Art/UI/Settings/send_button.png")
+# Social ufficiali Cube Crash (riga in fondo alla pagina MORE)
+const SOCIAL_IG := preload("res://CORE/Assets/Art/UI/Settings/social_instagram.svg")
+const SOCIAL_YT := preload("res://CORE/Assets/Art/UI/Settings/social_youtube.svg")
+const SOCIAL_TIKTOK := preload("res://CORE/Assets/Art/UI/Settings/social_tiktok.svg")
+const IG_URL := "https://www.instagram.com/cubecrashofficial/"
+const YT_URL := "https://www.youtube.com/@CubeCrashOfficial"
+const TIKTOK_URL := "https://www.tiktok.com/@cubecrashofficial?_r=1&_t=ZN-98YGDrdo8hC"
 
 const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🕹️ NUOVA HOME ARCADE\n🎯 Cabinato + tasto PLAY, scegli la modalità con le frecce\n📱 Menu in basso: Missioni · Home · Shop (ottimizzata per tablet/iPad)\n\n🧩 MODALITÀ\n💥 CLASSIC — combo a raffica + bombe (durata ribilanciata)\n⏱️ SPEEDRUN — più punti in 5 minuti (countdown 3-2-1-GO!)\n\n👤 PROFILO\n🖼️ Schermata EDIT PROFILE: scegli icona e nome personalizzati\n\n🏆 CLASSIFICA (TOP CRASHER)\n📊 Top 1-100 per Classic e Speedrun, si rinnova ogni 7 giorni\n🟢 La tua posizione evidenziata\n\n🎯 MISSIONI\n✅ GIORNALIERE (24h) e ⭐ SETTIMANALI (7 giorni)\n🪙 200 monete a missione giornaliera, 1000 a settimanale\n🔔 Badge quando hai ricompense da riscuotere\n✨ Monete e punteggio animati (contatore che sale)\n\n🔗 COMBO fino a 11 con animazioni a schermo intero\n💠 Abilità speciali con beam colorato per colore\n🎵 Nuova musica in home + nuova grafica gameplay\n\n⚡ PRESTAZIONI\n🚀 Avvio partita più veloce + animazioni combo più leggere\n👆 Tocco più preciso nel piazzare i cubi\n🐛 Fix crash e vari bug\n\n🛒 Shop in arrivo!\n\n📱 Grazie per aver provato questa build!"
 
@@ -283,7 +290,6 @@ func _build_more_page() -> void:
 
 	var entries := [
 		{"text": "CONTACT US", "cb": Callable(self, "_on_contact")},
-		{"text": "SHARE GAME", "cb": Callable(self, "_on_share_button_pressed")},
 		{"text": "TERMS OF SERVICE", "cb": Callable(self, "_open_terms")},
 		{"text": "PRIVACY POLICY", "cb": Callable(self, "_open_privacy")},
 		{"text": "PATCH NOTES", "cb": Callable(self, "_open_patchnotes")},
@@ -316,13 +322,39 @@ func _build_more_page() -> void:
 		_more_root.add_child(_make_invisible_button(
 			Vector2(0, y), Vector2(440, 73.0), entries[i]["cb"]))
 
-		if i < entries.size() - 1:
-			var d := ColorRect.new()
-			d.color = Color(0.03, 0.09, 0.24, 1.0)   # blu scuro
-			d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			d.position = Vector2(12, y + 90.0)
-			d.size = Vector2(416, 4)
-			_more_root.add_child(d)
+		# divisore sotto ogni riga (anche l'ultima: separa dalla riga social)
+		var d := ColorRect.new()
+		d.color = Color(0.03, 0.09, 0.24, 1.0)   # blu scuro
+		d.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		d.position = Vector2(12, y + 90.0)
+		d.size = Vector2(416, 4)
+		_more_root.add_child(d)
+
+	# --- riga SOCIAL ufficiali in fondo (Instagram, YouTube, TikTok) ---
+	var socials := [
+		{"tex": SOCIAL_IG, "url": IG_URL},
+		{"tex": SOCIAL_YT, "url": YT_URL},
+		{"tex": SOCIAL_TIKTOK, "url": TIKTOK_URL},
+	]
+	var sy := entries.size() * row_h + 24.0   # un po' distanziate dalle righe sopra
+	var isize := 52.0                        # più piccole
+	var gap := 44.0
+	var total := socials.size() * isize + (socials.size() - 1) * gap
+	var sx := (440.0 - total) * 0.5
+	for s in socials:
+		var btn := TextureButton.new()
+		btn.texture_normal = s["tex"]
+		btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		btn.ignore_texture_size = true
+		btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+		btn.position = Vector2(sx, sy)
+		btn.size = Vector2(isize, isize)
+		var url: String = s["url"]
+		btn.pressed.connect(func() -> void:
+			settings.button_feedback()
+			OS.shell_open(url))
+		_more_root.add_child(btn)
+		sx += isize + gap
 
 func _make_invisible_button(pos: Vector2, sz: Vector2, cb: Callable) -> Button:
 	var b := Button.new()
@@ -738,11 +770,11 @@ func _build_submit_form(cw: float) -> Control:
 	_submit_box = box
 	return box
 
-# Mostra il box 2s dopo aver premuto FOLLOW ME.
+# Mostra il box mezzo secondo dopo aver premuto FOLLOW ME.
 func _reveal_submit_after_delay() -> void:
 	if _submit_box == null or _submit_box.visible:
 		return
-	await get_tree().create_timer(2.0).timeout
+	await get_tree().create_timer(0.5).timeout
 	if _submit_box:
 		_submit_box.visible = true
 

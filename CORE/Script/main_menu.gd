@@ -186,6 +186,13 @@ var _art_pos := CAMERA_CENTER
 
 func _ready() -> void:
 	settings.play_music(music_player.stream)
+	# rimozione UNA-TANTUM del record speedrun dalla classifica online (richiesto)
+	var _cfg := ConfigFile.new()
+	if _cfg.load("user://save.cfg") == OK:
+		if not bool(_cfg.get_value("scores", "sr_lb_removed_v1", false)):
+			leaderboard.remove_best("speedrun")
+			_cfg.set_value("scores", "sr_lb_removed_v1", true)
+			_cfg.save("user://save.cfg")
 	_build_scene()
 	_build_play_button()
 	_build_screen_anim()

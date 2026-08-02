@@ -8,7 +8,7 @@ extends Node2D
 @export var offset: float = 64.0
 
 # Posizionamento BottomGrid (3 slot)
-@export var bottom_y_offset_pixels: int = 124 # quanto sotto alla griglia principale
+@export var bottom_y_offset_pixels: int = 148 # quanto sotto alla griglia principale (abbassato: non attaccato al contorno)
 @export var bottom_spacing_px: int = 140      # distanza orizzontale tra i 3 slot
 
 # Scala dei 3 cubi trascinabili: in basso sono più grandi, quando li
@@ -95,6 +95,9 @@ var _sr_music_pending: bool = false
 const MODE_C_COLOR_ORDER := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
 const MODE_C_START_COLORS := 5           # colori a inizio partita (facili le combo)
 const MODE_C_COLORS_PER_STEP := 2        # +1 colore ogni N livelli (colori più in fretta = match più duri prima)
+const SPEEDRUN_START_COLORS := 3         # speedrun: solo 3 colori i primi 3 min (tantissimi match)
+const SPEEDRUN_MAX_COLORS := 6           # speedrun: massimo colori dopo la fase iniziale
+var _bomb_suppress: float = 0.0          # dopo una bomba (+3) la prossima è meno probabile (decade nel tempo)
 # ordine dei cubi-bonus in possible_plus_pieces (3 per colore: +1,+2,+3)
 const MODE_C_PLUS_COLOR_ORDER := ["blue", "red", "pink", "purple", "yellow", "orange", "green"]
 var _mc_active_count: int = MODE_C_START_COLORS
@@ -133,6 +136,12 @@ func _load_scores() -> void:
 		high_score     = int(cfg.get_value("scores", "high_score", 0))
 		lifetime_score = int(cfg.get_value("scores", "lifetime_score", 0))
 		_speedrun_best = int(cfg.get_value("scores", "speedrun_best", 0))
+		# reset UNA-TANTUM del record speedrun (richiesto): azzera una sola volta
+		if not bool(cfg.get_value("scores", "sr_reset_v1", false)):
+			_speedrun_best = 0
+			cfg.set_value("scores", "speedrun_best", 0)
+			cfg.set_value("scores", "sr_reset_v1", true)
+			cfg.save(SAVE_PATH)
 	else:
 		high_score = 0
 		lifetime_score = 0
@@ -293,7 +302,7 @@ func _ready() -> void:
 	_mode = settings.game_mode
 	_is_speedrun = _mode == "speedrun"
 	_is_mode_c = _mode == "mode_c" or _is_speedrun   # speedrun = gameplay CLASSIC/mode_c
-	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.15 if _is_speedrun else 1.0)
+	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.5 if _is_speedrun else 1.0)
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
 	# SPEEDRUN: griglia e sfondo dedicati
@@ -301,6 +310,9 @@ func _ready() -> void:
 		var gnode := get_node_or_null("Grid") as TextureRect
 		if gnode:
 			gnode.texture = load("res://CORE/Assets/Art/Game/griglia_speedrun.svg")
+		var bnode := get_node_or_null("GridBorder") as TextureRect
+		if bnode:
+			bnode.texture = load("res://CORE/Assets/Art/Game/contorno_griglia_speedrun.svg")
 		var sfnode := get_node_or_null("../Sfondo") as TextureRect
 		if sfnode:
 			sfnode.texture = load("res://CORE/Assets/Art/Game/sfondo_speedrun.svg")
@@ -323,6 +335,9 @@ func _ready() -> void:
 		if set_btn:
 			set_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/settings_red.png")
 	_build_plus_pools()
+	# colori attivi iniziali (speedrun parte da 3 = tanti match; classic da 5)
+	if _is_mode_c:
+		_mc_active_count = _mode_c_active_count()
 	current_moves = max_moves
 	# mode_b: niente contatore mosse a schermo.
 	# mode_c: riusa quel contatore per le COMBO totali fatte.
@@ -1145,6 +1160,9 @@ func _process(_delta: float) -> void:
 			_sr_music_pending = false
 	if is_game_over:
 		return
+	# recupero della soppressione bombe (dopo una bomba la prossima è meno probabile)
+	if _bomb_suppress > 0.0:
+		_bomb_suppress = maxf(0.0, _bomb_suppress - _delta * 0.05)   # ~20s per tornare normale
 	# speedrun: il timer 5 min parte solo dopo il countdown 3-2-1-GO; a 0 finisce la partita
 	if _is_speedrun:
 		if _speedrun_started:
@@ -1154,6 +1172,8 @@ func _process(_delta: float) -> void:
 				_update_timer_label()
 				_trigger_game_over("time")
 				return
+			# colori progressivi basati sul tempo (pochi all'inizio = tanti match)
+			_mc_active_count = _mode_c_active_count()
 			# rete di sicurezza anti-blocco: se la board è piena, libera spazio
 			if not is_resolving and _is_board_full():
 				_remove_random_cells(10)
@@ -1789,10 +1809,14 @@ func _setup_speedrun_ui() -> void:
 	_update_timer_label()
 
 
+var _last_timer_sec: int = -1
 func _update_timer_label() -> void:
 	if _timer_label == null:
 		return
 	var s := int(ceil(_speedrun_time_left))
+	if s == _last_timer_sec:
+		return   # aggiorna solo quando cambia il secondo (evita lavoro ogni frame)
+	_last_timer_sec = s
 	_timer_label.text = "%d:%02d" % [s / 60, s % 60]
 	if _speedrun_time_left <= 30.0:
 		_timer_label.add_theme_color_override("font_color", Color(0.42, 0.03, 0.03))  # rosso scuro: ultimi 30s
@@ -1872,6 +1896,8 @@ func _on_ui_menu_open() -> void:
 
 func _on_settings_menu_menu_closed() -> void:
 	can_move = true
+	# riprende il gameplay quando si chiudono le impostazioni
+	get_tree().paused = false
 
 func _update_difficulty() -> void:
 	# Difficoltà GRADUALE = max(tempo, punteggio). Il TEMPO è la leva principale:
@@ -2132,10 +2158,22 @@ func _combo_refill_bias() -> float:
 	var t := float(difficulty_level) / float(max_difficulty_level)
 	# Mode C: combo ancora più frequenti (obiettivo: una combo ogni 1-2 azioni).
 	if _is_mode_c:
-		# combo presenti ma non regalate (più rare di prima): il player le costruisce
 		var b := lerpf(0.50, 0.34, t)
-		# ...ma le combo ALTE devono restare un traguardo: la 2 e la 3 sono comuni, la 4+ rara.
-		# già a combo 3 (_last_combo_shown>=3): prolungare ancora (→4+) è poco probabile.
+		if _is_speedrun:
+			# Curva difficoltà combo SPEEDRUN (bilanciata):
+			#   fino a ~3 = FACILE, ~7 = MEDIO, ~10 = COMPLESSO, ~15 = DIFFICILE, 20 = SUPER RARO.
+			var c := _last_combo_shown
+			if c >= 18:
+				b *= 0.05     # verso la 20: super raro
+			elif c >= 13:
+				b *= 0.12     # 15: difficile
+			elif c >= 9:
+				b *= 0.28     # 10: complesso
+			elif c >= 6:
+				b *= 0.55     # 7: medio
+			# c < 6: bias pieno -> le prime combo (fino a 3-5) restano facili
+			return b
+		# classic (non speedrun): la 2 e la 3 sono comuni, la 4+ più rara
 		if _last_combo_shown >= 3:
 			b *= 0.4
 		return b
@@ -2180,7 +2218,18 @@ func _build_mode_c_pools() -> void:
 		_mc_plus_by_color[acol][5] = possible_angles_pieces[i]
 
 # Numero di colori attivi in Mode C: parte da 5, +1 ogni MODE_C_COLORS_PER_STEP livelli.
+# SPEEDRUN: pochi colori all'inizio (tantissimi match) — basato sul TEMPO trascorso:
+# solo 3 colori per i primi 3 minuti, poi cresce lentamente (+1 ogni ~40s) fino a 6.
 func _mode_c_active_count() -> int:
+	if _is_speedrun:
+		var elapsed := 300.0 - _speedrun_time_left   # secondi giocati
+		if elapsed < 60.0:
+			return 3        # 1° minuto: 3 colori
+		elif elapsed < 120.0:
+			return 4        # 2° minuto: 4 colori
+		elif elapsed < 180.0:
+			return 5        # 3° minuto: 5 colori
+		return MODE_C_COLOR_ORDER.size()   # dal 4° minuto: TUTTI i colori
 	return clampi(MODE_C_START_COLORS + difficulty_level / MODE_C_COLORS_PER_STEP,
 		MODE_C_START_COLORS, MODE_C_COLOR_ORDER.size())
 
@@ -2217,6 +2266,24 @@ func _pick_plus_scene() -> PackedScene:
 		w1 = 0.50; w2 = 0.35      # media ~1.65 (+3 = 0.15)
 	else:
 		w1 = 0.72; w2 = 0.23      # media ~1.33 (+3 = 0.05) — ricco: presenti ma poco income
+	# Soppressione bombe: subito DOPO una bomba (+3) la successiva è molto meno
+	# probabile (sposta la sua probabilità su +1/+2). Decade nel tempo.
+	if _bomb_suppress > 0.0:
+		var bomb_p := maxf(0.0, 1.0 - w1 - w2)   # prob attuale della bomba +3
+		var cut := bomb_p * _bomb_suppress
+		w1 += cut * 0.6
+		w2 += cut * 0.4
+	# SPEEDRUN: TUTTE le bombe (+3, X, angoli) molto più rare, SOPRATTUTTO all'inizio.
+	# fattore ~0.05 nei primi ~40s, sale fino a max 0.60 (comunque più raro della classic).
+	var sr_bomb := 1.0
+	if _is_speedrun:
+		var el := 300.0 - _speedrun_time_left
+		sr_bomb = 0.05 + 0.55 * clampf((el - 40.0) / 140.0, 0.0, 1.0)
+		# riduci la bomba +3 spostando la sua probabilità su +1/+2
+		var bp := maxf(0.0, 1.0 - w1 - w2)
+		var cut2 := bp * (1.0 - sr_bomb)
+		w1 += cut2 * 0.6
+		w2 += cut2 * 0.4
 	var r := randf()
 	var v := 3
 	if r < w1:
@@ -2229,6 +2296,7 @@ func _pick_plus_scene() -> PackedScene:
 	var xprob := 0.015
 	if xfull >= 0.70:
 		xprob = lerpf(0.015, 0.35, clampf((xfull - 0.70) / 0.30, 0.0, 1.0))
+	xprob *= sr_bomb   # speedrun: X bomb più rara (all'inizio quasi nulla)
 	if randf() < xprob:
 		v = 4
 	# BOMBA ANGOLI: molto RARA di base, ma più probabile se gli ANGOLI sono COPERTI (così
@@ -2240,8 +2308,12 @@ func _pick_plus_scene() -> PackedScene:
 	var aprob := 0.008
 	if corners_occ >= 2:
 		aprob = lerpf(0.008, 0.28, clampf(float(corners_occ - 1) / 3.0, 0.0, 1.0))
+	aprob *= sr_bomb   # speedrun: bomba angoli più rara (all'inizio quasi nulla)
 	if randf() < aprob:
 		v = 5
+	# se è uscita una bomba +3, sopprimi la prossima (recupero nel tempo, vedi _process)
+	if v == 3:
+		_bomb_suppress = 1.0
 	# Mode C: il cubo-bonus deve avere un colore ATTIVO (così matcha con i normali).
 	if _is_mode_c and not _mc_plus_by_color.is_empty():
 		var n: int = mini(_mc_active_count, MODE_C_COLOR_ORDER.size())
@@ -2371,7 +2443,11 @@ func _bounce_bottom_piece(slot: int) -> void:
 func _wiggle_hint_at(cell: Vector2i, src: Node) -> void:
 	_clear_hint()
 	var ghost := Sprite2D.new()
-	if src != null and src.has_node("Sprite2D"):
+	# usa la texture NORMALE del cubo (i blocchi del tray usano la grafica SELECT, più
+	# grande: copiarla farebbe un fantasma troppo grande nella griglia).
+	if src != null and src.has_meta("normal_tex"):
+		ghost.texture = src.get_meta("normal_tex")
+	elif src != null and src.has_node("Sprite2D"):
 		ghost.texture = src.get_node("Sprite2D").texture
 	ghost.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
 	ghost.modulate = Color(1, 1, 1, 0.0)   # parte invisibile
@@ -2526,7 +2602,7 @@ func _show_combo_fullscreen(level: int) -> void:
 	asp.play("c")
 
 func _show_combo_effect(level: int, world_pos: Vector2) -> void:
-	var anim_level: int = clampi(level, 1, 11)   # dalla 12ª combo in poi usa COMBO 11
+	var anim_level: int = clampi(level, 1, 20)   # animazioni combo fino alla 20; oltre usa la 20
 	_show_combo_fullscreen(anim_level)           # cornice a schermo intero per ogni combo
 	var frames: SpriteFrames = _get_combo_frames(anim_level)
 	if frames == null or frames.get_frame_count("c") == 0:

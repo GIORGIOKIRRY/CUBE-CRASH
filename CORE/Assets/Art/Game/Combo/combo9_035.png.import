@@ -3,19 +3,21 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://rr20mr02qyh0"
-path="res://.godot/imported/combo9_035.png-ac32ecd9992d860752337c155594496c.ctex"
+path.s3tc="res://.godot/imported/combo9_035.png-ac32ecd9992d860752337c155594496c.s3tc.ctex"
+path.etc2="res://.godot/imported/combo9_035.png-ac32ecd9992d860752337c155594496c.etc2.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://CORE/Assets/Art/Game/Combo/combo9_035.png"
-dest_files=["res://.godot/imported/combo9_035.png-ac32ecd9992d860752337c155594496c.ctex"]
+dest_files=["res://.godot/imported/combo9_035.png-ac32ecd9992d860752337c155594496c.s3tc.ctex", "res://.godot/imported/combo9_035.png-ac32ecd9992d860752337c155594496c.etc2.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0

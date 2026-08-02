@@ -1,9 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://dybq1oauidg36"]
+[gd_scene load_steps=14 format=3 uid="uid://dybq1oauidg36"]
 
 [ext_resource type="Script" uid="uid://buqel5irtexms" path="res://CORE/Script/game.gd" id="1_6amic"]
 [ext_resource type="Script" uid="uid://vj6y1mo74g4s" path="res://CORE/Script/grid.gd" id="1_qj7w4"]
 [ext_resource type="Texture2D" path="res://CORE/Assets/Art/Game/griglia_new.svg" id="1_r4a0w"]
 [ext_resource type="Texture2D" path="res://CORE/Assets/Art/Game/sfondo_gameplay.svg" id="13_sfondo"]
+[ext_resource type="Texture2D" path="res://CORE/Assets/Art/Game/contorno_griglia_classic.svg" id="14_border"]
 [ext_resource type="Texture2D" uid="uid://b1hlk0w6qoqe1" path="res://CORE/Assets/Art/UI/Game/Top_Board.svg" id="2_qj7w4"]
 [ext_resource type="Texture2D" uid="uid://dqoaydpga4kcb" path="res://CORE/Assets/Art/UI/Menu/Back.svg" id="4_bq6fg"]
 [ext_resource type="Script" uid="uid://bdgror8l8dhfu" path="res://CORE/Script/Game_ui.gd" id="4_mwq41"]
@@ -50,6 +51,15 @@ x_start = 41.142857
 y_start = 772.857143
 offset = 82.285714
 max_moves = 15
+
+[node name="GridBorder" type="TextureRect" parent="grid"]
+offset_left = -17.0
+offset_top = 221.0
+offset_right = 593.0
+offset_bottom = 831.0
+texture = ExtResource("14_border")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="Grid" type="TextureRect" parent="grid"]
 offset_top = 238.0

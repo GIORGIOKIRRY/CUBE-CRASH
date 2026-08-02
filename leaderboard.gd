@@ -60,6 +60,17 @@ func _profile() -> Dictionary:
 # ============================================================
 # INVIO PUNTEGGIO (fire-and-forget, chiamato a fine partita)
 # ============================================================
+# Rimuove la voce del giocatore dalla classifica online per una modalità (DELETE).
+func remove_best(mode: String) -> void:
+	if DB_URL.is_empty() or _player_id.is_empty():
+		return
+	var url := "%s/leaderboards/%s/%d/%s.json" % [DB_URL, mode, _week(), _player_id]
+	var req := HTTPRequest.new()
+	add_child(req)
+	req.request_completed.connect(func(_r, _code, _h, _b) -> void: req.queue_free())
+	if req.request(url, [], HTTPClient.METHOD_DELETE) != OK:
+		req.queue_free()
+
 func submit_best(mode: String, score: int) -> void:
 	if DB_URL.is_empty() or score <= 0 or _player_id.is_empty():
 		return

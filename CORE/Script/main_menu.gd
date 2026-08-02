@@ -72,6 +72,7 @@ var _deck_base_pos := Vector2.ZERO
 var _coin_bar: TextureRect
 var _coin_count_label: Label
 var _leader_btn: TextureButton
+var _news_btn: TextureButton
 var _settings_btn2: TextureButton
 var _profile_pic: TextureRect
 var _name_frame: TextureRect
@@ -612,6 +613,10 @@ func _input(event: InputEvent) -> void:
 		return
 	if _leader_menu and _leader_menu.visible:
 		return
+	# blocca PLAY/frecce/deck quando le impostazioni o una sotto-pagina (thanks, ecc.) sono aperte
+	var sm := get_node_or_null("%SettingsMenu")
+	if sm and sm.visible:
+		return
 	if not (event is InputEventMouseButton or event is InputEventScreenTouch):
 		return
 	var world: Vector2 = get_viewport().get_canvas_transform().affine_inverse() * event.position
@@ -796,9 +801,12 @@ func _build_top_right() -> void:
 	_update_coin_count()
 	_update_record_labels()
 
-	# CLASSIFICA (trofeo) a SINISTRA delle impostazioni — più grandi e alzate
-	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(388.0, 74.0), 78.0)
+	# CLASSIFICA (trofeo) — spostata a sinistra per far posto al tasto NEWS
+	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(302.0, 74.0), 78.0)
 	_leader_btn.pressed.connect(_on_leaderboard_pressed)
+	# NEWS/RINGRAZIAMENTI (tra classifica e impostazioni) -> apre la schermata thanks
+	_news_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/news_icon.png", Vector2(388.0, 74.0), 78.0)
+	_news_btn.pressed.connect(_on_news_pressed)
 	# IMPOSTAZIONI (nuova icona)
 	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 74.0), 78.0)
 	_settings_btn2.pressed.connect(_on_settings_button_pressed)
@@ -1232,6 +1240,19 @@ func _update_coin_count() -> void:
 	if _shop_coins_label:
 		_shop_coins_label.text = c
 
+# Forza i contatori a un valore preciso (usato per tenere il vecchio totale
+# finché le monete volanti non arrivano nel contatore).
+func _set_coin_display(v: int) -> void:
+	var c := str(v)
+	if _coin_count_label:
+		_coin_count_label.text = c
+	if _missions_coins_label:
+		_missions_coins_label.text = c
+	if _shop_coins_label:
+		_shop_coins_label.text = c
+	if _coin_label:
+		_coin_label.text = "%d monete" % v
+
 
 func _on_leaderboard_pressed() -> void:
 	settings.button_feedback()
@@ -1582,6 +1603,12 @@ func _on_settings_button_pressed() -> void:
 	%SettingsMenu.visible = true
 
 
+# Tasto NEWS (tra classifica e impostazioni): apre la schermata dei ringraziamenti
+func _on_news_pressed() -> void:
+	settings.button_feedback()
+	%SettingsMenu.open_thanks_from_home()
+
+
 # Link in alto a sinistra: condividi il gioco (App Store)
 func _on_link_button_pressed() -> void:
 	settings.button_feedback()
@@ -1802,9 +1829,8 @@ func _mission_icon_path(m: Dictionary) -> String:
 		"play":
 			return "res://CORE/Assets/Art/UI/Missions/icon_play.png"
 		"break_color":
-			var cap := str(m["param"]).capitalize()
-			return "res://CORE/Assets/Art/Game/Cubes/%s/%s.svg" % [cap, cap]
-	return "res://CORE/Assets/Art/Game/Cubes/Red/Red.svg"
+			return "res://CORE/Assets/Art/UI/Missions/icon_cube_%s.png" % str(m["param"])
+	return "res://CORE/Assets/Art/UI/Missions/icon_cube_red.png"
 
 func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, halign: int) -> Label:
 	var l := Label.new()
@@ -1931,9 +1957,10 @@ func _claim_mission(index: int, is_weekly: bool = false, src: Control = null) ->
 	var got := missions.claim_weekly(index) if is_weekly else missions.claim(index)
 	if got > 0:
 		settings.button_feedback()
-		_update_coin_label()
-		_update_coin_count()
-		_populate_missions()
+		_populate_missions()   # ricostruisce la lista (rimuove la riga riscattata)
+		# NON aggiornare ancora i contatori: il valore cambia SOLO quando le
+		# monete volanti arrivano nel contatore (più naturale). Tieni il vecchio valore.
+		_set_coin_display(before)
 		_fly_coins_to_counter(src_pos, before, missions.coins)
 
 
@@ -1968,10 +1995,14 @@ func _fly_coins_to_counter(src_pos: Vector2, from_v: int, to_v: int) -> void:
 		tw.tween_property(c, "position", target - cs * 0.5, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 		tw.parallel().tween_property(c, "scale", Vector2(0.6, 0.6), 0.42)
 		tw.tween_callback(c.queue_free)
-	# conteggio + rimbalzo quando le monete iniziano ad arrivare
+	# conteggio + rimbalzo SOLO quando le monete arrivano nel contatore.
+	# A quel punto aggiorna tutti i contatori (top/shop) e anima la barra missioni.
 	var t := create_tween()
 	t.tween_interval(float(n) * 0.045 + 0.35)
-	t.tween_callback(func() -> void: _animate_coin_gain(from_v, to_v))
+	t.tween_callback(func() -> void:
+		_update_coin_count()   # top + shop + missioni al nuovo valore
+		_update_coin_label()
+		_animate_coin_gain(from_v, to_v))
 	var cl := create_tween()
 	cl.tween_interval(float(n) * 0.045 + 1.0)
 	cl.tween_callback(layer.queue_free)

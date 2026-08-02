@@ -1,0 +1,60 @@
+[gd_scene load_steps=12 format=3 uid="uid://xbomborange"]
+
+[ext_resource type="PackedScene" uid="uid://bftqiu3je1q6a" path="res://CORE/Scene/PieceScene/Piece.tscn" id="1_04l7x"]
+[ext_resource type="Texture2D" path="res://CORE/Assets/Art/Game/Cubes/_XBOMB/Orange_xbomb.svg" id="2_2ni06"]
+[ext_resource type="Texture2D" uid="uid://biuo1syqlld4r" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_2.svg" id="2_gbw0c"]
+[ext_resource type="Texture2D" uid="uid://dg1fw20lvruvb" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_3.svg" id="4_6sjov"]
+[ext_resource type="Texture2D" uid="uid://dd7iomwu63jkx" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_4.svg" id="5_isuf8"]
+[ext_resource type="Texture2D" uid="uid://bjm2cl72dlf24" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_5.svg" id="6_kr0fn"]
+[ext_resource type="Texture2D" uid="uid://dm6n037sl5rcw" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_6.svg" id="7_s3sxb"]
+[ext_resource type="Texture2D" uid="uid://bgdkjrqv6j0l3" path="res://CORE/Assets/Art/Game/Cubes/Orange/Orange_7.svg" id="8_pej0b"]
+
+[sub_resource type="Animation" id="Animation_bhmja"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [ExtResource("2_gbw0c")]
+}
+
+[sub_resource type="Animation" id="Animation_hoijn"]
+resource_name = "match"
+length = 0.3
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3),
+"transitions": PackedFloat32Array(1, 1, 1, 1, 1, 1, 1),
+"update": 1,
+"values": [ExtResource("2_2ni06"), ExtResource("2_gbw0c"), ExtResource("4_6sjov"), ExtResource("5_isuf8"), ExtResource("6_kr0fn"), ExtResource("7_s3sxb"), ExtResource("8_pej0b")]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_4ncme"]
+_data = {
+&"RESET": SubResource("Animation_bhmja"),
+&"match": SubResource("Animation_hoijn")
+}
+
+[node name="orange_plus3" instance=ExtResource("1_04l7x")]
+color = "orange"
+mooves = 4
+
+[node name="Sprite2D" parent="." index="0"]
+texture = ExtResource("2_2ni06")
+
+[node name="AnimationPlayer" parent="." index="1"]
+active = false
+libraries = {
+&"": SubResource("AnimationLibrary_4ncme")
+}

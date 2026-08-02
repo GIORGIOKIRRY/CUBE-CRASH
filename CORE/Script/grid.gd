@@ -180,11 +180,35 @@ var possible_plus_pieces = [
 	preload("res://CORE/Scene/PieceScene/green_plus_3.tscn")
 ]
 
+# BOMBA X (mooves = 4): esplode formando una X (due diagonali). Un colore per bomba,
+# ordine = MODE_C_PLUS_COLOR_ORDER (blue, red, pink, purple, yellow, orange, green).
+var possible_xbomb_pieces = [
+	preload("res://CORE/Scene/PieceScene/blue_xbomb.tscn"),
+	preload("res://CORE/Scene/PieceScene/red_xbomb.tscn"),
+	preload("res://CORE/Scene/PieceScene/pink_xbomb.tscn"),
+	preload("res://CORE/Scene/PieceScene/purple_xbomb.tscn"),
+	preload("res://CORE/Scene/PieceScene/yellow_xbomb.tscn"),
+	preload("res://CORE/Scene/PieceScene/orange_xbomb.tscn"),
+	preload("res://CORE/Scene/PieceScene/green_xbomb.tscn"),
+]
+
+# BOMBA ANGOLI (mooves = 5): rompe i 3 blocchi in ognuno dei 4 angoli della griglia.
+# Ordine = MODE_C_PLUS_COLOR_ORDER (blue, red, pink, purple, yellow, orange, green).
+var possible_angles_pieces = [
+	preload("res://CORE/Scene/PieceScene/blue_angles.tscn"),
+	preload("res://CORE/Scene/PieceScene/red_angles.tscn"),
+	preload("res://CORE/Scene/PieceScene/pink_angles.tscn"),
+	preload("res://CORE/Scene/PieceScene/purple_angles.tscn"),
+	preload("res://CORE/Scene/PieceScene/yellow_angles.tscn"),
+	preload("res://CORE/Scene/PieceScene/orange_angles.tscn"),
+	preload("res://CORE/Scene/PieceScene/green_angles.tscn"),
+]
+
 # Cubi-mossa raggruppati per valore (+1/+2/+3). Costruito da possible_plus_pieces
 # in _ready (ordine per colore: +1,+2,+3). Serve a scegliere il VALORE in base
 # alle mosse: così i cubi-mossa sono SEMPRE presenti, ma quando ne hai tante escono
 # per lo più +1 (poco income), quando sei a corto escono più +2/+3 (aiuto vero).
-var _plus_pool := {1: [], 2: [], 3: []}
+var _plus_pool := {1: [], 2: [], 3: [], 4: [], 5: []}
 
 # ----- Grid State -----
 var all_pieces: Array = []      # 2D [width][height] -> Node or null
@@ -515,8 +539,8 @@ func _bottom_slot_pixel(slot_idx: int) -> Vector2:
 # Sceglie il blocco per uno slot del tray in basso. Mode C: raramente uno speciale
 # (V/O/BOMBA) così piazzarlo e matcharlo dà un vantaggio (colonna/riga/3x3).
 func _pick_bottom_piece() -> PackedScene:
-	if _is_mode_c and randf() < BOTTOM_SPECIAL_PROB:
-		return _pick_plus_scene()
+	# i 3 blocchi del tray in basso sono SEMPRE normali: nessuno speciale (in tutte le mode).
+	# Gli speciali compaiono solo sulla board (refill), scalati con pienezza/angoli.
 	return _pick_normal_piece()
 
 func _spawn_bottom_pieces() -> void:
@@ -743,6 +767,29 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 	elif val == 2:
 		for x in width:
 			cells.append(Vector2i(x, center.y))
+	elif val == 4:
+		# BOMBA X: due diagonali complete passanti per il centro (forma una X).
+		# Lascia SPAZI VUOTI (cratere) da riempire con nuovi blocchi, come le altre bombe mode_c.
+		if _is_mode_c:
+			crater = true
+		var m := maxi(width, height)
+		for d in range(-m, m + 1):
+			cells.append(Vector2i(center.x + d, center.y + d))   # diagonale \
+			cells.append(Vector2i(center.x + d, center.y - d))   # diagonale /
+	elif val == 5:
+		# BOMBA ANGOLI: rompe i 3 blocchi (a L) in ognuno dei 4 angoli della griglia.
+		if _is_mode_c:
+			crater = true
+		var w1 := width - 1
+		var h1 := height - 1
+		for corner in [
+			[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
+			[Vector2i(w1, 0), Vector2i(w1 - 1, 0), Vector2i(w1, 1)],
+			[Vector2i(0, h1), Vector2i(1, h1), Vector2i(0, h1 - 1)],
+			[Vector2i(w1, h1), Vector2i(w1 - 1, h1), Vector2i(w1, h1 - 1)],
+		]:
+			for c in corner:
+				cells.append(c)
 	elif _is_mode_c:
 		# mode_c +3: bomba 3x3 (da -1 a +1), lascia un cratere vuoto e duraturo
 		crater = true
@@ -766,7 +813,7 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		if p != null:
 			all_pieces[c.x][c.y] = null
 			# V/O: pop del match (l'esplosione bianca resta SOLO per bomba val 3 / mode_b)
-			if is_beam or (_is_mode_c and val != 3):
+			if is_beam or (_is_mode_c and val != 3 and val != 4 and val != 5):
 				_destroy_piece_single(p)
 			else:
 				_spawn_explosion(grid_to_pixel(c.x, c.y), p)
@@ -777,11 +824,11 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 		if crater:
 			cell_active[c.x][c.y] = false   # buco: spazio vuoto e duraturo da riempire
 	if cleared > 0:
-		if is_beam or (_is_mode_c and val != 3):
+		if is_beam or (_is_mode_c and val != 3 and val != 4 and val != 5):
 			settings.play_destroy()    # V/O: suono del match
 		else:
 			settings.play_explosion()  # bomba / mode_b
-		if val == 3:
+		if val == 3 or val == 4 or val == 5:
 			settings.vibrate(500)      # BOMBA: vibrazione fortissima
 		elif is_beam:
 			# V/O: due vibrazioni di intensità crescente, un po' più lunghe
@@ -1676,12 +1723,13 @@ func _show_game_over_screen() -> void:
 			_timer_label.visible = false
 	# Interstitial a ogni sconfitta (anche speedrun): appare sopra la
 	# schermata finale, alla chiusura si ritrova il game over.
-	ads.show_interstitial()
-	# suono finale: record battuto -> New High Score, altrimenti Game Over
-	if _is_new_record:
-		settings.play_highscore()
+	# Il suono finale (Game Over / New High Score) parte SOLO dopo che
+	# l'adv e' chiusa e si torna sulla schermata del punteggio. Se non c'e'
+	# adv da mostrare, il suono parte subito.
+	if ads.show_interstitial():
+		ads.interstitial_closed.connect(_play_gameover_sound, CONNECT_ONE_SHOT)
 	else:
-		settings.play_gameover()
+		_play_gameover_sound()
 	var screen = get_node_or_null("%GameOverScreen")
 	if screen:
 		if screen.has_method("set_session_stats"):
@@ -1698,6 +1746,15 @@ func _show_game_over_screen() -> void:
 			screen.set_speedrun_mode(_speedrun_best, _is_new_record)
 		if screen is CanvasItem:
 			screen.z_index = 99999
+
+
+# Suono finale: record battuto -> New High Score, altrimenti Game Over.
+# Chiamato DOPO la chiusura dell'interstitial (o subito se non c'e' adv).
+func _play_gameover_sound() -> void:
+	if _is_new_record:
+		settings.play_highscore()
+	else:
+		settings.play_gameover()
 
 
 # Speedrun: punteggio più piccolo in alto + TIMER grande sotto; nasconde COMBO/HighScore.
@@ -2088,10 +2145,14 @@ func _combo_refill_bias() -> float:
 # di mosse (aiuto quando serve), di meno quando ne ha tante; la difficoltà li riduce.
 # Raggruppa i cubi-mossa per valore (l'array è ordinato per colore: +1,+2,+3).
 func _build_plus_pools() -> void:
-	_plus_pool = {1: [], 2: [], 3: []}
+	_plus_pool = {1: [], 2: [], 3: [], 4: [], 5: []}
 	for i in possible_plus_pieces.size():
 		var v := (i % 3) + 1
 		_plus_pool[v].append(possible_plus_pieces[i])
+	for xb in possible_xbomb_pieces:
+		_plus_pool[4].append(xb)
+	for ab in possible_angles_pieces:
+		_plus_pool[5].append(ab)
 
 # MODE C: costruisce le liste colore (normali + bonus) ordinate, per la progressione.
 func _build_mode_c_pools() -> void:
@@ -2106,6 +2167,17 @@ func _build_mode_c_pools() -> void:
 		if not _mc_plus_by_color.has(color):
 			_mc_plus_by_color[color] = {}
 		_mc_plus_by_color[color][v] = possible_plus_pieces[i]
+	# bomba X (valore 4) e ANGOLI (valore 5) per colore
+	for i in possible_xbomb_pieces.size():
+		var xcol: String = MODE_C_PLUS_COLOR_ORDER[i]
+		if not _mc_plus_by_color.has(xcol):
+			_mc_plus_by_color[xcol] = {}
+		_mc_plus_by_color[xcol][4] = possible_xbomb_pieces[i]
+	for i in possible_angles_pieces.size():
+		var acol: String = MODE_C_PLUS_COLOR_ORDER[i]
+		if not _mc_plus_by_color.has(acol):
+			_mc_plus_by_color[acol] = {}
+		_mc_plus_by_color[acol][5] = possible_angles_pieces[i]
 
 # Numero di colori attivi in Mode C: parte da 5, +1 ogni MODE_C_COLORS_PER_STEP livelli.
 func _mode_c_active_count() -> int:
@@ -2151,6 +2223,25 @@ func _pick_plus_scene() -> PackedScene:
 		v = 1
 	elif r < w1 + w2:
 		v = 2
+	# BOMBA X: molto RARA di base, ma diventa più probabile quando la tavola si riempie
+	# troppo (libera spazio con le due diagonali -> allunga il gameplay). Sostituisce lo speciale.
+	var xfull := float(_count_occupied()) / float(width * height)
+	var xprob := 0.015
+	if xfull >= 0.70:
+		xprob = lerpf(0.015, 0.35, clampf((xfull - 0.70) / 0.30, 0.0, 1.0))
+	if randf() < xprob:
+		v = 4
+	# BOMBA ANGOLI: molto RARA di base, ma più probabile se gli ANGOLI sono COPERTI (così
+	# aiuta a liberarli e ad allungare il gameplay, soprattutto in classic).
+	var corners_occ := 0
+	for cc in [Vector2i(0, 0), Vector2i(width - 1, 0), Vector2i(0, height - 1), Vector2i(width - 1, height - 1)]:
+		if is_in_grid(cc) and all_pieces[cc.x][cc.y] != null:
+			corners_occ += 1
+	var aprob := 0.008
+	if corners_occ >= 2:
+		aprob = lerpf(0.008, 0.28, clampf(float(corners_occ - 1) / 3.0, 0.0, 1.0))
+	if randf() < aprob:
+		v = 5
 	# Mode C: il cubo-bonus deve avere un colore ATTIVO (così matcha con i normali).
 	if _is_mode_c and not _mc_plus_by_color.is_empty():
 		var n: int = mini(_mc_active_count, MODE_C_COLOR_ORDER.size())

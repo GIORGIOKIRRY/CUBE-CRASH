@@ -71,10 +71,16 @@ func _build() -> void:
 	_revive_btn.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_revive_btn.ignore_texture_size = true
 	_revive_btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
-	_revive_btn.size = Vector2(474, 185)   # aspect 1472:576
-	_revive_btn.position = Vector2(288 - 237, 760)
+	_revive_btn.size = Vector2(330, 129)   # più piccolo (aspect 1472:576)
+	_revive_btn.position = Vector2(288 - 165, 800)   # centrato
 	_revive_btn.visible = false
 	_revive_btn.pressed.connect(_on_revive)
+	# mini animazione di pressione (affonda + vibra)
+	_revive_btn.button_down.connect(func() -> void:
+		_revive_btn.position.y += 5.0
+		settings.vibrate(15))
+	_revive_btn.button_up.connect(func() -> void:
+		_revive_btn.position.y -= 5.0)
 	add_child(_revive_btn)
 
 # Avvia il flusso. allow_revive=false salta la schermata revive (limite 3/partita).

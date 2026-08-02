@@ -7,7 +7,7 @@ extends Node
 const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400      # 24h (giornaliere)
 const WEEKLY_REFRESH_SECONDS := 604800   # 7 giorni (settimanali)
-const DATA_VERSION := 8           # bump per FORZARE un reset delle missioni una volta
+const DATA_VERSION := 9           # bump per FORZARE un reset delle missioni una volta
 const DAILY_REWARD := 200         # ogni missione giornaliera vale 200 monete
 const WEEKLY_REWARD := 1000       # ogni missione settimanale vale 1000 monete
 var _data_version: int = 0
@@ -81,7 +81,7 @@ func _generate() -> void:
 
 
 func _mk_score() -> Dictionary:
-	var t: int = [800, 1500, 3000, 5000].pick_random()
+	var t: int = [15000, 20000, 25000].pick_random()
 	return {"type": "score", "param": "", "target": t, "progress": 0, "reward": DAILY_REWARD, "claimed": false}
 
 func _mk_break_color(c: String) -> Dictionary:
@@ -116,23 +116,23 @@ func _generate_weekly() -> void:
 	weekly = pool.slice(0, NUM_MISSIONS)
 
 func _mk_w_score() -> Dictionary:
-	var t: int = [8000, 15000, 25000].pick_random()
+	var t: int = [40000, 50000, 60000].pick_random()
 	return {"type": "score", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
 
 func _mk_w_break_color(c: String) -> Dictionary:
-	var t: int = [150, 250, 400].pick_random()
+	var t: int = [300, 450, 600].pick_random()
 	return {"type": "break_color", "param": c, "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
 
 func _mk_w_break_total() -> Dictionary:
-	var t: int = [500, 900, 1500].pick_random()
+	var t: int = [1500, 2500, 4000].pick_random()
 	return {"type": "break_total", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
 
 func _mk_w_combo() -> Dictionary:
-	var t: int = [6, 7, 8].pick_random()
+	var t: int = [8, 9, 10].pick_random()
 	return {"type": "combo", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
 
 func _mk_w_play() -> Dictionary:
-	var t: int = [15, 25].pick_random()
+	var t: int = [25, 40].pick_random()
 	return {"type": "play", "param": "", "target": t, "progress": 0, "reward": WEEKLY_REWARD, "claimed": false}
 
 

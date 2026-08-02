@@ -36,10 +36,24 @@ const TOGGLE_ON := preload("res://CORE/Assets/Art/UI/Settings/toggle_on.png")
 const TOGGLE_OFF := preload("res://CORE/Assets/Art/UI/Settings/toggle_off.png")
 const SUBPAGE_BG := preload("res://CORE/Assets/Art/UI/Settings/subpage_bg.png")
 const ARROW_BTN := preload("res://CORE/Assets/Art/UI/Settings/arrow_setting.png")
+# Pagina THANKS: sfondo dedicato + freccia indietro rosa + tasto FOLLOW ME
+const THANKS_BG := preload("res://CORE/Assets/Art/UI/Settings/thanks_bg.png")
+const BACK_THANKS := preload("res://CORE/Assets/Art/UI/Settings/back_thanks.png")
+const FOLLOW_ME := preload("res://CORE/Assets/Art/UI/Settings/follow_me.png")
+const NAME_BOX := preload("res://CORE/Assets/Art/UI/Settings/name_box.png")
+const SEND_BTN := preload("res://CORE/Assets/Art/UI/Settings/send_button.png")
 
 const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🕹️ NUOVA HOME ARCADE\n🎯 Cabinato + tasto PLAY, scegli la modalità con le frecce\n📱 Menu in basso: Missioni · Home · Shop (ottimizzata per tablet/iPad)\n\n🧩 MODALITÀ\n💥 CLASSIC — combo a raffica + bombe (durata ribilanciata)\n⏱️ SPEEDRUN — più punti in 5 minuti (countdown 3-2-1-GO!)\n\n👤 PROFILO\n🖼️ Schermata EDIT PROFILE: scegli icona e nome personalizzati\n\n🏆 CLASSIFICA (TOP CRASHER)\n📊 Top 1-100 per Classic e Speedrun, si rinnova ogni 7 giorni\n🟢 La tua posizione evidenziata\n\n🎯 MISSIONI\n✅ GIORNALIERE (24h) e ⭐ SETTIMANALI (7 giorni)\n🪙 200 monete a missione giornaliera, 1000 a settimanale\n🔔 Badge quando hai ricompense da riscuotere\n✨ Monete e punteggio animati (contatore che sale)\n\n🔗 COMBO fino a 11 con animazioni a schermo intero\n💠 Abilità speciali con beam colorato per colore\n🎵 Nuova musica in home + nuova grafica gameplay\n\n⚡ PRESTAZIONI\n🚀 Avvio partita più veloce + animazioni combo più leggere\n👆 Tocco più preciso nel piazzare i cubi\n🐛 Fix crash e vari bug\n\n🛒 Shop in arrivo!\n\n📱 Grazie per aver provato questa build!"
 
 const CONTACT_EMAIL := "cubecrash.game@gmail.com"
+# Link del canale (per il tasto "follow" nella pagina THANKS). Da aggiornare col vero canale.
+const CHANNEL_URL := "https://www.instagram.com/giorgiorossellini/"
+# Lista OG SUPPORTERS aggiornabile da remoto (editabile dal telefono, nessuna build):
+# editor: https://www.npoint.io/docs/c0e50f85707a48094b11
+const SUPPORTERS_URL := "https://api.npoint.io/c0e50f85707a48094b11"
+# Posta in arrivo delle proposte utenti ("manda il tuo nome"):
+# editor: https://www.npoint.io/docs/d580adb16f1a8cd182d6
+const PENDING_URL := "https://api.npoint.io/d580adb16f1a8cd182d6"
 const PRIVACY_TEXT := "PRIVACY POLICY\nUltimo aggiornamento: 2026\n\nCube Crash (\"il Gioco\") rispetta la tua privacy. Questa policy spiega quali dati vengono trattati.\n\n1. DATI CHE NON RACCOGLIAMO\nNon richiediamo registrazione né account. Non raccogliamo nome reale, email, contatti o posizione. I progressi (punteggi, monete, profilo) sono salvati SOLO sul tuo dispositivo.\n\n2. CLASSIFICA ONLINE\nSe usi la classifica, vengono inviati solo il nome che scegli e il punteggio, per mostrarli nella classifica pubblica. Non sono dati identificativi.\n\n3. PUBBLICITÀ (AdMob)\nIl Gioco mostra annunci tramite Google AdMob. Google può raccogliere identificatori del dispositivo e dati d'uso per fornire annunci. Consulta la Privacy Policy di Google: https://policies.google.com/privacy\nPuoi limitare gli annunci personalizzati dalle impostazioni del dispositivo.\n\n4. MINORI\nIl Gioco è adatto a tutti. Non raccogliamo consapevolmente dati personali da minori.\n\n5. CONTATTI\nPer domande: cubecrash.game@gmail.com"
 const TERMS_TEXT := "TERMS OF SERVICE\nUltimo aggiornamento: 2026\n\nBenvenuto in Cube Crash. Usando il Gioco accetti questi termini.\n\n1. LICENZA\nTi concediamo una licenza personale, non esclusiva e non trasferibile per giocare a Cube Crash per uso personale e non commerciale.\n\n2. USO CORRETTO\nNon puoi copiare, modificare, decompilare o distribuire il Gioco, né usare cheat, bot o exploit che alterino punteggi e classifiche.\n\n3. CONTENUTI E PROGRESSI\nI progressi sono salvati sul dispositivo. Aggiornamenti o disinstallazioni possono azzerarli. Non garantiamo il recupero dei dati.\n\n4. PUBBLICITÀ E ACQUISTI\nIl Gioco può mostrare annunci di terze parti. Eventuali acquisti futuri sono soggetti alle regole dello store.\n\n5. NESSUNA GARANZIA\nIl Gioco è fornito \"così com'è\", senza garanzie. Non siamo responsabili per eventuali danni derivanti dall'uso.\n\n6. MODIFICHE\nPossiamo aggiornare questi termini; l'uso continuato implica l'accettazione.\n\n7. CONTATTI\ncubecrash.game@gmail.com"
 
@@ -47,6 +61,19 @@ var _more_root: Control = null
 var _more_back: TextureButton = null   # freccia per tornare alla pagina 1 dei settings
 var _subpages: Dictionary = {}   # nome -> Control
 var _opened_from_home: bool = false   # thanks aperto direttamente dalla home
+var _supporters_label: Label = null   # etichetta nomi OG (aggiornata da remoto)
+var _supporters_http: HTTPRequest = null
+const SUPPORTERS_DEFAULT := "Giorgio Rossellini, Marco Zappa, Tu"
+# Modulo "manda il tuo nome" (appare solo dopo aver premuto FOLLOW ME)
+var _submit_box: Control = null
+var _name_input: LineEdit = null
+var _submit_btn: BaseButton = null
+var _submit_status: Label = null
+var _submit_http: HTTPRequest = null
+var _submit_phase: int = 0        # 0 idle, 1 GET pending, 2 POST pending
+var _submit_entry: String = ""    # proposta in corso
+var _thanks_vb: Control = null       # VBox contenuto thanks
+var _thanks_scroll: ScrollContainer = null   # scroll della pagina thanks
 
 # ==========================
 # Ready
@@ -112,7 +139,7 @@ func _apply_new_design() -> void:
 	var divs := ["Divider1", "Divider2", "Divider3", "Divider4"]
 	var lbl_names := {"SoundSettings": "Sound", "MusicSettings": "Music", "VibrationSettings": "Vibration", "MoreSettings": "More", "ShareSettings": "Share"}
 	var y0 := 54.0      # più spazio tra la zona titolo/X e le sezioni
-	var step := 100.0   # padding tra sezioni (leggermente aumentato)
+	var step := 106.0   # padding tra sezioni (leggermente aumentato)
 	var row_h := 73.0
 	for i in rows.size():
 		var r := get_node_or_null("Menu/Control/" + rows[i]) as Control
@@ -259,9 +286,9 @@ func _build_more_page() -> void:
 		{"text": "SHARE GAME", "cb": Callable(self, "_on_share_button_pressed")},
 		{"text": "TERMS OF SERVICE", "cb": Callable(self, "_open_terms")},
 		{"text": "PRIVACY POLICY", "cb": Callable(self, "_open_privacy")},
-		{"text": "THANKS", "cb": Callable(self, "_open_thanks")},
+		{"text": "PATCH NOTES", "cb": Callable(self, "_open_patchnotes")},
 	]
-	var row_h := 100.0   # stesso passo delle righe di SETTINGS
+	var row_h := 106.0   # stesso passo delle righe di SETTINGS
 	for i in entries.size():
 		var y := i * row_h
 
@@ -293,7 +320,7 @@ func _build_more_page() -> void:
 			var d := ColorRect.new()
 			d.color = Color(0.03, 0.09, 0.24, 1.0)   # blu scuro
 			d.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			d.position = Vector2(12, y + 87.0)
+			d.position = Vector2(12, y + 90.0)
 			d.size = Vector2(416, 4)
 			_more_root.add_child(d)
 
@@ -331,6 +358,11 @@ func _open_privacy() -> void:
 func _open_thanks() -> void:
 	settings.button_feedback()
 	_show_subpage("thanks")
+	_fetch_supporters()
+
+func _open_patchnotes() -> void:
+	settings.button_feedback()
+	_show_subpage("patchnotes")
 
 # ==========================
 # Sotto-pagine a schermo intero
@@ -338,7 +370,7 @@ func _open_thanks() -> void:
 func _build_subpages() -> void:
 	_subpages["terms"] = _make_subpage("TERMS OF SERVICE", _terms_content())
 	_subpages["privacy"] = _make_subpage("PRIVACY POLICY", _privacy_content())
-	_subpages["thanks"] = _make_subpage("THANKS", _thanks_content())
+	_subpages["thanks"] = _make_subpage("THANKS", _thanks_content(), THANKS_BG, BACK_THANKS)
 	_subpages["patchnotes"] = _make_subpage("NOVITÀ", _patchnotes_content())
 
 func _show_subpage(name: String) -> void:
@@ -351,6 +383,7 @@ func open_thanks_from_home() -> void:
 	visible = true
 	_show_more(false)
 	_show_subpage("thanks")
+	_fetch_supporters()
 
 # Apertura diretta delle PATCH NOTES dalla home (tastino pergamena in alto a destra)
 func open_patchnotes_from_home() -> void:
@@ -372,6 +405,8 @@ func _pixel_emoji_font() -> Font:
 func _patchnotes_content() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER   # niente barra a destra
+	scroll.clip_contents = true
 	scroll.size = Vector2(496, 640)
 	var lbl := Label.new()
 	lbl.text = PATCHNOTES_TEXT
@@ -387,7 +422,7 @@ func _hide_subpages() -> void:
 	for k in _subpages:
 		_subpages[k].visible = false
 
-func _make_subpage(title: String, content: Control) -> Control:
+func _make_subpage(title: String, content: Control, bg_tex: Texture2D = SUBPAGE_BG, back_tex: Texture2D = BACK_ICON) -> Control:
 	var page := Control.new()
 	page.set_anchors_preset(Control.PRESET_FULL_RECT)
 	page.visible = false
@@ -395,9 +430,9 @@ func _make_subpage(title: String, content: Control) -> Control:
 	page.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(page)
 
-	# sfondo dedicato (subpage_bg) a tutto schermo
+	# sfondo dedicato a tutto schermo
 	var bg := TextureRect.new()
-	bg.texture = SUBPAGE_BG
+	bg.texture = bg_tex
 	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -415,7 +450,7 @@ func _make_subpage(title: String, content: Control) -> Control:
 
 	# freccia indietro nella posizione dell'icona profilo della home
 	var back := TextureButton.new()
-	back.texture_normal = BACK_ICON
+	back.texture_normal = back_tex
 	back.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	back.ignore_texture_size = true
 	back.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
@@ -424,11 +459,12 @@ func _make_subpage(title: String, content: Control) -> Control:
 	back.pressed.connect(_on_subpage_back)
 	page.add_child(back)
 
-	# titolo
+	# titolo: CENTRATO orizzontalmente e alla STESSA ALTEZZA della freccia back.
+	var left_x := 24.0
 	var lbl := Label.new()
 	lbl.text = title
-	lbl.position = Vector2(0, 168 + cam_shift)
-	lbl.size = Vector2(576, 70)
+	lbl.position = Vector2(0, 74 + cam_shift)
+	lbl.size = Vector2(576, 78)
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_override("font", FONT)
@@ -438,10 +474,10 @@ func _make_subpage(title: String, content: Control) -> Control:
 	lbl.add_theme_constant_override("outline_size", 6)
 	page.add_child(lbl)
 
-	# contenuto (scrollabile, fino in fondo) sotto il titolo
-	var cy := 258.0 + cam_shift
-	content.position = Vector2(40, cy)
-	content.size = Vector2(496, maxf(300.0, vh - cy - 30.0))
+	# contenuto (scrollabile, fino in fondo) sotto il titolo, allineato a sinistra
+	var cy := 200.0 + cam_shift
+	content.position = Vector2(left_x, cy)
+	content.size = Vector2(576 - left_x - 24.0, maxf(300.0, vh - cy - 30.0))
 	page.add_child(content)
 
 	return page
@@ -484,14 +520,329 @@ func _terms_content() -> Control:
 func _privacy_content() -> Control:
 	return _scrollable_text(PRIVACY_TEXT)
 
+# Applica uno stroke (outline) scuro al testo così resta leggibile sullo sfondo colorato.
+func _add_stroke(l: Label, size: int = 8) -> void:
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", size)
+
 func _thanks_content() -> Control:
+	# la pagina THANKS è scrollabile (i nomi saranno tanti)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	scroll.clip_contents = true
+	_thanks_scroll = scroll
+
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
-	var og := _make_text("OG", Color(1, 0.85, 0.1), 34)
-	var names := _make_text("Giorgio Rossellini, Tu", Color(1, 1, 1), 30)
+	vb.add_theme_constant_override("separation", 16)
+	vb.size_flags_horizontal = Control.SIZE_FILL
+	_thanks_vb = vb
+	var cw := 528.0   # larghezza contenuto (pagina left_x=24)
+	vb.custom_minimum_size = Vector2(cw, 0)
+	scroll.add_child(vb)
+
+	# ringraziamento speciale (inglese) a tutti gli iscritti al canale
+	var msg := _make_text(
+		"A special thank you to everyone subscribed to the channel who has supported this project since day one. You made Cube Crash possible. ❤️",
+		Color(1, 1, 1), 30)
+	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg.add_theme_font_override("font", _pixel_emoji_font())
+	msg.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(msg)
+	vb.add_child(msg)
+
+	# invito: vuoi il tuo nome qui? segui il canale
+	var invite := _make_text(
+		"Want your name here? Tap the button and follow me!",
+		Color(1, 1, 1), 26)
+	invite.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	invite.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(invite)
+	vb.add_child(invite)
+
+	# modulo "manda il tuo nome" (SOPRA il follow, nascosto finché non premi FOLLOW ME)
+	vb.add_child(_build_submit_form(cw))
+
+	# spazio sopra il tasto follow
+	var top_gap := Control.new()
+	top_gap.custom_minimum_size = Vector2(cw, 20)
+	top_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(top_gap)
+
+	# tasto FOLLOW ME (immagine) -> apre il canale. Wrapper per il saltellio.
+	var follow_wrap := Control.new()
+	follow_wrap.custom_minimum_size = Vector2(cw, 128)
+	follow_wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var follow := TextureButton.new()
+	follow.texture_normal = FOLLOW_ME
+	follow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	follow.ignore_texture_size = true
+	follow.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	follow.size = Vector2(cw, 128)   # aspect 1472:576 -> ~328x128 centrato
+	follow.pressed.connect(func() -> void:
+		settings.button_feedback()
+		OS.shell_open(CHANNEL_URL)
+		# il modulo "manda il tuo nome" appare 2s dopo aver premuto FOLLOW ME
+		_reveal_submit_after_delay())
+	# mini animazione di pressione (affonda + vibra)
+	follow.button_down.connect(func() -> void:
+		follow.position.y += 5.0
+		settings.vibrate(15))
+	follow.button_up.connect(func() -> void:
+		follow.position.y -= 5.0)
+	follow_wrap.add_child(follow)
+	vb.add_child(follow_wrap)
+	# saltellio continuo del tasto (avviato quando è nell'albero)
+	follow.ready.connect(func() -> void: _bounce_follow(follow))
+	if follow.is_inside_tree():
+		_bounce_follow(follow)
+
+	# spazio extra tra il tasto e l'elenco dei nomi
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(cw, 44)
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(spacer)
+
+	# "OG SUPPORTERS" in oro pixel con stroke nero + luccichio (luminosità)
+	var og := _make_text("OG SUPPORTERS", Color(1.0, 0.86, 0.25), 34)
+	og.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	og.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(og)   # stroke nero
 	vb.add_child(og)
+	# luccichio: pulsazione continua della luminosità/alone
+	og.ready.connect(func() -> void: _shine_gold(og))
+	if og.is_inside_tree():
+		_shine_gold(og)
+
+	var names := _make_text(SUPPORTERS_DEFAULT, Color(1, 1, 1), 28)
+	names.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	names.custom_minimum_size = Vector2(cw, 0)
+	names.add_theme_constant_override("line_spacing", 6)
+	_add_stroke(names)
 	vb.add_child(names)
-	return vb
+	_supporters_label = names
+
+	# spazio in fondo per scrollare comodamente
+	var bottom_gap := Control.new()
+	bottom_gap.custom_minimum_size = Vector2(cw, 60)
+	bottom_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(bottom_gap)
+
+	return scroll
+
+# Scarica la lista OG SUPPORTERS da remoto (npoint) e aggiorna la label.
+# Editabile dal telefono: https://www.npoint.io/docs/c0e50f85707a48094b11
+# Se offline / errore, resta la lista di default già mostrata.
+func _fetch_supporters() -> void:
+	if _supporters_http == null:
+		_supporters_http = HTTPRequest.new()
+		add_child(_supporters_http)
+		_supporters_http.request_completed.connect(_on_supporters_fetched)
+	# evita richieste sovrapposte
+	if _supporters_http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		return
+	_supporters_http.request(SUPPORTERS_URL)
+
+func _on_supporters_fetched(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if code != 200:
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY or not data.has("og_supporters"):
+		return
+	var arr: Array = data["og_supporters"]
+	var clean: Array = []
+	for n in arr:
+		var s := str(n).strip_edges()
+		if s != "":
+			clean.append(s)
+	if clean.is_empty():
+		return
+	if is_instance_valid(_supporters_label):
+		_supporters_label.text = ", ".join(clean)
+
+# --- Modulo "manda il tuo nome" -------------------------------------------------
+func _build_submit_form(cw: float) -> Control:
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	box.custom_minimum_size = Vector2(cw, 0)
+	box.visible = false   # appare 3s dopo FOLLOW ME
+
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(cw, 24)
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(spacer)
+
+	var q := _make_text("To be added we'll verify that you follow us.\nSend your name:", Color(1, 1, 1), 26)
+	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	q.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(q)
+	box.add_child(q)
+
+	# campo nome dentro il box-immagine
+	var box_h := cw * 322.0 / 2693.0   # aspect del box
+	var name_wrap := Control.new()
+	name_wrap.custom_minimum_size = Vector2(cw, box_h)
+	var nb := TextureRect.new()
+	nb.texture = NAME_BOX
+	nb.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	nb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	nb.stretch_mode = TextureRect.STRETCH_SCALE
+	nb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_wrap.add_child(nb)
+	var inp := LineEdit.new()
+	inp.placeholder_text = "Your name (or @instagram)"
+	inp.max_length = 30
+	inp.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inp.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inp.offset_left = 22
+	inp.offset_right = -22
+	inp.offset_top = 4
+	inp.offset_bottom = -4
+	inp.add_theme_font_override("font", FONT)
+	inp.add_theme_font_size_override("font_size", 30)
+	inp.add_theme_color_override("font_color", Color(0.1, 0.05, 0.12))
+	inp.add_theme_color_override("font_placeholder_color", Color(0.4, 0.4, 0.45))
+	inp.add_theme_color_override("caret_color", Color(0.1, 0.05, 0.12))
+	var empty := StyleBoxEmpty.new()
+	inp.add_theme_stylebox_override("normal", empty)
+	inp.add_theme_stylebox_override("focus", empty)
+	inp.focus_entered.connect(_on_name_focus_in)
+	inp.focus_exited.connect(_on_name_focus_out)
+	name_wrap.add_child(inp)
+	box.add_child(name_wrap)
+	_name_input = inp
+
+	# tasto SEND (immagine)
+	var send_h := cw * 299.0 / 2735.0   # aspect del tasto
+	var send := TextureButton.new()
+	send.texture_normal = SEND_BTN
+	send.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	send.ignore_texture_size = true
+	send.stretch_mode = TextureButton.STRETCH_SCALE
+	send.custom_minimum_size = Vector2(cw, send_h)
+	send.button_down.connect(func() -> void: send.modulate = Color(0.9, 0.9, 0.9))
+	send.button_up.connect(func() -> void: send.modulate = Color(1, 1, 1))
+	send.pressed.connect(_on_submit_name)
+	box.add_child(send)
+	_submit_btn = send
+
+	# esito
+	var status := _make_text("", Color(1, 1, 1), 24)
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(status)
+	box.add_child(status)
+	_submit_status = status
+
+	_submit_box = box
+	return box
+
+# Mostra il box 2s dopo aver premuto FOLLOW ME.
+func _reveal_submit_after_delay() -> void:
+	if _submit_box == null or _submit_box.visible:
+		return
+	await get_tree().create_timer(2.0).timeout
+	if _submit_box:
+		_submit_box.visible = true
+
+# Quando il campo nome prende il focus, porto il modulo in cima all'area scroll
+# (così resta in alto, sopra la tastiera, senza tagliare nulla).
+func _on_name_focus_in() -> void:
+	if _thanks_scroll == null or _submit_box == null:
+		return
+	await get_tree().process_frame   # attende il layout
+	if is_instance_valid(_thanks_scroll) and is_instance_valid(_submit_box):
+		var target := int(maxf(0.0, _submit_box.position.y - 8.0))
+		_thanks_scroll.scroll_vertical = target
+
+func _on_name_focus_out() -> void:
+	pass
+
+func _on_submit_name() -> void:
+	if _submit_phase != 0:
+		return   # invio già in corso
+	var nm := ""
+	if is_instance_valid(_name_input):
+		nm = _name_input.text.strip_edges()
+	if nm.length() < 2:
+		if _submit_status:
+			_submit_status.text = "Please enter your name."
+		return
+	settings.button_feedback()
+	_submit_entry = nm
+	if _submit_status:
+		_submit_status.text = "Sending..."
+	if _submit_btn:
+		_submit_btn.disabled = true
+	if _submit_http == null:
+		_submit_http = HTTPRequest.new()
+		add_child(_submit_http)
+		_submit_http.request_completed.connect(_on_submit_http)
+	# leggo la lista attuale, poi aggiungo (read-modify-write)
+	_submit_phase = 1
+	_submit_http.request(PENDING_URL)
+
+func _on_submit_http(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if _submit_phase == 1:
+		# fase GET: prendo la lista, aggiungo la nuova proposta, poi POST
+		var arr: Array = []
+		if code == 200:
+			var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if typeof(data) == TYPE_DICTIONARY and data.has("pending") and typeof(data["pending"]) == TYPE_ARRAY:
+				arr = data["pending"]
+		arr.append(_submit_entry)
+		var payload := JSON.stringify({"pending": arr})
+		_submit_phase = 2
+		var headers := PackedStringArray(["Content-Type: application/json"])
+		_submit_http.request(PENDING_URL, headers, HTTPClient.METHOD_POST, payload)
+	elif _submit_phase == 2:
+		# fase POST: esito finale
+		_submit_phase = 0
+		if code == 200 or code == 201:
+			# chiudo la tastiera e nascondo tutto il modulo tranne il "grazie",
+			# così la sezione non resta a ingombrare la pagina.
+			if _name_input:
+				_name_input.release_focus()
+				_name_input.get_parent().visible = false   # nasconde box nome
+			if _submit_btn:
+				_submit_btn.visible = false
+			if _submit_status:
+				_submit_status.text = "Thanks! We've added you ❤️"
+				_submit_status.add_theme_font_override("font", _pixel_emoji_font())
+			# dopo 2.5s sparisce l'intera sezione
+			get_tree().create_timer(2.5).timeout.connect(func() -> void:
+				if is_instance_valid(_submit_box):
+					_submit_box.visible = false)
+		else:
+			_submit_phase = 0
+			if _submit_status:
+				_submit_status.text = "Network error, try again."
+			if _submit_btn:
+				_submit_btn.disabled = false
+
+# Saltellio continuo del tasto FOLLOW ME (su e giù, in loop).
+func _bounce_follow(btn: Control) -> void:
+	if not is_instance_valid(btn):
+		return
+	var base_y := btn.position.y
+	var t := btn.create_tween().set_loops()
+	t.tween_property(btn, "position:y", base_y - 12.0, 0.45).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	t.tween_property(btn, "position:y", base_y, 0.55).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+
+# Luccichio dorato: pulsazione continua di luminosità + alone brillante.
+func _shine_gold(l: Label) -> void:
+	if not is_instance_valid(l):
+		return
+	var t := l.create_tween().set_loops()
+	t.tween_method(_apply_gold_shine.bind(l), 0.0, 1.0, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	t.tween_method(_apply_gold_shine.bind(l), 1.0, 0.0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func _apply_gold_shine(k: float, l: Label) -> void:
+	if not is_instance_valid(l):
+		return
+	# solo luminosità (luccichio): lo stroke resta nero
+	l.modulate = Color(1, 1, 1).lerp(Color(1.5, 1.35, 0.8), k)
 
 # ==========================
 # Close (X): back se sei in More, altrimenti chiudi

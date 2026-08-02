@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Cube Crash — Gestione Supporters</title>
+<style>
+  :root{ --bg:#0b1026; --card:#151b3a; --line:#2a336b; --pink:#ff2ea6; --orange:#ff7a1a; --green:#25c26b; --red:#e23b3b; --txt:#eef1ff; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:linear-gradient(160deg,#0b1026,#141a3f); color:var(--txt); min-height:100vh; }
+  header{ padding:18px 16px; background:linear-gradient(90deg,var(--pink),var(--orange)); color:#fff; font-weight:800; font-size:20px; letter-spacing:.5px; position:sticky; top:0; z-index:5; }
+  main{ padding:16px; max-width:640px; margin:0 auto; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin:0 0 16px; }
+  h2{ margin:0 0 10px; font-size:16px; opacity:.9; display:flex; align-items:center; gap:8px; }
+  .count{ background:var(--line); border-radius:999px; padding:2px 10px; font-size:13px; }
+  .row{ display:flex; align-items:center; gap:8px; padding:10px; border:1px solid var(--line); border-radius:12px; margin-bottom:8px; background:#0f1533; }
+  .row .name{ flex:1; font-size:16px; word-break:break-word; }
+  button{ border:0; border-radius:10px; padding:10px 12px; font-size:15px; font-weight:700; color:#fff; cursor:pointer; }
+  button:active{ transform:translateY(1px); }
+  .ok{ background:var(--green); } .no{ background:var(--red); } .rm{ background:#3a4483; }
+  .wide{ width:100%; padding:14px; font-size:16px; margin-top:8px; }
+  .approveall{ background:linear-gradient(90deg,#25c26b,#1aa657); }
+  input[type=text],input[type=password]{ width:100%; padding:13px; border-radius:12px; border:1px solid var(--line); background:#0f1533; color:#fff; font-size:16px; }
+  .add{ display:flex; gap:8px; margin-top:10px; }
+  .add input{ flex:1; }
+  .add button{ background:var(--orange); }
+  .muted{ opacity:.6; font-size:14px; padding:6px 2px; }
+  #status{ position:sticky; bottom:0; padding:10px 16px; font-size:14px; text-align:center; background:#0b1026cc; backdrop-filter:blur(6px); }
+  .toolbar{ display:flex; gap:8px; margin-bottom:14px; }
+  .toolbar button{ flex:1; background:#3a4483; }
+  #gate{ max-width:360px; margin:12vh auto; padding:24px; }
+  .hidden{ display:none; }
+</style>
+</head>
+<body>
+<header>🧊 Cube Crash — Supporters</header>
+
+<div id="gate" class="card">
+  <h2>🔒 Accesso</h2>
+  <input id="pw" type="password" placeholder="Password" autocomplete="off">
+  <button class="wide add" style="background:var(--pink)" onclick="login()">Entra</button>
+  <div id="gateErr" class="muted" style="color:#ff8f8f"></div>
+</div>
+
+<main id="app" class="hidden">
+  <div class="toolbar">
+    <button onclick="loadAll()">🔄 Aggiorna</button>
+    <button onclick="logout()">Esci</button>
+  </div>
+
+  <div class="card">
+    <h2>📥 Richieste in arrivo <span class="count" id="pcount">0</span></h2>
+    <div id="pending"></div>
+    <button class="wide approveall" onclick="approveAll()">✓ Approva tutte</button>
+  </div>
+
+  <div class="card">
+    <h2>⭐ OG Supporters (lista pubblica) <span class="count" id="scount">0</span></h2>
+    <div id="supporters"></div>
+    <div class="add">
+      <input id="newname" type="text" placeholder="Aggiungi un nome…">
+      <button onclick="addName()">Aggiungi</button>
+    </div>
+  </div>
+</main>
+
+<div id="status" class="hidden"></div>
+
+<script>
+const PW_HASH = "b5b9f695b9c97a9791941691b0ffc66157bec2b3f6b24a465164e159bec2d557"; // SHA-256
+const SUPP_URL = "https://api.npoint.io/c0e50f85707a48094b11";
+const PEND_URL = "https://api.npoint.io/d580adb16f1a8cd182d6";
+
+let supporters = [];
+let pending = [];
+
+function setStatus(msg, color){
+  const s = document.getElementById('status');
+  s.classList.remove('hidden');
+  s.textContent = msg;
+  s.style.color = color || '#9fb4ff';
+}
+
+async function sha256hex(s){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function login(){
+  const v = document.getElementById('pw').value;
+  if(await sha256hex(v) === PW_HASH){
+    sessionStorage.setItem('cc_auth','1');
+    showApp();
+  }else{
+    document.getElementById('gateErr').textContent = 'Password errata.';
+  }
+}
+function logout(){ sessionStorage.removeItem('cc_auth'); location.reload(); }
+
+function showApp(){
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  loadAll();
+}
+
+async function loadAll(){
+  setStatus('Carico…');
+  try{
+    const [s,p] = await Promise.all([
+      fetch(SUPP_URL,{cache:'no-store'}).then(r=>r.json()),
+      fetch(PEND_URL,{cache:'no-store'}).then(r=>r.json())
+    ]);
+    supporters = Array.isArray(s.og_supporters) ? s.og_supporters : [];
+    pending = Array.isArray(p.pending) ? p.pending : [];
+    render();
+    setStatus('Aggiornato ✓', '#7ee0a4');
+  }catch(e){ setStatus('Errore di rete: '+e.message, '#ff8f8f'); }
+}
+
+async function saveSupporters(){
+  await fetch(SUPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({og_supporters:supporters})});
+}
+async function savePending(){
+  await fetch(PEND_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pending:pending})});
+}
+
+function esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render(){
+  document.getElementById('pcount').textContent = pending.length;
+  document.getElementById('scount').textContent = supporters.length;
+
+  const pc = document.getElementById('pending');
+  pc.innerHTML = pending.length ? '' : '<div class="muted">Nessuna richiesta.</div>';
+  pending.forEach((name,i)=>{
+    const row = document.createElement('div'); row.className='row';
+    row.innerHTML = `<div class="name">${esc(name)}</div>
+      <button class="ok" onclick="approve(${i})">✓</button>
+      <button class="no" onclick="reject(${i})">✗</button>`;
+    pc.appendChild(row);
+  });
+
+  const sc = document.getElementById('supporters');
+  sc.innerHTML = supporters.length ? '' : '<div class="muted">Lista vuota.</div>';
+  supporters.forEach((name,i)=>{
+    const row = document.createElement('div'); row.className='row';
+    row.innerHTML = `<div class="name">${esc(name)}</div>
+      <button class="rm" onclick="removeName(${i})">✕</button>`;
+    sc.appendChild(row);
+  });
+}
+
+async function approve(i){
+  const name = pending[i];
+  if(name==null) return;
+  if(!supporters.includes(name)) supporters.push(name);
+  pending.splice(i,1);
+  render();
+  setStatus('Salvo…');
+  try{ await Promise.all([saveSupporters(),savePending()]); setStatus('Approvato: '+name+' ✓','#7ee0a4'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
+}
+
+async function reject(i){
+  const name = pending[i];
+  pending.splice(i,1);
+  render();
+  setStatus('Salvo…');
+  try{ await savePending(); setStatus('Rifiutato: '+name,'#9fb4ff'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
+}
+
+async function approveAll(){
+  if(!pending.length){ setStatus('Nessuna richiesta.'); return; }
+  pending.forEach(n=>{ if(!supporters.includes(n)) supporters.push(n); });
+  const n = pending.length; pending = [];
+  render();
+  setStatus('Salvo…');
+  try{ await Promise.all([saveSupporters(),savePending()]); setStatus('Approvate '+n+' richieste ✓','#7ee0a4'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
+}
+
+async function addName(){
+  const el = document.getElementById('newname');
+  const v = el.value.trim();
+  if(v.length<1) return;
+  if(!supporters.includes(v)) supporters.push(v);
+  el.value='';
+  render();
+  setStatus('Salvo…');
+  try{ await saveSupporters(); setStatus('Aggiunto: '+v+' ✓','#7ee0a4'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
+}
+
+async function removeName(i){
+  const name = supporters[i];
+  supporters.splice(i,1);
+  render();
+  setStatus('Salvo…');
+  try{ await saveSupporters(); setStatus('Rimosso: '+name,'#9fb4ff'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
+}
+
+document.getElementById('pw').addEventListener('keydown',e=>{ if(e.key==='Enter') login(); });
+document.getElementById('newname')&&document.getElementById('newname').addEventListener('keydown',e=>{ if(e.key==='Enter') addName(); });
+
+if(sessionStorage.getItem('cc_auth')==='1') showApp();
+</script>
+</body>
+</html>

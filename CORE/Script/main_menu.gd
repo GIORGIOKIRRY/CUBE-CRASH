@@ -94,12 +94,13 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Profile/profile_cupgold.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_cupgreen.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_creator.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_beta.png",
 ]
 # icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
 # Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
 # "creator" NON viene dalle missioni: si sblocca da remoto quando l'admin
 # approva la richiesta Creator (vedi _fetch_creator_approval).
-const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator"}
+const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator", 8: "beta"}
 const CREATOR_BIN_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
@@ -1991,6 +1992,8 @@ func _mission_icon_path(m: Dictionary) -> String:
 			return "res://CORE/Assets/Art/UI/Missions/icon_play.png"   # controller
 		"score_classic":
 			return "res://CORE/Assets/Art/UI/Missions/icon_score.png"
+		"beta":
+			return "res://CORE/Assets/Art/Home/Profile/profile_beta.png"
 	return "res://CORE/Assets/Art/UI/Missions/icon_cube_red.png"
 
 func _miss_label(txt: String, size: int, col: Color, pos: Vector2, sz: Vector2, halign: int) -> Label:

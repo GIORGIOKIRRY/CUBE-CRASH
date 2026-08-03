@@ -7,7 +7,7 @@ extends Node
 const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400      # 24h (giornaliere)
 const WEEKLY_REFRESH_SECONDS := 604800   # 7 giorni (settimanali)
-const DATA_VERSION := 11          # bump per FORZARE un reset delle missioni una volta
+const DATA_VERSION := 12          # bump per FORZARE un reset delle missioni una volta
 const DAILY_REWARD := 200         # ogni missione giornaliera vale 200 monete
 const WEEKLY_REWARD := 1000       # ogni missione settimanale vale 1000 monete
 const MONTHLY_REFRESH_SECONDS := 2592000   # 30 giorni (mensili)
@@ -87,6 +87,9 @@ func seconds_until_monthly_refresh() -> int:
 func _generate_monthly() -> void:
 	# NB: se una missione mensile era già stata riscattata (icona sbloccata) resta tale.
 	monthly = [
+		# BETA TESTER: già completata per chi gioca durante la beta (basta riscuotere l'icona)
+		{"type": "beta", "param": "", "target": 1, "progress": 1,
+			"reward_type": "icon", "reward_icon": "beta", "claimed": false},
 		{"type": "streak", "param": "", "target": 7, "progress": 0,
 			"reward_type": "icon", "reward_icon": "fire", "claimed": false},
 		{"type": "score_classic", "param": "", "target": 500000, "progress": 0,
@@ -330,6 +333,8 @@ func describe(m: Dictionary) -> String:
 			return "Entra ogni giorno per %d giorni" % m["target"]
 		"score_classic":
 			return "Fai %s punti in CLASSIC" % fmt(int(m["target"]))
+		"beta":
+			return "Hai giocato alla versione BETA di Cube Crash!"
 	return "?"
 
 

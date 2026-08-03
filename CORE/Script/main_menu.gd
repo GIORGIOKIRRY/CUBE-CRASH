@@ -799,9 +799,9 @@ var _record_labels: Array = []
 const REC_CLASSIC_TEX := "res://CORE/Assets/Art/Home/counter_record_classic.png"
 const REC_SR_TEX := "res://CORE/Assets/Art/Home/counter_record_speedrun.png"
 const REC_CLASSIC_ICON_FRAC := 0.24
-const REC_SR_ICON_FRAC := 0.27
+const REC_SR_ICON_FRAC := 0.22
 const REC_CLASSIC_W := 44.0 * 900.0 / 192.0    # aspetto naturale a h=44
-const REC_SR_W := 44.0 * 928.0 / 192.0
+const REC_SR_W := 44.0 * 1155.0 / 191.0
 var _record_bars: Array = []     # tutte le barre record (home/missioni/shop)
 
 # Crea un contatore (frame + numero centrato nella zona scura). Ritorna [bar, label].
@@ -1235,7 +1235,7 @@ func _layout_profile() -> void:
 	_profile_name_edit.add_theme_font_size_override("font_size", int(nb_h * 0.56))
 	_profile_name_edit.position = Vector2(nb_x + nb_w * 0.05, row_cy - nb_h * 0.34)
 	_profile_name_edit.size = Vector2(nb_w * 0.9, nb_h * 0.68)
-	_profile_edit_btn.position = Vector2(nb_x + nb_w - eb_s * 0.55, row_cy - eb_s * 0.5)   # più a sinistra
+	_profile_edit_btn.position = Vector2(nb_x + nb_w - eb_s * 0.30, row_cy - eb_s * 0.5)   # un po' più a destra
 	_profile_edit_btn.size = Vector2(eb_s, eb_s)
 	# frame selezione icone: ABBASSATO
 	var sf_w := fw * 0.88

@@ -1930,11 +1930,13 @@ func _update_high_score_labels_everywhere() -> void:
 	if hs and hs is Label:
 		hs.text = "HighScore: " + str(high_score)
 
+	# BEST SCORE del game over: DIPENDE dalla modalità (speedrun -> _speedrun_best,
+	# classic -> high_score). Altrimenti in speedrun mostrava il record classico.
 	var gos = get_node_or_null("%GameOverScreen")
 	if gos:
 		var best := gos.get_node_or_null("Items/L_BestScoreNumber")
 		if best and best is Label:
-			best.text = str(high_score)
+			best.text = str(_speedrun_best if _is_speedrun else high_score)
 
 func _update_gameover_current_score() -> void:
 	var gos = get_node_or_null("%GameOverScreen")

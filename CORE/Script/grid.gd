@@ -340,6 +340,9 @@ func _ready() -> void:
 		# _process quando è pronta -> _ready finisce subito e la board si genera regolarmente.
 		ResourceLoader.load_threaded_request(SR_MUSIC_PATH)
 		_sr_music_pending = true
+		# se disattivi/riattivi la musica dai settings, ferma/riprende anche quella speedrun
+		if not settings.music_toggled.is_connected(_on_music_toggled):
+			settings.music_toggled.connect(_on_music_toggled)
 	# icona uscita: speedrun = freccia ROSSA, classic = X, altre = freccia
 	var back_btn := get_node_or_null("../UI/BackButton") as TextureButton
 	if back_btn:
@@ -1175,9 +1178,11 @@ func _process(_delta: float) -> void:
 			if sfp:
 				settings.fade_out_music()      # spegni la musica dei settings (gameplay/home)
 				sfp.stream = srm
-				sfp.volume_db = -8.0           # musica speedrun come sottofondo (SFX in evidenza)
-				if settings.music_enabled:
-					sfp.play()
+				# SEMPRE in play: la musica è a TEMPO col timer 5 min (non loop). Se OFF parte
+				# comunque, solo MUTATA, e avanza col timer; il toggle la muta/smuta senza
+				# riavviarla. Riparte da zero solo con "play again".
+				sfp.volume_db = -8.0 if settings.music_enabled else -80.0
+				sfp.play()
 		elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
 			_sr_music_pending = false
 	if is_game_over:
@@ -1200,6 +1205,12 @@ func _process(_delta: float) -> void:
 			if not is_resolving and _is_board_full():
 				_remove_random_cells(10)
 		_update_timer_label()
+		# la musica speedrun segue il toggle "Musica" (muta/smuta, non si ferma)
+		var _srp := get_node_or_null("../AudioStreamPlayer2D") as AudioStreamPlayer
+		if _srp and _srp.playing:
+			var _tv := -8.0 if settings.music_enabled else -80.0
+			if _srp.volume_db != _tv:
+				_srp.volume_db = _tv
 	# difficoltà basata sul tempo: aggiorna ~1 volta al secondo anche mentre si risolve
 	if Time.get_ticks_msec() - _last_diff_update_ms > 1000:
 		_last_diff_update_ms = Time.get_ticks_msec()
@@ -1759,6 +1770,12 @@ func _remove_random_cells(n: int) -> void:
 		settings.vibrate(50)
 
 func _show_game_over_screen() -> void:
+	# invia il punteggio alla CLASSIFICA online a fine partita (così appare anche
+	# senza aprire la classifica): speedrun -> "speedrun", classic (mode_c) -> "classic".
+	if _is_speedrun:
+		leaderboard.submit_best("speedrun", _speedrun_best)
+	elif _mode == "mode_c":
+		leaderboard.submit_best("classic", high_score)
 	# Speedrun: si va dritti alla schermata finale senza DefeatFlow, quindi la
 	# board resta sotto. Nascondila (e il timer) così i cubi non si sovrappongono
 	# al punteggio mostrato.
@@ -1807,6 +1824,14 @@ func _on_gameover_after_ad() -> void:
 		var s = get_node_or_null("%GameOverScreen")
 		if s and s.has_method("play_confetti"):
 			s.play_confetti()
+
+# Toggle musica dai settings: ferma/riprende anche la musica speedrun (player della scena).
+func _on_music_toggled(enabled: bool) -> void:
+	var sfp := get_node_or_null("../AudioStreamPlayer2D") as AudioStreamPlayer
+	if sfp == null or sfp.stream == null or not sfp.playing:
+		return
+	# solo MUTA/SMUTA (non ferma): la musica resta in sync col timer
+	sfp.volume_db = -8.0 if enabled else -80.0
 
 
 # Speedrun: punteggio più piccolo in alto + TIMER grande sotto; nasconde COMBO/HighScore.

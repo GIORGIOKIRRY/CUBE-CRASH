@@ -5,7 +5,7 @@ signal MenuOpen
 
 const MODE_FONT := preload("res://CORE/Assets/Font/Jersey10-Regular.ttf")
 
-var _exit_popup: Control = null
+var _exit_popup: Node = null   # CanvasLayer che contiene il popup (layer alto)
 
 func _ready() -> void:
 	SettingsMenu.visible = false
@@ -42,8 +42,14 @@ func _show_exit_confirm() -> void:
 	# ricostruisci ogni volta (punteggio aggiornato)
 	if _exit_popup != null and is_instance_valid(_exit_popup):
 		_exit_popup.queue_free()
-	_exit_popup = _build_exit_popup()
-	add_child(_exit_popup)
+	# su un CanvasLayer alto (sopra gli effetti combo, layer 90): il popup + il nero
+	# di opacità devono stare SOPRA a tutto durante la pausa.
+	var _lay := CanvasLayer.new()
+	_lay.layer = 120
+	_lay.process_mode = Node.PROCESS_MODE_ALWAYS
+	_lay.add_child(_build_exit_popup())
+	add_child(_lay)
+	_exit_popup = _lay   # liberandolo si libera anche il popup dentro
 	# mette in pausa il gioco (così in speedrun il timer non scorre mentre decidi)
 	get_tree().paused = true
 
@@ -51,14 +57,16 @@ func _build_exit_popup() -> Control:
 	var root := Control.new()
 	root.z_index = 2000
 	root.process_mode = Node.PROCESS_MODE_ALWAYS   # funziona anche a gioco in pausa
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)   # rect = viewport (così i figli si ancorano bene)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.7)
-	dim.offset_left = -400.0
-	dim.offset_top = -400.0
-	dim.offset_right = 1000.0
-	dim.offset_bottom = 1600.0
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)   # copre SEMPRE tutto lo schermo
+	dim.offset_left = 0.0
+	dim.offset_top = 0.0
+	dim.offset_right = 0.0
+	dim.offset_bottom = 0.0
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	# tap FUORI dal frame -> torna al gameplay
 	dim.gui_input.connect(func(e: InputEvent) -> void:
@@ -67,10 +75,12 @@ func _build_exit_popup() -> Control:
 	root.add_child(dim)
 
 	# frame (2496x1984 -> box scura interna a y 0.274..0.661)
-	var FL := 28.0
-	var FT := 306.0
+	# CENTRATO sul viewport reale (così è al centro su ogni dispositivo).
+	var _vp := get_viewport().get_visible_rect().size
 	var FW := 520.0
 	var FH := 413.0
+	var FL := (_vp.x - FW) * 0.5
+	var FT := (_vp.y - FH) * 0.5
 	var frame := TextureRect.new()
 	frame.texture = load("res://CORE/Assets/Art/UI/Game/exit_frame.png")
 	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

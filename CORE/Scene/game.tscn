@@ -141,7 +141,7 @@ text = "HighScore: 0"
 horizontal_alignment = 2
 
 [node name="SettingsLayer" type="CanvasLayer" parent="."]
-layer = 20
+layer = 120
 
 [node name="SettingsMenu" parent="SettingsLayer" instance=ExtResource("9_kdr7y")]
 unique_name_in_owner = true

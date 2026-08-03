@@ -91,10 +91,12 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Profile/profile_green.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_fire.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_trophy.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_cupgold.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_cupgreen.png",
 ]
 # icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
 # Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
-const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy"}
+const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen"}
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
 var _profile_menu: Control
@@ -1171,7 +1173,7 @@ func _layout_profile() -> void:
 	_profile_name_edit.add_theme_font_size_override("font_size", int(nb_h * 0.56))
 	_profile_name_edit.position = Vector2(nb_x + nb_w * 0.05, row_cy - nb_h * 0.34)
 	_profile_name_edit.size = Vector2(nb_w * 0.9, nb_h * 0.68)
-	_profile_edit_btn.position = Vector2(nb_x + nb_w, row_cy - eb_s * 0.5)
+	_profile_edit_btn.position = Vector2(nb_x + nb_w - eb_s * 0.55, row_cy - eb_s * 0.5)   # più a sinistra
 	_profile_edit_btn.size = Vector2(eb_s, eb_s)
 	# frame selezione icone: ABBASSATO
 	var sf_w := fw * 0.88
@@ -2003,7 +2005,7 @@ func _make_mission_row(index: int, m: Dictionary, kind: String = "daily") -> Con
 		fill.size = Vector2(bw * (0.974 - 0.025) * frac, bh * (0.853 - 0.143))
 		content.add_child(fill)
 		content.add_child(_miss_tex(MISS + "bar_front.png", Vector2(bx, by), Vector2(bw, bh)))
-		var prog := _miss_label("%d/%d" % [m["progress"], m["target"]], 18, Color(1, 1, 1), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER)
+		var prog := _miss_label("%s/%s" % [_fmt_score(int(m["progress"])), _fmt_score(int(m["target"]))], 18, Color(1, 1, 1), Vector2(bx, by), Vector2(bw, bh), HORIZONTAL_ALIGNMENT_CENTER)
 		prog.add_theme_constant_override("outline_size", 6)
 		prog.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 		content.add_child(prog)

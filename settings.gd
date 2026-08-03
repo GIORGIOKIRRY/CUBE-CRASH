@@ -1,5 +1,9 @@
 extends Node
 
+# emesso quando la musica viene attivata/disattivata (es. la scena speedrun,
+# che ha un suo player, la ferma/riprende di conseguenza)
+signal music_toggled(enabled: bool)
+
 # ============================================================
 # Autoload "settings" — impostazioni + audio + feedback aptico.
 # MUSICA: gestita qui con 2 player persistenti per il CROSSFADE
@@ -50,7 +54,8 @@ var _sfx_bomb: AudioStreamPlayer        # esplosione bombe (+3 / X / angoli)
 var _sfx_arrow: AudioStreamPlayer       # frecce cambio modalità (home)
 var _sfx_coin: AudioStreamPlayer        # animazione monete che salgono
 var _sfx_mission: AudioStreamPlayer     # riscossione missione completata
-var _sfx_combo: Array[AudioStreamPlayer] = []   # combo 1..5
+var _sfx_combo: Array[AudioStreamPlayer] = []       # combo NUOVI 1..11 (volume pieno)
+var _sfx_combo_old: Array[AudioStreamPlayer] = []   # combo VECCHI 1..5 (layer più basso)
 
 const SFX_DIR := "res://CORE/Assets/Music&Sound/SFX/"
 
@@ -93,8 +98,13 @@ func _setup_sfx_players() -> void:
 	_sfx_arrow = _make_sfx(SFX_DIR + "arrow.mp3")
 	_sfx_coin = _make_sfx(SFX_DIR + "coin.mp3")
 	_sfx_mission = _make_sfx(SFX_DIR + "mission.mp3")
-	for i in range(1, 6):
-		_sfx_combo.append(_make_sfx(SFX_DIR + "combo%d.mp3" % i))
+	for i in range(1, 12):   # 11 suoni combo NUOVI (1..11); oltre l'11 usa l'11
+		_sfx_combo.append(_make_sfx(SFX_DIR + "combo%d.wav" % i))
+	for i in range(1, 6):    # combo VECCHI (1..5) sotto, più bassi di volume
+		var op := _make_sfx(SFX_DIR + "combo%d.mp3" % i)
+		if op:
+			op.volume_db = -12.0
+		_sfx_combo_old.append(op)
 
 func _make_sfx(path: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
@@ -214,7 +224,10 @@ func play_combo(level: int) -> void:
 	if _sfx_combo.is_empty():
 		return
 	var i: int = clampi(level, 1, _sfx_combo.size()) - 1
-	_play_sfx(_sfx_combo[i])
+	_play_sfx(_sfx_combo[i])           # nuovo suono (volume pieno)
+	if not _sfx_combo_old.is_empty():  # vecchio suono in layer, più basso
+		var j: int = clampi(level, 1, _sfx_combo_old.size()) - 1
+		_play_sfx(_sfx_combo_old[j])
 
 func _play_sfx(p: AudioStreamPlayer) -> void:
 	if p == null or not sound_enabled:
@@ -250,6 +263,7 @@ func set_music_enabled(enabled: bool) -> void:
 		_fade(cur, MUSIC_VOL_DB, MUSIC_FADE)
 	else:
 		_fade_out_stop(cur, MUSIC_FADE)
+	music_toggled.emit(enabled)   # avvisa le scene con musica propria (speedrun)
 	save_settings()
 
 func set_sound_enabled(enabled: bool) -> void:
@@ -259,7 +273,7 @@ func set_sound_enabled(enabled: bool) -> void:
 	if not sound_enabled:
 		var all_sfx := [_sfx_uiclick, _sfx_destroy, _sfx_extramove, _sfx_disappear, _sfx_pickup,
 			_sfx_place, _sfx_playbtn, _sfx_toggle_on, _sfx_toggle_off,
-			_sfx_error, _sfx_gameover, _sfx_highscore] + _sfx_combo
+			_sfx_error, _sfx_gameover, _sfx_highscore] + _sfx_combo + _sfx_combo_old
 		for p in all_sfx:
 			if p != null:
 				p.stop()

@@ -7,7 +7,7 @@ extends Node
 const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400      # 24h (giornaliere)
 const WEEKLY_REFRESH_SECONDS := 604800   # 7 giorni (settimanali)
-const DATA_VERSION := 10          # bump per FORZARE un reset delle missioni una volta
+const DATA_VERSION := 11          # bump per FORZARE un reset delle missioni una volta
 const DAILY_REWARD := 200         # ogni missione giornaliera vale 200 monete
 const WEEKLY_REWARD := 1000       # ogni missione settimanale vale 1000 monete
 const MONTHLY_REFRESH_SECONDS := 2592000   # 30 giorni (mensili)
@@ -91,6 +91,10 @@ func _generate_monthly() -> void:
 			"reward_type": "icon", "reward_icon": "fire", "claimed": false},
 		{"type": "score_classic", "param": "", "target": 500000, "progress": 0,
 			"reward_type": "icon", "reward_icon": "trophy", "claimed": false},
+		{"type": "score_classic", "param": "", "target": 1000000, "progress": 0,
+			"reward_type": "icon", "reward_icon": "cupgold", "claimed": false},
+		{"type": "score_classic", "param": "", "target": 1500000, "progress": 0,
+			"reward_type": "icon", "reward_icon": "cupgreen", "claimed": false},
 	]
 	# ripristina lo stato "claimed" se l'icona è già stata sbloccata
 	for m in monthly:
@@ -289,14 +293,26 @@ func claim(index: int) -> int:
 func claim_weekly(index: int) -> int:
 	return _claim_from(weekly, index)
 
+# Numero con i punti come separatori delle migliaia (es. 1500000 -> "1.500.000").
+func fmt(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	var cnt := 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		cnt += 1
+		if cnt % 3 == 0 and i > 0:
+			out = "." + out
+	return out
+
 func describe(m: Dictionary) -> String:
 	match m["type"]:
 		"score":
-			return "Raggiungi %d punti in una partita" % m["target"]
+			return "Raggiungi %s punti in una partita" % fmt(int(m["target"]))
 		"break_color":
-			return "Rompi %d cubi %s" % [m["target"], COLOR_IT.get(m["param"], m["param"])]
+			return "Rompi %s cubi %s" % [fmt(int(m["target"])), COLOR_IT.get(m["param"], m["param"])]
 		"break_total":
-			return "Rompi %d cubi in totale" % m["target"]
+			return "Rompi %s cubi in totale" % fmt(int(m["target"]))
 		"combo":
 			return "Fai una COMBO %d" % m["target"]
 		"play":
@@ -304,7 +320,7 @@ func describe(m: Dictionary) -> String:
 		"streak":
 			return "Entra ogni giorno per %d giorni" % m["target"]
 		"score_classic":
-			return "Fai %d punti in CLASSIC" % m["target"]
+			return "Fai %s punti in CLASSIC" % fmt(int(m["target"]))
 	return "?"
 
 

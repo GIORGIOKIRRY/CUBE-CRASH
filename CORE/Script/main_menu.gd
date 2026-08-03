@@ -265,9 +265,13 @@ func _layout() -> void:
 	if _missions_coins_label:
 		_missions_coins_label.position = Vector2(COIN_X + COIN_W * COIN_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
 	if _missions_record_bar:
-		_missions_record_bar.position = Vector2(RECORD_X + cam_dx, COUNTER_Y + cam_dy)
+		_missions_record_bar.position = Vector2(REC_CLASSIC_X + cam_dx, COUNTER_Y + cam_dy)
 	if _missions_record_label:
-		_missions_record_label.position = Vector2(RECORD_X + RECORD_W * RECORD_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
+		_missions_record_label.position = Vector2(REC_CLASSIC_X + REC_W * REC_CLASSIC_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
+	if _missions_record_sr_bar:
+		_missions_record_sr_bar.position = Vector2(REC_SR_X + cam_dx, COUNTER_Y + cam_dy)
+	if _missions_record_sr_label:
+		_missions_record_sr_label.position = Vector2(REC_SR_X + REC_W * REC_SR_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
 
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
@@ -793,8 +797,22 @@ const COIN_TEX := "res://CORE/Assets/Art/UI/Menu/coin_count.png"
 const RECORD_TEX := "res://CORE/Assets/Art/UI/Menu/record_count.png"
 var _record_labels: Array = []
 
+# Due contatori RECORD affiancati: CLASSIC (trofeo) + SPEEDRUN (trofeo+fiamma).
+const REC_W := 185.0
+const REC_CLASSIC_X := 8.0
+const REC_SR_X := 200.0
+const REC_CLASSIC_TEX := "res://CORE/Assets/Art/Home/counter_record_classic.png"
+const REC_SR_TEX := "res://CORE/Assets/Art/Home/counter_record_speedrun.png"
+const REC_CLASSIC_ICON_FRAC := 0.25
+const REC_SR_ICON_FRAC := 0.28
+const REC_FONT := 22
+var _record_sr_labels: Array = []
+var _record_sr_bar: TextureRect
+var _missions_record_sr_bar: TextureRect
+var _missions_record_sr_label: Label
+
 # Crea un contatore (frame + numero centrato nella zona scura). Ritorna [bar, label].
-func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float, icon_frac: float) -> Array:
+func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float, icon_frac: float, font_size: int = 26) -> Array:
 	var bar := TextureRect.new()
 	bar.texture = load(tex_path)
 	bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -806,7 +824,7 @@ func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float,
 	parent.add_child(bar)
 	var lbl := Label.new()
 	lbl.add_theme_font_override("font", MODE_FONT)
-	lbl.add_theme_font_size_override("font_size", 26)
+	lbl.add_theme_font_size_override("font_size", font_size)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -816,21 +834,34 @@ func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float,
 	parent.add_child(lbl)
 	return [bar, lbl]
 
+# Costruisce i due contatori record (classic + speedrun) affiancati.
+# Ritorna [classic_bar, classic_lbl, sr_bar, sr_lbl].
+func _build_record_pair(parent: Node) -> Array:
+	var rc := _make_counter(parent, REC_CLASSIC_TEX, REC_CLASSIC_X, COUNTER_Y, REC_W, REC_CLASSIC_ICON_FRAC, REC_FONT)
+	_record_labels.append(rc[1])
+	var sr := _make_counter(parent, REC_SR_TEX, REC_SR_X, COUNTER_Y, REC_W, REC_SR_ICON_FRAC, REC_FONT)
+	_record_sr_labels.append(sr[1])
+	return [rc[0], rc[1], sr[0], sr[1]]
+
 func _update_record_labels() -> void:
 	var rec := _fmt_score(_player_score("classic"))
+	var rec_sr := _fmt_score(_player_score("speedrun"))
 	for l in _record_labels:
 		if is_instance_valid(l):
 			(l as Label).text = rec
+	for l in _record_sr_labels:
+		if is_instance_valid(l):
+			(l as Label).text = rec_sr
 
 func _build_top_right() -> void:
 	# MONETE a destra
 	var cc := _make_counter(self, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
 	_coin_bar = cc[0] as TextureRect
 	_coin_count_label = cc[1] as Label
-	# RECORD (punteggio più alto) a sinistra, stessa altezza
-	var rc := _make_counter(self, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
-	_record_bar = rc[0] as TextureRect
-	_record_labels.append(rc[1])
+	# RECORD a sinistra: CLASSIC (trofeo) + SPEEDRUN (trofeo+fiamma) affiancati
+	var pair := _build_record_pair(self)
+	_record_bar = pair[0] as TextureRect
+	_record_sr_bar = pair[2] as TextureRect
 	_update_coin_count()
 	_update_record_labels()
 
@@ -1914,10 +1945,11 @@ func _build_missions_menu() -> void:
 	_missions_coin_bar = mcc[0] as TextureRect
 	_missions_coin_bar.pivot_offset = _missions_coin_bar.size * 0.5
 	_missions_coins_label = mcc[1] as Label
-	var mrc := _make_counter(_missions_menu, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
-	_missions_record_bar = mrc[0] as TextureRect
-	_missions_record_label = mrc[1] as Label
-	_record_labels.append(_missions_record_label)
+	var mpair := _build_record_pair(_missions_menu)
+	_missions_record_bar = mpair[0] as TextureRect
+	_missions_record_label = mpair[1] as Label
+	_missions_record_sr_bar = mpair[2] as TextureRect
+	_missions_record_sr_label = mpair[3] as Label
 
 	# striscia TAB (weekly / daily): texture full-width, posizionata in _layout
 	_missions_tabs = TextureRect.new()
@@ -2501,8 +2533,7 @@ func _build_shop_menu() -> void:
 	# contatori in alto: MONETE a destra + RECORD a sinistra (come home/missioni)
 	var scc := _make_counter(_shop_menu, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
 	_shop_coins_label = scc[1] as Label
-	var src := _make_counter(_shop_menu, RECORD_TEX, RECORD_X, COUNTER_Y, RECORD_W, RECORD_ICON_FRAC)
-	_record_labels.append(src[1])
+	_build_record_pair(_shop_menu)
 	var t := Label.new()
 	t.text = "SHOP"
 	t.add_theme_font_override("font", MODE_FONT)

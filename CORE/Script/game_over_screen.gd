@@ -284,7 +284,7 @@ func set_mode_tag(mode: String) -> void:
 	if lbl == null:
 		lbl = Label.new()
 		lbl.name = "ModeTag"
-		lbl.add_theme_font_override("font", MODE_FONT)
+		lbl.add_theme_font_override("font", STATS_FONT)
 		lbl.add_theme_font_size_override("font_size", 40)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

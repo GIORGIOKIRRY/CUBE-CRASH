@@ -160,4 +160,26 @@ func _on_exit_cancel() -> void:
 func _on_exit_confirm() -> void:
 	get_tree().paused = false
 	settings.button_feedback()
+	# ADV LUNGA (rewarded) a OGNI abbandono partita; si torna al menu solo dopo
+	# che l'adv è chiusa. Fallback: interstitial -> nessuna adv -> menu diretto.
+	if ads.is_rewarded_ready():
+		ads.rewarded_closed.connect(_go_home_after_ad, CONNECT_ONE_SHOT)
+		if not ads.show_rewarded():
+			if ads.rewarded_closed.is_connected(_go_home_after_ad):
+				ads.rewarded_closed.disconnect(_go_home_after_ad)
+			_fallback_interstitial_then_home()
+	else:
+		_fallback_interstitial_then_home()
+
+func _fallback_interstitial_then_home() -> void:
+	if ads.is_interstitial_ready():
+		ads.interstitial_closed.connect(_go_home_after_ad, CONNECT_ONE_SHOT)
+		if not ads.show_interstitial():
+			if ads.interstitial_closed.is_connected(_go_home_after_ad):
+				ads.interstitial_closed.disconnect(_go_home_after_ad)
+			_go_home_after_ad()
+	else:
+		_go_home_after_ad()
+
+func _go_home_after_ad() -> void:
 	transition.change_scene("res://CORE/Scene/MainMenu.tscn")

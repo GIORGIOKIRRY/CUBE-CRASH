@@ -93,10 +93,14 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Profile/profile_trophy.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_cupgold.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_cupgreen.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_creator.png",
 ]
 # icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
 # Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
-const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen"}
+# "creator" NON viene dalle missioni: si sblocca da remoto quando l'admin
+# approva la richiesta Creator (vedi _fetch_creator_approval).
+const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator"}
+const CREATOR_BIN_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
 var _profile_menu: Control
@@ -848,6 +852,8 @@ func _build_top_right() -> void:
 
 	# PROFILE PICTURE a SINISTRA (mostra l'icona scelta; tap -> schermata EDIT PROFILE)
 	_load_player_name()
+	# controlla da remoto se questo giocatore è stato approvato come Creator
+	_fetch_creator_approval()
 	_profile_pic = TextureRect.new()
 	_profile_pic.texture = load(_current_profile_icon_path())
 	_profile_pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -1214,6 +1220,41 @@ func _close_profile() -> void:
 	_profile_menu.visible = false
 
 # icona profilo bloccata? (missione mensile non ancora riscossa)
+# --- Sblocco icona Creator (approvazione remota via admin) ---------------------
+var _creator_http: HTTPRequest = null
+
+func _fetch_creator_approval() -> void:
+	# se già sbloccata non serve ricontrollare
+	if missions.is_icon_unlocked("creator"):
+		return
+	if _creator_http == null:
+		_creator_http = HTTPRequest.new()
+		add_child(_creator_http)
+		_creator_http.request_completed.connect(_on_creator_approval)
+	if _creator_http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		return
+	_creator_http.request(CREATOR_BIN_URL)
+
+func _on_creator_approval(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if code != 200:
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY or not data.has("creator_approved"):
+		return
+	var approved: Array = data["creator_approved"]
+	var me := _player_name.strip_edges().to_lower()
+	var matched := false
+	for n in approved:
+		if str(n).strip_edges().to_lower() == me:
+			matched = true
+			break
+	if not matched:
+		return
+	# concedi l'icona Creator e aggiorna la UI del profilo
+	if missions.unlock_icon("creator"):
+		if _profile_icon_btns.size() > 0:
+			_update_profile_selection()
+
 func _is_profile_icon_locked(i: int) -> bool:
 	if not PROFILE_ICON_LOCK.has(i):
 		return false

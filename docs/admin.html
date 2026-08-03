@@ -76,7 +76,8 @@ const PW_HASH = "b5b9f695b9c97a9791941691b0ffc66157bec2b3f6b24a465164e159bec2d55
 const SUPP_URL = "https://api.npoint.io/c0e50f85707a48094b11";
 const PEND_URL = "https://api.npoint.io/d580adb16f1a8cd182d6";
 const CREATOR_URL = "https://api.npoint.io/d307da3a533b2dd1bafa";
-let creators = [];
+let creators = [];          // richieste in attesa
+let creatorApproved = [];   // nomi profilo approvati (il gioco legge questa lista)
 
 let supporters = [];
 let pending = [];
@@ -120,6 +121,7 @@ async function loadAll(){
     supporters = Array.isArray(s.og_supporters) ? s.og_supporters : [];
     pending = Array.isArray(p.pending) ? p.pending : [];
     creators = Array.isArray(c.creator_requests) ? c.creator_requests : [];
+    creatorApproved = Array.isArray(c.creator_approved) ? c.creator_approved : [];
     render();
     setStatus('Aggiornato ✓', '#7ee0a4');
   }catch(e){ setStatus('Errore di rete: '+e.message, '#ff8f8f'); }
@@ -132,7 +134,7 @@ async function savePending(){
   await fetch(PEND_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pending:pending})});
 }
 async function saveCreators(){
-  await fetch(CREATOR_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creator_requests:creators})});
+  await fetch(CREATOR_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creator_requests:creators,creator_approved:creatorApproved})});
 }
 
 function esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -163,20 +165,36 @@ function render(){
   document.getElementById('ccount').textContent = creators.length;
   const cc = document.getElementById('creators');
   cc.innerHTML = creators.length ? '' : '<div class="muted">Nessuna richiesta.</div>';
-  creators.forEach((name,i)=>{
+  creators.forEach((c,i)=>{
+    const player = creatorPlayer(c), info = creatorInfo(c);
     const row = document.createElement('div'); row.className='row';
-    row.innerHTML = `<div class="name">${esc(name)}</div>
-      <button class="ok" onclick="doneCreator(${i})">✓ Fatto</button>`;
+    row.innerHTML = `<div class="name"><b>👤 ${esc(player)}</b><br><span style="opacity:.75;font-size:14px">${esc(info)}</span></div>
+      <button class="ok" onclick="approveCreator(${i})" title="assegna l'icona Creator a questo giocatore">✓ Approva</button>
+      <button class="no" onclick="rejectCreator(${i})">✗</button>`;
     cc.appendChild(row);
   });
 }
 
-async function doneCreator(i){
-  const name = creators[i];
+// le voci possono essere oggetti {player, info} (nuovo) o semplici stringhe (vecchio)
+function creatorPlayer(c){ return (c && typeof c==='object') ? (c.player||'?') : String(c); }
+function creatorInfo(c){ return (c && typeof c==='object') ? (c.info||'') : ''; }
+
+async function approveCreator(i){
+  const player = creatorPlayer(creators[i]);
+  if(!creatorApproved.includes(player)) creatorApproved.push(player);
   creators.splice(i,1);
   render();
   setStatus('Salvo…');
-  try{ await saveCreators(); setStatus('Gestita: '+name+' ✓','#7ee0a4'); }
+  try{ await saveCreators(); setStatus('Approvato Creator: '+player+' — icona assegnata ✓','#7ee0a4'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
+}
+
+async function rejectCreator(i){
+  const player = creatorPlayer(creators[i]);
+  creators.splice(i,1);
+  render();
+  setStatus('Salvo…');
+  try{ await saveCreators(); setStatus('Rifiutato: '+player,'#9fb4ff'); }
   catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
 }
 

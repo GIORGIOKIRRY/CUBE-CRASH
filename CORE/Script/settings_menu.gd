@@ -478,6 +478,18 @@ func _creator_content() -> Control:
 	_add_stroke(q)
 	vb.add_child(q)
 
+	# anteprima dell'icona profilo esclusiva Creator
+	var icon_wrap := CenterContainer.new()
+	icon_wrap.custom_minimum_size = Vector2(cw, 168.0)
+	var icon := TextureRect.new()
+	icon.texture = load("res://CORE/Assets/Art/Home/Profile/profile_creator.png")
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = Vector2(160.0, 160.0)
+	icon_wrap.add_child(icon)
+	vb.add_child(icon_wrap)
+
 	# box nome/canale (immagine name_box + LineEdit)
 	var box_h := cw * 322.0 / 2693.0
 	var name_wrap := Control.new()
@@ -542,6 +554,14 @@ func _creator_content() -> Control:
 
 	return vb
 
+func _creator_player_name() -> String:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://profile.cfg") == OK:
+		var n := str(cfg.get_value("profile", "name", "")).strip_edges()
+		if n != "":
+			return n
+	return "?"
+
 func _on_creator_submit() -> void:
 	if _creator_phase != 0:
 		return
@@ -568,12 +588,18 @@ func _on_creator_submit() -> void:
 func _on_creator_http(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	if _creator_phase == 1:
 		var arr: Array = []
+		var approved: Array = []
 		if code == 200:
 			var data: Variant = JSON.parse_string(body.get_string_from_utf8())
-			if typeof(data) == TYPE_DICTIONARY and data.has("creator_requests") and typeof(data["creator_requests"]) == TYPE_ARRAY:
-				arr = data["creator_requests"]
-		arr.append(_creator_entry)
-		var payload := JSON.stringify({"creator_requests": arr})
+			if typeof(data) == TYPE_DICTIONARY:
+				if data.has("creator_requests") and typeof(data["creator_requests"]) == TYPE_ARRAY:
+					arr = data["creator_requests"]
+				if data.has("creator_approved") and typeof(data["creator_approved"]) == TYPE_ARRAY:
+					approved = data["creator_approved"]
+		# invia anche il NOME PROFILO del giocatore, così l'admin può assegnare
+		# l'icona esclusiva al giocatore giusto (non solo il testo del canale)
+		arr.append({"player": _creator_player_name(), "info": _creator_entry})
+		var payload := JSON.stringify({"creator_requests": arr, "creator_approved": approved})
 		_creator_phase = 2
 		var headers := PackedStringArray(["Content-Type: application/json"])
 		_creator_http.request(CREATOR_URL, headers, HTTPClient.METHOD_POST, payload)

@@ -105,6 +105,15 @@ func _generate_monthly() -> void:
 func is_icon_unlocked(icon_id: String) -> bool:
 	return bool(unlocked_icons.get(icon_id, false))
 
+# Sblocca direttamente un'icona (usato per l'icona Creator, concessa da remoto
+# quando l'admin approva la richiesta). Ritorna true se è una NUOVA icona.
+func unlock_icon(icon_id: String) -> bool:
+	if bool(unlocked_icons.get(icon_id, false)):
+		return false
+	unlocked_icons[icon_id] = true
+	_save()
+	return true
+
 # Streak login: chiamato all'avvio. Aggiorna i giorni consecutivi + la missione streak.
 func report_login() -> void:
 	var today: int = int(_now() / 86400)   # giorno assoluto

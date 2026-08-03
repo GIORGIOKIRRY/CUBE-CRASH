@@ -750,9 +750,35 @@ func _build_test_gameover_button() -> void:
 		y += 52.0
 
 func _on_test_gameover_pressed(mode: String, kind: String) -> void:
-	settings.debug_gameover = kind
-	settings.game_mode = mode
-	transition.change_scene("res://CORE/Scene/game.tscn")
+	settings.button_feedback()
+	# istanzia DIRETTAMENTE la schermata di fine partita con i parametri giusti,
+	# così ogni tasto mostra in modo affidabile la sua grafica (classic/speedrun/record).
+	var scene: PackedScene = load("res://CORE/Scene/game_over_screen.tscn")
+	var go: Control = scene.instantiate()
+	var lay := CanvasLayer.new()
+	lay.layer = 300
+	add_child(lay)
+	lay.add_child(go)
+	go.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var is_rec := kind == "record"
+	var sc := go.get_node_or_null("Items/L_ScoreNumber") as Label
+	if sc:
+		sc.text = "215420" if is_rec else "32030"
+	var bs := go.get_node_or_null("Items/L_BestScoreNumber") as Label
+	if bs:
+		bs.text = "180000"
+	if go.has_method("set_end_bonus"):
+		go.set_end_bonus(215420 if is_rec else 32030, 0, 100)
+	if go.has_method("set_session_stats"):
+		go.set_session_stats("5:43  ·  26 pose  ·  32030 pt")
+	if go.has_method("show_result"):
+		go.show_result(is_rec)
+	if mode == "speedrun" and not is_rec and go.has_method("set_speedrun_mode"):
+		go.set_speedrun_mode(180000, false)
+	if go.has_method("set_mode_tag"):
+		go.set_mode_tag(mode)
+	if is_rec and go.has_method("play_confetti"):
+		go.play_confetti()
 
 
 # --- Tasto CUBE DECK -----------------------------------------------------------

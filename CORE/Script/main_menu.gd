@@ -855,6 +855,11 @@ func _build_top_right() -> void:
 	_load_player_name()
 	# controlla da remoto se questo giocatore è stato approvato come Creator
 	_fetch_creator_approval()
+	# invia SUBITO all'avvio i propri migliori punteggi (classic + speedrun) online:
+	# così la classifica speedrun si popola anche per chi non apre quella scheda o
+	# gioca da build vecchie che inviavano il punteggio solo a fine partita.
+	leaderboard.submit_best("classic", _player_score("classic"))
+	leaderboard.submit_best("speedrun", _player_score("speedrun"))
 	_profile_pic = TextureRect.new()
 	_profile_pic.texture = load(_current_profile_icon_path())
 	_profile_pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST

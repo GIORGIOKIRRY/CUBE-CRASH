@@ -1800,6 +1800,9 @@ func _show_game_over_screen() -> void:
 			screen.visible = true
 		if _is_speedrun and screen.has_method("set_speedrun_mode"):
 			screen.set_speedrun_mode(_speedrun_best, _is_new_record)
+		# etichetta modalità in alto (così negli screenshot si vede CLASSIC / SPEEDRUN)
+		if screen.has_method("set_mode_tag"):
+			screen.set_mode_tag("speedrun" if _is_speedrun else "classic")
 		if screen is CanvasItem:
 			screen.z_index = 99999
 	# se non c'era adv, esegui subito (dopo aver mostrato lo schermo)

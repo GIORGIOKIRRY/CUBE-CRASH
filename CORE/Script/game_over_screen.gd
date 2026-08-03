@@ -91,7 +91,7 @@ func set_speedrun_mode(record: int, is_record: bool) -> void:
 	var light_red := Color(1.0, 0.5, 0.45)   # "SCORE"/"RECORD" rosso chiaro
 	var title := get_node_or_null("Items/L_GameOver") as Label
 	if title:
-		title.text = "SPEEDRUN"
+		title.text = "GAME OVER"   # la modalità la mostra l'etichetta ModeTag in alto
 	var best_lbl := get_node_or_null("Items/BestScore") as Label
 	if best_lbl:
 		best_lbl.text = "NUOVO RECORD!" if is_record else "RECORD"
@@ -268,6 +268,31 @@ func _apply_new_record_layout() -> void:
 
 	# Play Again "nuovo record" (centrato, aspect mantenuto)
 	_set_play_texture(PLAY_AGAIN_RECORD_TEX)
+
+
+# Etichetta MODALITÀ in alto ("CLASSIC" / "SPEEDRUN"): così negli screenshot del
+# nuovo record si capisce sempre in che modalità è stato fatto.
+func set_mode_tag(mode: String) -> void:
+	var is_sr := mode == "speedrun"
+	var txt := "SPEEDRUN" if is_sr else "CLASSIC"
+	var lbl := get_node_or_null("Items/ModeTag") as Label
+	if lbl == null:
+		lbl = Label.new()
+		lbl.name = "ModeTag"
+		lbl.add_theme_font_override("font", MODE_FONT)
+		lbl.add_theme_font_size_override("font_size", 40)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+		lbl.add_theme_constant_override("outline_size", 8)
+		lbl.offset_left = -290.0
+		lbl.offset_right = 330.0
+		lbl.offset_top = -392.0
+		lbl.offset_bottom = -334.0
+		$Items.add_child(lbl)
+	lbl.text = txt
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.62, 0.2) if is_sr else Color(0.82, 0.62, 1.0))
+	lbl.visible = true
 
 
 func _on_close_button_pressed() -> void:

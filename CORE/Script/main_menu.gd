@@ -265,13 +265,8 @@ func _layout() -> void:
 	if _missions_coins_label:
 		_missions_coins_label.position = Vector2(COIN_X + COIN_W * COIN_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
 	if _missions_record_bar:
-		_missions_record_bar.position = Vector2(REC_CLASSIC_X + cam_dx, COUNTER_Y + cam_dy)
-	if _missions_record_label:
-		_missions_record_label.position = Vector2(REC_CLASSIC_X + REC_W * REC_CLASSIC_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
-	if _missions_record_sr_bar:
-		_missions_record_sr_bar.position = Vector2(REC_SR_X + cam_dx, COUNTER_Y + cam_dy)
-	if _missions_record_sr_label:
-		_missions_record_sr_label.position = Vector2(REC_SR_X + REC_W * REC_SR_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
+		# la label è figlia della barra: si sposta insieme, basta muovere la barra
+		_missions_record_bar.position = Vector2(RECORD_X + cam_dx, COUNTER_Y + cam_dy)
 
 	# zona missioni: tab full-width -> pannello scuro -> timer -> lista clippata
 	if _missions_tabs:
@@ -598,6 +593,8 @@ func _build_mode_screen() -> void:
 func _update_mode_screen() -> void:
 	var m: Dictionary = MODES[_mode_index]
 	var mode: String = m["mode"]
+	# aggiorna il contatore RECORD in alto alla modalità selezionata
+	_refresh_record_counters()
 	# se la modalità ha un'animazione a schermo la mostro (dietro il cabinato) e nascondo il testo
 	if _screen_anim and _mode_anims.has(mode):
 		_screen_anim.sprite_frames = _mode_anims[mode]
@@ -797,19 +794,15 @@ const COIN_TEX := "res://CORE/Assets/Art/UI/Menu/coin_count.png"
 const RECORD_TEX := "res://CORE/Assets/Art/UI/Menu/record_count.png"
 var _record_labels: Array = []
 
-# Due contatori RECORD affiancati: CLASSIC (trofeo) + SPEEDRUN (trofeo+fiamma).
-const REC_W := 185.0
-const REC_CLASSIC_X := 8.0
-const REC_SR_X := 200.0
+# UN SOLO contatore RECORD alla volta: mostra il record della MODALITÀ SELEZIONATA
+# (Classic = trofeo, Speedrun = trofeo+fiamma), a dimensione piena (non stracciato).
 const REC_CLASSIC_TEX := "res://CORE/Assets/Art/Home/counter_record_classic.png"
 const REC_SR_TEX := "res://CORE/Assets/Art/Home/counter_record_speedrun.png"
-const REC_CLASSIC_ICON_FRAC := 0.25
-const REC_SR_ICON_FRAC := 0.28
-const REC_FONT := 22
-var _record_sr_labels: Array = []
-var _record_sr_bar: TextureRect
-var _missions_record_sr_bar: TextureRect
-var _missions_record_sr_label: Label
+const REC_CLASSIC_ICON_FRAC := 0.24
+const REC_SR_ICON_FRAC := 0.27
+const REC_CLASSIC_W := 44.0 * 900.0 / 192.0    # aspetto naturale a h=44
+const REC_SR_W := 44.0 * 928.0 / 192.0
+var _record_bars: Array = []     # tutte le barre record (home/missioni/shop)
 
 # Crea un contatore (frame + numero centrato nella zona scura). Ritorna [bar, label].
 func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float, icon_frac: float, font_size: int = 26) -> Array:
@@ -834,36 +827,63 @@ func _make_counter(parent: Node, tex_path: String, x: float, y: float, w: float,
 	parent.add_child(lbl)
 	return [bar, lbl]
 
-# Costruisce i due contatori record (classic + speedrun) affiancati.
-# Ritorna [classic_bar, classic_lbl, sr_bar, sr_lbl].
-func _build_record_pair(parent: Node) -> Array:
-	var rc := _make_counter(parent, REC_CLASSIC_TEX, REC_CLASSIC_X, COUNTER_Y, REC_W, REC_CLASSIC_ICON_FRAC, REC_FONT)
-	_record_labels.append(rc[1])
-	var sr := _make_counter(parent, REC_SR_TEX, REC_SR_X, COUNTER_Y, REC_W, REC_SR_ICON_FRAC, REC_FONT)
-	_record_sr_labels.append(sr[1])
-	return [rc[0], rc[1], sr[0], sr[1]]
+# Contatore record (label FIGLIA della barra, così segue la barra quando si sposta).
+# La texture/valore vengono impostati da _refresh_record_counters() in base alla modalità.
+func _make_record_counter(parent: Node, x: float) -> Array:
+	var bar := TextureRect.new()
+	bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bar.stretch_mode = TextureRect.STRETCH_SCALE
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.position = Vector2(x, COUNTER_Y)
+	bar.size = Vector2(REC_CLASSIC_W, COUNTER_H)
+	parent.add_child(bar)
+	var lbl := Label.new()
+	lbl.add_theme_font_override("font", MODE_FONT)
+	lbl.add_theme_font_size_override("font_size", 26)   # come le monete
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.add_child(lbl)   # figlia della barra
+	_record_bars.append(bar)
+	_record_labels.append(lbl)
+	_refresh_record_counters()
+	return [bar, lbl]
 
+# Aggiorna TUTTI i contatori record alla modalità attualmente selezionata.
+func _refresh_record_counters() -> void:
+	var is_sr: bool = MODES[_mode_index]["mode"] == "speedrun"
+	var tex := load(REC_SR_TEX if is_sr else REC_CLASSIC_TEX)
+	var w: float = REC_SR_W if is_sr else REC_CLASSIC_W
+	var frac: float = REC_SR_ICON_FRAC if is_sr else REC_CLASSIC_ICON_FRAC
+	var val := _fmt_score(_player_score("speedrun" if is_sr else "classic"))
+	for i in _record_bars.size():
+		var bar: TextureRect = _record_bars[i]
+		if not is_instance_valid(bar):
+			continue
+		bar.texture = tex
+		bar.size = Vector2(w, COUNTER_H)
+		var lbl: Label = _record_labels[i]
+		if is_instance_valid(lbl):
+			lbl.position = Vector2(w * frac, 0.0)
+			lbl.size = Vector2(w * (1.0 - frac), COUNTER_H)
+			lbl.text = val
+
+# compat: aggiornamento valori record -> ora è un refresh completo
 func _update_record_labels() -> void:
-	var rec := _fmt_score(_player_score("classic"))
-	var rec_sr := _fmt_score(_player_score("speedrun"))
-	for l in _record_labels:
-		if is_instance_valid(l):
-			(l as Label).text = rec
-	for l in _record_sr_labels:
-		if is_instance_valid(l):
-			(l as Label).text = rec_sr
+	_refresh_record_counters()
 
 func _build_top_right() -> void:
 	# MONETE a destra
 	var cc := _make_counter(self, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
 	_coin_bar = cc[0] as TextureRect
 	_coin_count_label = cc[1] as Label
-	# RECORD a sinistra: CLASSIC (trofeo) + SPEEDRUN (trofeo+fiamma) affiancati
-	var pair := _build_record_pair(self)
-	_record_bar = pair[0] as TextureRect
-	_record_sr_bar = pair[2] as TextureRect
+	# RECORD a sinistra: UN solo contatore, in base alla modalità selezionata
+	var rc := _make_record_counter(self, RECORD_X)
+	_record_bar = rc[0] as TextureRect
 	_update_coin_count()
-	_update_record_labels()
+	_refresh_record_counters()
 
 	# CLASSIFICA (trofeo) — spostata a sinistra per far posto al tasto NEWS
 	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(302.0, 74.0), 78.0)
@@ -1945,11 +1965,9 @@ func _build_missions_menu() -> void:
 	_missions_coin_bar = mcc[0] as TextureRect
 	_missions_coin_bar.pivot_offset = _missions_coin_bar.size * 0.5
 	_missions_coins_label = mcc[1] as Label
-	var mpair := _build_record_pair(_missions_menu)
-	_missions_record_bar = mpair[0] as TextureRect
-	_missions_record_label = mpair[1] as Label
-	_missions_record_sr_bar = mpair[2] as TextureRect
-	_missions_record_sr_label = mpair[3] as Label
+	var mrc := _make_record_counter(_missions_menu, RECORD_X)
+	_missions_record_bar = mrc[0] as TextureRect
+	_missions_record_label = mrc[1] as Label
 
 	# striscia TAB (weekly / daily): texture full-width, posizionata in _layout
 	_missions_tabs = TextureRect.new()
@@ -2533,7 +2551,7 @@ func _build_shop_menu() -> void:
 	# contatori in alto: MONETE a destra + RECORD a sinistra (come home/missioni)
 	var scc := _make_counter(_shop_menu, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
 	_shop_coins_label = scc[1] as Label
-	_build_record_pair(_shop_menu)
+	_make_record_counter(_shop_menu, RECORD_X)
 	var t := Label.new()
 	t.text = "SHOP"
 	t.add_theme_font_override("font", MODE_FONT)

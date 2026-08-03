@@ -169,8 +169,16 @@ func _on_exit_confirm() -> void:
 			if ads.interstitial_closed.is_connected(_go_home_after_ad):
 				ads.interstitial_closed.disconnect(_go_home_after_ad)
 			_go_home_after_ad()
+		else:
+			# SICUREZZA: se per qualsiasi motivo l'adv non emette la chiusura,
+			# esci comunque dopo qualche secondo (mai restare bloccati sul gioco).
+			get_tree().create_timer(15.0).timeout.connect(_go_home_after_ad)
 	else:
 		_go_home_after_ad()
 
+var _leaving_game := false
 func _go_home_after_ad() -> void:
+	if _leaving_game:
+		return   # può arrivare sia dalla chiusura adv sia dal timer di sicurezza
+	_leaving_game = true
 	transition.change_scene("res://CORE/Scene/MainMenu.tscn")

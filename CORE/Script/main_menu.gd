@@ -848,6 +848,8 @@ func _build_top_right() -> void:
 	_load_player_name()
 	# controlla da remoto se questo giocatore è stato approvato come Creator
 	_fetch_creator_approval()
+	# scarica la lista OG supporters (per il tag dorato [OG] accanto al nome)
+	_fetch_og_supporters()
 	# invia SUBITO all'avvio i propri migliori punteggi (classic + speedrun) online:
 	# così la classifica speedrun si popola anche per chi non apre quella scheda o
 	# gioca da build vecchie che inviavano il punteggio solo a fine partita.
@@ -956,6 +958,8 @@ func _build_top_right() -> void:
 	add_child(_name_edit)
 	# se il fetch Creator è già arrivato, applica subito il nome verde brillante
 	_apply_creator_name_style()
+	# se il fetch OG è già arrivato, applica subito il tag [OG] dorato
+	_apply_og_name_tag()
 
 
 func _current_profile_icon_path() -> String:
@@ -1254,6 +1258,73 @@ func _on_creator_approval(_result: int, code: int, _headers: PackedStringArray, 
 
 func _is_creator(name: String) -> bool:
 	return bool(_creator_names.get(name.strip_edges().to_lower(), false))
+
+# --- OG Supporters: tag dorato [OG] accanto al nome -----------------------------
+const OG_BIN_URL := "https://api.npoint.io/c0e50f85707a48094b11"
+var _og_http: HTTPRequest = null
+var _og_names: Dictionary = {}   # nome (minuscolo) -> true per gli OG supporters
+
+func _fetch_og_supporters() -> void:
+	if _og_http == null:
+		_og_http = HTTPRequest.new()
+		add_child(_og_http)
+		_og_http.request_completed.connect(_on_og_fetched)
+	if _og_http.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+		return
+	_og_http.request(OG_BIN_URL)
+
+func _on_og_fetched(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if code != 200:
+		return
+	var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+	if typeof(data) != TYPE_DICTIONARY or not data.has("og_supporters"):
+		return
+	var arr: Array = data["og_supporters"]
+	_og_names.clear()
+	for n in arr:
+		var s := str(n).strip_edges().to_lower()
+		if s != "":
+			_og_names[s] = true
+	# aggiorna il tag [OG] sul nome in home (se questo giocatore è un OG)
+	_apply_og_name_tag()
+
+func _is_og(name: String) -> bool:
+	return bool(_og_names.get(name.strip_edges().to_lower(), false))
+
+# Etichetta dorata "[OG]" (stile oro con contorno scuro)
+func _make_og_tag(size: int, pos: Vector2, sz: Vector2, halign: int) -> Label:
+	var l := Label.new()
+	l.text = "[OG]"
+	l.add_theme_font_override("font", MODE_FONT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15))   # oro
+	l.add_theme_color_override("font_outline_color", Color(0.30, 0.18, 0.0))
+	l.add_theme_constant_override("outline_size", 5)
+	l.horizontal_alignment = halign
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.position = pos
+	l.size = sz
+	return l
+
+# Mostra "[OG]" dorato accanto al nome in HOME, se il giocatore è un OG supporter
+var _og_home_tag: Label = null
+func _apply_og_name_tag() -> void:
+	if not is_instance_valid(_name_edit):
+		return
+	if is_instance_valid(_og_home_tag):
+		_og_home_tag.queue_free()
+		_og_home_tag = null
+	if not _is_og(_player_name):
+		return
+	# larghezza del nome per posizionare il tag subito dopo (nome centrato nel box)
+	var fsz := 30
+	var name_w := MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
+	var center_x := _name_edit.position.x + _name_edit.size.x * 0.5
+	var tag_x := center_x + name_w * 0.5 + 8.0
+	var tag := _make_og_tag(22, Vector2(tag_x, _name_edit.position.y), Vector2(70, _name_edit.size.y), HORIZONTAL_ALIGNMENT_LEFT)
+	add_child(tag)
+	_og_home_tag = tag
 
 # Applica al nome nella home l'effetto verde "sbrilluccicato" (se sei un Creator)
 func _apply_creator_name_style() -> void:
@@ -1619,10 +1690,15 @@ func _make_leader_row(e: Dictionary) -> Control:
 	var ic := LB_ROW_H * 0.62
 	row.add_child(_miss_tex(PROFILE_ICONS[clampi(int(e["icon"]), 0, PROFILE_ICONS.size() - 1)], Vector2(LB_ROW_W * 0.16, (LB_ROW_H - ic) * 0.5), Vector2(ic, ic), true))
 	# nome (i Creator approvati hanno il nome verde "sbrilluccicato")
-	var name_lbl := _lb_label(str(e["name"]), 24, txt_col, Vector2(LB_ROW_W * 0.30, 0), Vector2(LB_ROW_W * 0.34, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT)
+	var nm_x := LB_ROW_W * 0.30
+	var name_lbl := _lb_label(str(e["name"]), 24, txt_col, Vector2(nm_x, 0), Vector2(LB_ROW_W * 0.34, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT)
 	row.add_child(name_lbl)
 	if _is_creator(str(e["name"])):
 		_shimmer_name(name_lbl, ["font_color"])
+	# tag dorato [OG] subito dopo il nome, per gli OG supporters
+	if _is_og(str(e["name"])):
+		var nw := MODE_FONT.get_string_size(str(e["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+		row.add_child(_make_og_tag(18, Vector2(nm_x + nw + 6.0, 0), Vector2(64, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT))
 	# punteggio agganciato a destra: giallo chiaro + stroke nero
 	var sc := _lb_label(_fmt_score(int(e["score"])), 24, Color(1, 0.93, 0.5), Vector2(LB_ROW_W * 0.60, 0), Vector2(LB_ROW_W * 0.36, LB_ROW_H), HORIZONTAL_ALIGNMENT_RIGHT)
 	sc.add_theme_color_override("font_outline_color", Color(0, 0, 0))

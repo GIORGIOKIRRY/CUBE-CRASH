@@ -89,15 +89,22 @@ func submit_best(mode: String, score: int) -> void:
 			var v: Variant = JSON.parse_string(body.get_string_from_utf8())
 			if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
 				cur = int(v)
-		if score <= cur:
-			return   # non abbassare mai il punteggio in classifica
 		var p := _profile()
-		var payload := JSON.stringify({"name": p["name"], "score": score, "icon": p["icon"]})
 		var putreq := HTTPRequest.new()
 		add_child(putreq)
 		putreq.request_completed.connect(func(_r2, _c2, _h2, _b2) -> void: putreq.queue_free())
-		if putreq.request(base + ".json", ["Content-Type: application/json"], HTTPClient.METHOD_PUT, payload) != OK:
-			putreq.queue_free())
+		if score > cur:
+			# nuovo record: aggiorna TUTTO (PUT sovrascrive la voce)
+			var payload := JSON.stringify({"name": p["name"], "score": score, "icon": p["icon"]})
+			if putreq.request(base + ".json", ["Content-Type: application/json"], HTTPClient.METHOD_PUT, payload) != OK:
+				putreq.queue_free()
+		else:
+			# punteggio NON migliore: NON abbassare lo score, ma aggiorna comunque
+			# nome + icona (PATCH lascia intatto "score") -> così cambiare icona/nome
+			# si riflette sempre in classifica.
+			var payload := JSON.stringify({"name": p["name"], "icon": p["icon"]})
+			if putreq.request(base + ".json", ["Content-Type: application/json"], HTTPClient.METHOD_PATCH, payload) != OK:
+				putreq.queue_free())
 	# leggi solo il campo "score" del giocatore
 	if getreq.request(base + "/score.json") != OK:
 		getreq.queue_free()

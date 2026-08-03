@@ -1303,9 +1303,9 @@ func _input(event: InputEvent) -> void:
 				# Inserimento dalla BottomGrid: se spot vuoto, rimane anche senza match
 				dragging_piece.set_meta("origin", "grid")
 				_restore_normal_look(dragging_piece)   # sulla griglia: grafica cubo normale
-				# ferma il tween di scala del drag: altrimenti combatte con il pop di dim()
-				if _drag_scale_tween != null and _drag_scale_tween.is_valid():
-					_drag_scale_tween.kill()
+				# ferma OGNI tween di scala di questo pezzo: altrimenti un tween orfano
+				# (es. verso 1.35) continua e lascia il cubo piazzato ingrandito/sballato
+				_kill_piece_scale_tween(dragging_piece)
 				dragging_piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 				dragging_piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 				all_pieces[target_grid.x][target_grid.y] = dragging_piece
@@ -1422,6 +1422,7 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 	if is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null and (not _moves_enabled or current_moves > 0):
 		piece.set_meta("origin", "grid")
 		_restore_normal_look(piece)   # sulla griglia: grafica cubo normale
+		_kill_piece_scale_tween(piece)   # nessun tween orfano che ingrandisca il cubo piazzato
 		piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 		piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 		all_pieces[target_grid.x][target_grid.y] = piece
@@ -1993,9 +1994,25 @@ func _update_difficulty() -> void:
 func _tween_piece_scale(p: Node2D, s: float) -> void:
 	if p == null:
 		return
+	# uccidi un eventuale tween di scala ancora attivo su QUESTO pezzo: altrimenti
+	# due tween litigano sulla scala e ne resta uno orfano che, al piazzamento,
+	# continua ad animare il cubo (es. verso 1.35) lasciandolo ingrandito/sballato.
+	_kill_piece_scale_tween(p)
 	var tw := p.create_tween()
 	tw.tween_property(p, "scale", Vector2(s, s), 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	p.set_meta("scale_tween", tw)
 	_drag_scale_tween = tw
+
+# Ferma qualsiasi tween di scala legato a questo pezzo (per-pezzo, non solo l'ultimo).
+func _kill_piece_scale_tween(p: Node) -> void:
+	if p == null:
+		return
+	if not p.has_meta("scale_tween"):
+		return
+	var prev: Variant = p.get_meta("scale_tween")
+	if prev is Tween and prev.is_valid():
+		prev.kill()
+	p.remove_meta("scale_tween")
 
 func _moves_color(m: int) -> Color:
 	if m <= 1:

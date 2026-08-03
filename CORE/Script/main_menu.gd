@@ -1317,13 +1317,14 @@ func _apply_og_name_tag() -> void:
 		_og_home_tag = null
 	if not _is_og(_player_name):
 		return
-	# larghezza del nome per posizionare il tag subito dopo (nome centrato nel box)
+	# il tag è FIGLIO del nome: così segue tutte le sue animazioni (affondamento
+	# alla pressione, colore, intro...). Posizione in coordinate LOCALI del nome.
+	_name_edit.clip_contents = false
 	var fsz := 30
 	var name_w := MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
-	var center_x := _name_edit.position.x + _name_edit.size.x * 0.5
-	var tag_x := center_x + name_w * 0.5 + 8.0
-	var tag := _make_og_tag(22, Vector2(tag_x, _name_edit.position.y), Vector2(70, _name_edit.size.y), HORIZONTAL_ALIGNMENT_LEFT)
-	add_child(tag)
+	var tag_x := _name_edit.size.x * 0.5 + name_w * 0.5 + 6.0
+	var tag := _make_og_tag(22, Vector2(tag_x, 0.0), Vector2(70, _name_edit.size.y), HORIZONTAL_ALIGNMENT_LEFT)
+	_name_edit.add_child(tag)
 	_og_home_tag = tag
 
 # Applica al nome nella home l'effetto verde "sbrilluccicato" (se sei un Creator)

@@ -62,6 +62,11 @@
       <button onclick="addName()">Aggiungi</button>
     </div>
   </div>
+
+  <div class="card">
+    <h2>🎬 Richieste Creator <span class="count" id="ccount">0</span></h2>
+    <div id="creators"></div>
+  </div>
 </main>
 
 <div id="status" class="hidden"></div>
@@ -70,6 +75,8 @@
 const PW_HASH = "b5b9f695b9c97a9791941691b0ffc66157bec2b3f6b24a465164e159bec2d557"; // SHA-256
 const SUPP_URL = "https://api.npoint.io/c0e50f85707a48094b11";
 const PEND_URL = "https://api.npoint.io/d580adb16f1a8cd182d6";
+const CREATOR_URL = "https://api.npoint.io/d307da3a533b2dd1bafa";
+let creators = [];
 
 let supporters = [];
 let pending = [];
@@ -105,12 +112,14 @@ function showApp(){
 async function loadAll(){
   setStatus('Carico…');
   try{
-    const [s,p] = await Promise.all([
+    const [s,p,c] = await Promise.all([
       fetch(SUPP_URL,{cache:'no-store'}).then(r=>r.json()),
-      fetch(PEND_URL,{cache:'no-store'}).then(r=>r.json())
+      fetch(PEND_URL,{cache:'no-store'}).then(r=>r.json()),
+      fetch(CREATOR_URL,{cache:'no-store'}).then(r=>r.json())
     ]);
     supporters = Array.isArray(s.og_supporters) ? s.og_supporters : [];
     pending = Array.isArray(p.pending) ? p.pending : [];
+    creators = Array.isArray(c.creator_requests) ? c.creator_requests : [];
     render();
     setStatus('Aggiornato ✓', '#7ee0a4');
   }catch(e){ setStatus('Errore di rete: '+e.message, '#ff8f8f'); }
@@ -121,6 +130,9 @@ async function saveSupporters(){
 }
 async function savePending(){
   await fetch(PEND_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pending:pending})});
+}
+async function saveCreators(){
+  await fetch(CREATOR_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creator_requests:creators})});
 }
 
 function esc(t){ return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -147,6 +159,25 @@ function render(){
       <button class="rm" onclick="removeName(${i})">✕</button>`;
     sc.appendChild(row);
   });
+
+  document.getElementById('ccount').textContent = creators.length;
+  const cc = document.getElementById('creators');
+  cc.innerHTML = creators.length ? '' : '<div class="muted">Nessuna richiesta.</div>';
+  creators.forEach((name,i)=>{
+    const row = document.createElement('div'); row.className='row';
+    row.innerHTML = `<div class="name">${esc(name)}</div>
+      <button class="ok" onclick="doneCreator(${i})">✓ Fatto</button>`;
+    cc.appendChild(row);
+  });
+}
+
+async function doneCreator(i){
+  const name = creators[i];
+  creators.splice(i,1);
+  render();
+  setStatus('Salvo…');
+  try{ await saveCreators(); setStatus('Gestita: '+name+' ✓','#7ee0a4'); }
+  catch(e){ setStatus('Errore salvataggio: '+e.message,'#ff8f8f'); }
 }
 
 async function approve(i){

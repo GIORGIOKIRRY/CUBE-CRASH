@@ -61,6 +61,9 @@ const SUPPORTERS_URL := "https://api.npoint.io/c0e50f85707a48094b11"
 # Posta in arrivo delle proposte utenti ("manda il tuo nome"):
 # editor: https://www.npoint.io/docs/d580adb16f1a8cd182d6
 const PENDING_URL := "https://api.npoint.io/d580adb16f1a8cd182d6"
+# Posta in arrivo delle richieste "diventa Creator":
+# editor: https://www.npoint.io/docs/d307da3a533b2dd1bafa
+const CREATOR_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
 const PRIVACY_TEXT := "PRIVACY POLICY\nUltimo aggiornamento: 2026\n\nCube Crash (\"il Gioco\") rispetta la tua privacy. Questa policy spiega quali dati vengono trattati.\n\n1. DATI CHE NON RACCOGLIAMO\nNon richiediamo registrazione né account. Non raccogliamo nome reale, email, contatti o posizione. I progressi (punteggi, monete, profilo) sono salvati SOLO sul tuo dispositivo.\n\n2. CLASSIFICA ONLINE\nSe usi la classifica, vengono inviati solo il nome che scegli e il punteggio, per mostrarli nella classifica pubblica. Non sono dati identificativi.\n\n3. PUBBLICITÀ (AdMob)\nIl Gioco mostra annunci tramite Google AdMob. Google può raccogliere identificatori del dispositivo e dati d'uso per fornire annunci. Consulta la Privacy Policy di Google: https://policies.google.com/privacy\nPuoi limitare gli annunci personalizzati dalle impostazioni del dispositivo.\n\n4. MINORI\nIl Gioco è adatto a tutti. Non raccogliamo consapevolmente dati personali da minori.\n\n5. CONTATTI\nPer domande: cubecrash.game@gmail.com"
 const TERMS_TEXT := "TERMS OF SERVICE\nUltimo aggiornamento: 2026\n\nBenvenuto in Cube Crash. Usando il Gioco accetti questi termini.\n\n1. LICENZA\nTi concediamo una licenza personale, non esclusiva e non trasferibile per giocare a Cube Crash per uso personale e non commerciale.\n\n2. USO CORRETTO\nNon puoi copiare, modificare, decompilare o distribuire il Gioco, né usare cheat, bot o exploit che alterino punteggi e classifiche.\n\n3. CONTENUTI E PROGRESSI\nI progressi sono salvati sul dispositivo. Aggiornamenti o disinstallazioni possono azzerarli. Non garantiamo il recupero dei dati.\n\n4. PUBBLICITÀ E ACQUISTI\nIl Gioco può mostrare annunci di terze parti. Eventuali acquisti futuri sono soggetti alle regole dello store.\n\n5. NESSUNA GARANZIA\nIl Gioco è fornito \"così com'è\", senza garanzie. Non siamo responsabili per eventuali danni derivanti dall'uso.\n\n6. MODIFICHE\nPossiamo aggiornare questi termini; l'uso continuato implica l'accettazione.\n\n7. CONTATTI\ncubecrash.game@gmail.com"
 
@@ -79,6 +82,13 @@ var _submit_status: Label = null
 var _submit_http: HTTPRequest = null
 var _submit_phase: int = 0        # 0 idle, 1 GET pending, 2 POST pending
 var _submit_entry: String = ""    # proposta in corso
+# Modulo "diventa Creator"
+var _creator_input: LineEdit = null
+var _creator_btn: BaseButton = null
+var _creator_status: Label = null
+var _creator_http: HTTPRequest = null
+var _creator_phase: int = 0
+var _creator_entry: String = ""
 var _thanks_vb: Control = null       # VBox contenuto thanks
 var _thanks_scroll: ScrollContainer = null   # scroll della pagina thanks
 
@@ -292,7 +302,7 @@ func _build_more_page() -> void:
 		{"text": "CONTACT US", "cb": Callable(self, "_on_contact")},
 		{"text": "TERMS OF SERVICE", "cb": Callable(self, "_open_terms")},
 		{"text": "PRIVACY POLICY", "cb": Callable(self, "_open_privacy")},
-		{"text": "PATCH NOTES", "cb": Callable(self, "_open_patchnotes")},
+		{"text": "BECOME A CREATOR", "cb": Callable(self, "_open_creator")},
 	]
 	var row_h := 106.0   # stesso passo delle righe di SETTINGS
 	for i in entries.size():
@@ -396,6 +406,10 @@ func _open_patchnotes() -> void:
 	settings.button_feedback()
 	_show_subpage("patchnotes")
 
+func _open_creator() -> void:
+	settings.button_feedback()
+	_show_subpage("creator")
+
 # ==========================
 # Sotto-pagine a schermo intero
 # ==========================
@@ -404,6 +418,7 @@ func _build_subpages() -> void:
 	_subpages["privacy"] = _make_subpage("PRIVACY POLICY", _privacy_content())
 	_subpages["thanks"] = _make_subpage("THANKS", _thanks_content(), THANKS_BG, BACK_THANKS)
 	_subpages["patchnotes"] = _make_subpage("NOVITÀ", _patchnotes_content())
+	_subpages["creator"] = _make_subpage("CREATOR", _creator_content())
 
 func _show_subpage(name: String) -> void:
 	for k in _subpages:
@@ -449,6 +464,135 @@ func _patchnotes_content() -> Control:
 	lbl.custom_minimum_size = Vector2(496, 0)
 	scroll.add_child(lbl)
 	return scroll
+
+# --- Modulo "DIVENTA UN CREATOR" (stessa grafica del form supporters) -----------
+func _creator_content() -> Control:
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 14)
+	var cw := 528.0
+
+	var q := _make_text("Vuoi diventare un Content Creator ufficiale di Cube Crash?\nManda il modulo di verifica 🎬", Color(1, 1, 1), 28)
+	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	q.add_theme_font_override("font", _pixel_emoji_font())
+	q.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(q)
+	vb.add_child(q)
+
+	# box nome/canale (immagine name_box + LineEdit)
+	var box_h := cw * 322.0 / 2693.0
+	var name_wrap := Control.new()
+	name_wrap.custom_minimum_size = Vector2(cw, box_h)
+	var nb := TextureRect.new()
+	nb.texture = NAME_BOX
+	nb.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	nb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	nb.stretch_mode = TextureRect.STRETCH_SCALE
+	nb.set_anchors_preset(Control.PRESET_FULL_RECT)
+	nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_wrap.add_child(nb)
+	var inp := LineEdit.new()
+	inp.placeholder_text = "Nome + link del tuo canale"
+	inp.max_length = 80
+	inp.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	inp.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inp.offset_left = 22
+	inp.offset_right = -22
+	inp.offset_top = 4
+	inp.offset_bottom = -4
+	inp.add_theme_font_override("font", FONT)
+	inp.add_theme_font_size_override("font_size", 26)
+	inp.add_theme_color_override("font_color", Color(0.1, 0.05, 0.12))
+	inp.add_theme_color_override("font_placeholder_color", Color(0.4, 0.4, 0.45))
+	inp.add_theme_color_override("caret_color", Color(0.1, 0.05, 0.12))
+	var empty := StyleBoxEmpty.new()
+	inp.add_theme_stylebox_override("normal", empty)
+	inp.add_theme_stylebox_override("focus", empty)
+	name_wrap.add_child(inp)
+	vb.add_child(name_wrap)
+	_creator_input = inp
+
+	# tasto SEND (immagine)
+	var send_h := cw * 299.0 / 2735.0
+	var send := TextureButton.new()
+	send.texture_normal = SEND_BTN
+	send.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	send.ignore_texture_size = true
+	send.stretch_mode = TextureButton.STRETCH_SCALE
+	send.custom_minimum_size = Vector2(cw, send_h)
+	send.button_down.connect(func() -> void: send.modulate = Color(0.9, 0.9, 0.9))
+	send.button_up.connect(func() -> void: send.modulate = Color(1, 1, 1))
+	send.pressed.connect(_on_creator_submit)
+	vb.add_child(send)
+	_creator_btn = send
+
+	var status := _make_text("", Color(1, 1, 1), 24)
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(status)
+	vb.add_child(status)
+	_creator_status = status
+
+	# requisiti
+	var req := _make_text("Per diventare Cube Crash Creator devi aver fatto almeno 3 video sul gioco. Ti accetteremo come CubeCrash Creator e otterrai un'ICONA PROFILO ESCLUSIVA! 🏆", Color(1.0, 0.92, 0.45), 22)
+	req.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	req.add_theme_font_override("font", _pixel_emoji_font())
+	req.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(req)
+	vb.add_child(req)
+
+	return vb
+
+func _on_creator_submit() -> void:
+	if _creator_phase != 0:
+		return
+	var nm := ""
+	if is_instance_valid(_creator_input):
+		nm = _creator_input.text.strip_edges()
+	if nm.length() < 3:
+		if _creator_status:
+			_creator_status.text = "Scrivi nome e canale."
+		return
+	settings.button_feedback()
+	_creator_entry = nm
+	if _creator_status:
+		_creator_status.text = "Invio..."
+	if _creator_btn:
+		_creator_btn.disabled = true
+	if _creator_http == null:
+		_creator_http = HTTPRequest.new()
+		add_child(_creator_http)
+		_creator_http.request_completed.connect(_on_creator_http)
+	_creator_phase = 1
+	_creator_http.request(CREATOR_URL)
+
+func _on_creator_http(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	if _creator_phase == 1:
+		var arr: Array = []
+		if code == 200:
+			var data: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if typeof(data) == TYPE_DICTIONARY and data.has("creator_requests") and typeof(data["creator_requests"]) == TYPE_ARRAY:
+				arr = data["creator_requests"]
+		arr.append(_creator_entry)
+		var payload := JSON.stringify({"creator_requests": arr})
+		_creator_phase = 2
+		var headers := PackedStringArray(["Content-Type: application/json"])
+		_creator_http.request(CREATOR_URL, headers, HTTPClient.METHOD_POST, payload)
+	elif _creator_phase == 2:
+		_creator_phase = 0
+		if code == 200 or code == 201:
+			if _creator_input:
+				_creator_input.release_focus()
+				_creator_input.get_parent().visible = false
+			if _creator_btn:
+				_creator_btn.visible = false
+			if _creator_status:
+				_creator_status.text = "Richiesta inviata! Ti ricontatteremo ❤️"
+				_creator_status.add_theme_font_override("font", _pixel_emoji_font())
+		else:
+			if _creator_status:
+				_creator_status.text = "Errore di rete, riprova."
+			if _creator_btn:
+				_creator_btn.disabled = false
 
 func _hide_subpages() -> void:
 	for k in _subpages:

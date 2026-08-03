@@ -71,18 +71,36 @@ func remove_best(mode: String) -> void:
 	if req.request(url, [], HTTPClient.METHOD_DELETE) != OK:
 		req.queue_free()
 
+# Invia il punteggio SOLO se è più alto di quello già in classifica per questo
+# giocatore (MONOTÒNO): così una partita con punteggio inferiore NON può mai
+# abbassare/cancellare il record online. Prima legge il valore attuale, poi
+# scrive solo se il nuovo è maggiore (o se non esiste ancora).
 func submit_best(mode: String, score: int) -> void:
 	if DB_URL.is_empty() or score <= 0 or _player_id.is_empty():
 		return
-	var p := _profile()
-	var body := JSON.stringify({"name": p["name"], "score": score, "icon": p["icon"]})
-	var url := "%s/leaderboards/%s/%d/%s.json" % [DB_URL, mode, _week(), _player_id]
-	var req := HTTPRequest.new()
-	add_child(req)
-	req.request_completed.connect(func(_r, _code, _h, _b) -> void: req.queue_free())
-	var err := req.request(url, ["Content-Type: application/json"], HTTPClient.METHOD_PUT, body)
-	if err != OK:
-		req.queue_free()
+	var base := "%s/leaderboards/%s/%d/%s" % [DB_URL, mode, _week(), _player_id]
+	var getreq := HTTPRequest.new()
+	add_child(getreq)
+	getreq.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+		getreq.queue_free()
+		# punteggio attuale sul server (o -1 se non c'è)
+		var cur := -1
+		if code == 200:
+			var v: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+				cur = int(v)
+		if score <= cur:
+			return   # non abbassare mai il punteggio in classifica
+		var p := _profile()
+		var payload := JSON.stringify({"name": p["name"], "score": score, "icon": p["icon"]})
+		var putreq := HTTPRequest.new()
+		add_child(putreq)
+		putreq.request_completed.connect(func(_r2, _c2, _h2, _b2) -> void: putreq.queue_free())
+		if putreq.request(base + ".json", ["Content-Type: application/json"], HTTPClient.METHOD_PUT, payload) != OK:
+			putreq.queue_free())
+	# leggi solo il campo "score" del giocatore
+	if getreq.request(base + "/score.json") != OK:
+		getreq.queue_free()
 
 # ============================================================
 # LETTURA TOP 100 (async; [] se offline / errore / DB non configurato)

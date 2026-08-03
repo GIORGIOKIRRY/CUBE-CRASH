@@ -773,8 +773,13 @@ func destroy_matched() -> Array:
 		lifetime_score += gained
 		_show_points_gain_popup(gained)
 
-		# High score live-update (solo classic: lo speedrun ha il suo _speedrun_best)
-		if not _is_speedrun and score > high_score:
+		# Record live-update: classic -> high_score, speedrun -> _speedrun_best.
+		# Aggiornare ANCHE lo speedrun in tempo reale evita che, uscendo dalla
+		# partita prima dello scadere del timer, il punteggio venga perso.
+		if _is_speedrun:
+			if score > _speedrun_best:
+				_speedrun_best = score
+		elif score > high_score:
 			high_score = score
 
 		# UI + Salva
@@ -1324,7 +1329,10 @@ func _input(event: InputEvent) -> void:
 				# Punteggio: posizionare un blocco dà 30 punti
 				score += points_per_placement
 				lifetime_score += points_per_placement
-				if not _is_speedrun and score > high_score:
+				if _is_speedrun:
+					if score > _speedrun_best:
+						_speedrun_best = score
+				elif score > high_score:
 					high_score = score
 				_show_points_gain_popup(points_per_placement)
 				_update_point_label()
@@ -1431,7 +1439,10 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 		_stat_placements += 1
 		score += points_per_placement
 		lifetime_score += points_per_placement
-		if not _is_speedrun and score > high_score:
+		if _is_speedrun:
+			if score > _speedrun_best:
+				_speedrun_best = score
+		elif score > high_score:
 			high_score = score
 		_show_points_gain_popup(points_per_placement)
 		_update_point_label()

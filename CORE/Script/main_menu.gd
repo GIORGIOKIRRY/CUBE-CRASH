@@ -798,10 +798,10 @@ var _record_labels: Array = []
 # (Classic = trofeo, Speedrun = trofeo+fiamma), a dimensione piena (non stracciato).
 const REC_CLASSIC_TEX := "res://CORE/Assets/Art/Home/counter_record_classic.png"
 const REC_SR_TEX := "res://CORE/Assets/Art/Home/counter_record_speedrun.png"
-const REC_CLASSIC_ICON_FRAC := 0.24
+const REC_CLASSIC_ICON_FRAC := 0.20
 const REC_SR_ICON_FRAC := 0.22
-const REC_CLASSIC_W := 44.0 * 900.0 / 192.0    # aspetto naturale a h=44
-const REC_SR_W := 44.0 * 1155.0 / 191.0
+const REC_CLASSIC_W := 44.0 * 1156.0 / 192.0    # aspetto naturale a h=44
+const REC_SR_W := 44.0 * 1156.0 / 192.0
 var _record_bars: Array = []     # tutte le barre record (home/missioni/shop)
 
 # Crea un contatore (frame + numero centrato nella zona scura). Ritorna [bar, label].

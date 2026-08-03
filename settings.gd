@@ -22,6 +22,11 @@ var vibration_enabled: bool = true
 #  "mode_b"  = niente mosse, stile Block Blast (si perde solo per spazio)
 var game_mode: String = "classic"
 
+# DEBUG: se true, all'avvio della partita si forza subito un game over con NUOVO
+# RECORD (per testare la grafica del game over / nuovo record dal tasto TEST home).
+# TOGLIERE prima della release (tasto TEST + questo flag).
+var debug_force_gameover: bool = false
+
 const SETTINGS_PATH := "user://settings.dat"
 
 # Link condivisione (App Store). TODO: sostituire con l'ID reale a pubblicazione.

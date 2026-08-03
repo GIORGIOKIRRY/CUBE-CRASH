@@ -716,6 +716,30 @@ func _on_play_pressed() -> void:
 	_start_mode(MODES[_mode_index]["mode"])
 
 
+# --- DEBUG: tasto TEST GAME OVER (da rimuovere prima della release) -------------
+# Avvia la modalità selezionata e forza subito un game over con NUOVO RECORD,
+# per testare la grafica del game over / nuovo record senza giocare una partita.
+func _build_test_gameover_button() -> void:
+	var lay := CanvasLayer.new()   # screen-space: sempre visibile su ogni dispositivo
+	lay.layer = 200
+	add_child(lay)
+	var b := Button.new()
+	b.text = "TEST\nGAME OVER"
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_font_override("font", MODE_FONT)
+	b.add_theme_font_size_override("font_size", 20)
+	b.add_theme_color_override("font_color", Color(1, 1, 1))
+	b.position = Vector2(10, 120)
+	b.size = Vector2(140, 60)
+	b.modulate = Color(1, 1, 1, 0.85)
+	b.pressed.connect(_on_test_gameover_pressed)
+	lay.add_child(b)
+
+func _on_test_gameover_pressed() -> void:
+	settings.debug_force_gameover = true
+	_start_mode(MODES[_mode_index]["mode"])
+
+
 # --- Tasto CUBE DECK -----------------------------------------------------------
 func _on_deck_down() -> void:
 	settings.button_feedback()
@@ -894,6 +918,8 @@ func _build_top_right() -> void:
 	# IMPOSTAZIONI (nuova icona)
 	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 74.0), 78.0)
 	_settings_btn2.pressed.connect(_on_settings_button_pressed)
+
+	_build_test_gameover_button()
 
 	# PROFILE PICTURE a SINISTRA (mostra l'icona scelta; tap -> schermata EDIT PROFILE)
 	_load_player_name()
@@ -1366,15 +1392,28 @@ func _apply_og_name_tag() -> void:
 	if is_instance_valid(_og_home_tag):
 		_og_home_tag.queue_free()
 		_og_home_tag = null
+	# ripristina il font pieno del nome (potrebbe essere stato rimpicciolito prima)
+	_name_edit.add_theme_font_size_override("font_size", 30)
 	if not _is_og(_player_name):
 		return
-	# il tag è FIGLIO del nome: così segue tutte le sue animazioni (affondamento
-	# alla pressione, colore, intro...). Posizione in coordinate LOCALI del nome.
+	# il tag è FIGLIO del nome: segue tutte le sue animazioni. Deve stare ATTACCATO
+	# al nome ma SEMPRE dentro il box: se il nome è lungo, si rimpicciolisce il nome
+	# quel tanto che basta perché nome + [OG] restino dentro (niente sovrapposizioni).
 	_name_edit.clip_contents = false
-	var fsz := 30
-	var name_w := MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
-	var tag_x := _name_edit.size.x * 0.5 + name_w * 0.5 + 6.0
-	var tag := _make_og_tag(22, Vector2(tag_x, 0.0), Vector2(70, _name_edit.size.y), HORIZONTAL_ALIGNMENT_LEFT)
+	var box_w := _name_edit.size.x
+	var gap := 5.0
+	var tag_font := 20
+	var tag_w := MODE_FONT.get_string_size("[OG]", HORIZONTAL_ALIGNMENT_LEFT, -1, tag_font).x
+	var name_font := 30
+	var name_w := MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_font).x
+	# spazio massimo per il nome (centrato) lasciando posto al tag a destra DENTRO il box
+	var avail := box_w - 2.0 * (gap + tag_w)
+	if avail > 10.0 and name_w > avail:
+		name_font = maxi(12, int(round(name_font * avail / name_w)))
+		_name_edit.add_theme_font_size_override("font_size", name_font)
+		name_w = MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_font).x
+	var tag_x := box_w * 0.5 + name_w * 0.5 + gap
+	var tag := _make_og_tag(tag_font, Vector2(tag_x, 0.0), Vector2(tag_w + 8.0, _name_edit.size.y), HORIZONTAL_ALIGNMENT_LEFT)
 	_name_edit.add_child(tag)
 	_og_home_tag = tag
 

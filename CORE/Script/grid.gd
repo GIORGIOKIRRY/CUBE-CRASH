@@ -409,9 +409,28 @@ func _ready() -> void:
 
 	_last_action_ms = Time.get_ticks_msec()
 
+	# DEBUG (tasto TEST home): forza subito il game over con NUOVO RECORD
+	if settings.debug_force_gameover:
+		settings.debug_force_gameover = false
+		_run_test_gameover.call_deferred()
+		return
+
 	# speedrun: prima di far partire il timer, countdown 3-2-1-GO! (input bloccato)
 	if _is_speedrun:
 		_speedrun_countdown()
+
+# DEBUG: forza un game over con NUOVO RECORD nella modalità corrente (per testare
+# la grafica). Da rimuovere con il tasto TEST prima della release.
+var _debug_test_gameover: bool = false
+func _run_test_gameover() -> void:
+	await get_tree().create_timer(0.4).timeout
+	if not is_inside_tree():
+		return
+	_speedrun_started = true
+	_debug_test_gameover = true
+	var base: int = _prev_speedrun_best if _is_speedrun else _prev_high_score
+	score = base + 123450   # sopra il record -> forza NUOVO RECORD
+	_trigger_game_over("time" if _is_speedrun else "no_space")
 
 # --- Speedrun: countdown iniziale 3-2-1-GO! -----------------------------------
 func _speedrun_countdown() -> void:
@@ -1727,7 +1746,7 @@ func _trigger_game_over(reason := "no_space") -> void:
 
 	# Flusso di sconfitta: strip motivo -> revive -> schermata finale
 	var flow = get_node_or_null("%DefeatFlow")
-	if flow and not _is_speedrun:   # speedrun: niente revive, si va diritti alla schermata finale
+	if flow and not _is_speedrun and not _debug_test_gameover:   # speedrun/test: diritti alla schermata finale
 		if not flow.finished.is_connected(_on_defeat_finished):
 			flow.finished.connect(_on_defeat_finished)
 			flow.revive_requested.connect(_on_revive_requested)

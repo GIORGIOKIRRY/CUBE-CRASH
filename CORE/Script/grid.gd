@@ -136,12 +136,6 @@ func _load_scores() -> void:
 		high_score     = int(cfg.get_value("scores", "high_score", 0))
 		lifetime_score = int(cfg.get_value("scores", "lifetime_score", 0))
 		_speedrun_best = int(cfg.get_value("scores", "speedrun_best", 0))
-		# reset UNA-TANTUM del record speedrun (richiesto): azzera una sola volta
-		if not bool(cfg.get_value("scores", "sr_reset_v1", false)):
-			_speedrun_best = 0
-			cfg.set_value("scores", "speedrun_best", 0)
-			cfg.set_value("scores", "sr_reset_v1", true)
-			cfg.save(SAVE_PATH)
 	else:
 		high_score = 0
 		lifetime_score = 0

@@ -716,28 +716,43 @@ func _on_play_pressed() -> void:
 	_start_mode(MODES[_mode_index]["mode"])
 
 
-# --- DEBUG: tasto TEST GAME OVER (da rimuovere prima della release) -------------
-# Avvia la modalità selezionata e forza subito un game over con NUOVO RECORD,
-# per testare la grafica del game over / nuovo record senza giocare una partita.
+# --- DEBUG: 3 tasti TEST per le schermate di fine partita (rimuovere prima release) --
+# Ognuno lancia direttamente la relativa schermata: Game Over CLASSIC, Game Over
+# SPEEDRUN, NUOVO RECORD (con coriandoli). Da rimuovere prima della release.
 func _build_test_gameover_button() -> void:
 	var lay := CanvasLayer.new()   # screen-space: sempre visibile su ogni dispositivo
 	lay.layer = 200
 	add_child(lay)
-	var b := Button.new()
-	b.text = "TEST\nGAME OVER"
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_override("font", MODE_FONT)
-	b.add_theme_font_size_override("font_size", 20)
-	b.add_theme_color_override("font_color", Color(1, 1, 1))
-	b.position = Vector2(10, 120)
-	b.size = Vector2(140, 60)
-	b.modulate = Color(1, 1, 1, 0.85)
-	b.pressed.connect(_on_test_gameover_pressed)
-	lay.add_child(b)
+	var specs := [
+		{"t": "GO CLASSIC", "mode": "mode_c", "kind": "classic", "col": Color(0.2, 0.6, 1.0)},
+		{"t": "GO SPEED", "mode": "speedrun", "kind": "speedrun", "col": Color(1.0, 0.35, 0.2)},
+		{"t": "NEW RECORD", "mode": "speedrun", "kind": "record", "col": Color(0.7, 0.3, 1.0)},
+	]
+	var y := 120.0
+	for s in specs:
+		var b := Button.new()
+		b.text = s["t"]
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_override("font", MODE_FONT)
+		b.add_theme_font_size_override("font_size", 20)
+		b.add_theme_color_override("font_color", Color(1, 1, 1))
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = s["col"]
+		sb.set_corner_radius_all(6)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_stylebox_override("hover", sb)
+		b.add_theme_stylebox_override("pressed", sb)
+		b.position = Vector2(8, y)
+		b.size = Vector2(150, 46)
+		b.modulate = Color(1, 1, 1, 0.9)
+		b.pressed.connect(_on_test_gameover_pressed.bind(str(s["mode"]), str(s["kind"])))
+		lay.add_child(b)
+		y += 52.0
 
-func _on_test_gameover_pressed() -> void:
-	settings.debug_force_gameover = true
-	_start_mode(MODES[_mode_index]["mode"])
+func _on_test_gameover_pressed(mode: String, kind: String) -> void:
+	settings.debug_gameover = kind
+	settings.game_mode = mode
+	transition.change_scene("res://CORE/Scene/game.tscn")
 
 
 # --- Tasto CUBE DECK -----------------------------------------------------------

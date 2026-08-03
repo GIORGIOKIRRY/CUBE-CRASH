@@ -409,9 +409,10 @@ func _ready() -> void:
 
 	_last_action_ms = Time.get_ticks_msec()
 
-	# DEBUG (tasto TEST home): forza subito il game over con NUOVO RECORD
-	if settings.debug_force_gameover:
-		settings.debug_force_gameover = false
+	# DEBUG (tasti TEST home): forza subito una schermata di fine partita da testare
+	if settings.debug_gameover != "":
+		_debug_go_type = settings.debug_gameover
+		settings.debug_gameover = ""
 		_run_test_gameover.call_deferred()
 		return
 
@@ -419,17 +420,24 @@ func _ready() -> void:
 	if _is_speedrun:
 		_speedrun_countdown()
 
-# DEBUG: forza un game over con NUOVO RECORD nella modalità corrente (per testare
-# la grafica). Da rimuovere con il tasto TEST prima della release.
+# DEBUG: forza una schermata di fine partita per testarne la grafica (tasti TEST
+# nella home). Da rimuovere insieme ai tasti prima della release.
 var _debug_test_gameover: bool = false
+var _debug_go_type: String = ""            # "classic" | "speedrun" | "record"
+var _debug_force_record: int = -1          # -1 nessun override, 0 forza NO record, 1 forza record
 func _run_test_gameover() -> void:
 	await get_tree().create_timer(0.4).timeout
 	if not is_inside_tree():
 		return
 	_speedrun_started = true
 	_debug_test_gameover = true
-	var base: int = _prev_speedrun_best if _is_speedrun else _prev_high_score
-	score = base + 123450   # sopra il record -> forza NUOVO RECORD
+	if _debug_go_type == "record":
+		var base: int = _prev_speedrun_best if _is_speedrun else _prev_high_score
+		score = base + 123450   # sopra il record -> NUOVO RECORD
+		_debug_force_record = 1
+	else:
+		score = 5000            # punteggio qualunque, NON record
+		_debug_force_record = 0
 	_trigger_game_over("time" if _is_speedrun else "no_space")
 
 # --- Speedrun: countdown iniziale 3-2-1-GO! -----------------------------------
@@ -1720,6 +1728,11 @@ func _trigger_game_over(reason := "no_space") -> void:
 			_speedrun_best = score
 	else:
 		_is_new_record = score > _prev_high_score and score > 0
+	# DEBUG (tasti TEST): forza lo stato record/non-record per testare le grafiche
+	if _debug_force_record == 1:
+		_is_new_record = true
+	elif _debug_force_record == 0:
+		_is_new_record = false
 
 	# Aggiorna HighScore (classic). In speedrun il record è _speedrun_best: non toccare high_score.
 	if not _is_speedrun and score > high_score:

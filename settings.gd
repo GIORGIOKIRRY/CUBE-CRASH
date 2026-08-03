@@ -22,10 +22,12 @@ var vibration_enabled: bool = true
 #  "mode_b"  = niente mosse, stile Block Blast (si perde solo per spazio)
 var game_mode: String = "classic"
 
-# DEBUG: se true, all'avvio della partita si forza subito un game over con NUOVO
-# RECORD (per testare la grafica del game over / nuovo record dal tasto TEST home).
-# TOGLIERE prima della release (tasto TEST + questo flag).
-var debug_force_gameover: bool = false
+# DEBUG: se != "", all'avvio della partita si forza subito una schermata di fine
+# partita per testarne la grafica dai tasti TEST nella home:
+#   "classic" = game over classic (non record) · "speedrun" = game over speedrun
+#   "record"  = schermata NUOVO RECORD (con coriandoli)
+# TOGLIERE prima della release (tasti TEST + questo flag).
+var debug_gameover: String = ""
 
 const SETTINGS_PATH := "user://settings.dat"
 

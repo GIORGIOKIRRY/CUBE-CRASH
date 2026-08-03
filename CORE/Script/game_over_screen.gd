@@ -1,14 +1,19 @@
 extends Control
 
-# Colori schermata "nuovo record"
-const RECORD_PURPLE := Color(0.478431, 0.270588, 0.815686)  # sfondo viola
+# Colori sfondo per stato (grafiche fornite)
+const CLASSIC_BG := Color("#0578ec")      # game over classic (blu)
+const SPEEDRUN_BG := Color("#932014")     # game over speedrun (rosso)
+const RECORD_PURPLE := Color("#8005ec")   # nuovo record (viola)
 const RECORD_YELLOW := Color(0.980392, 0.788235, 0.098039)  # "BEST SCORE!"
 const RECORD_LAVENDER := Color(0.850980, 0.619608, 1.0)     # etichetta "SCORE"
 const PLAY_AGAIN_GOLD := preload("res://CORE/Assets/Art/UI/GameOver/PlayAgainGold.svg")
 const LINK_PURPLE := preload("res://CORE/Assets/Art/UI/Menu/LinkPurple.svg")
 const CLOSE_PURPLE := preload("res://CORE/Assets/Art/UI/Menu/ClosePurple.svg")
 
-# Tasti "gioca ancora" per stato + X viola del nuovo record
+# Tasti "gioca ancora" + X per stato (grafiche fornite)
+const PLAY_AGAIN_GREEN := preload("res://CORE/Assets/Art/UI/GameOver/play_again_green.png")   # classic
+const PLAY_AGAIN_GOLD_NEW := preload("res://CORE/Assets/Art/UI/GameOver/play_again_gold.png") # speedrun + record
+const X_CLASSIC := preload("res://CORE/Assets/Art/UI/GameOver/exit_x_classic.png")            # X classic (blu)
 const PLAY_AGAIN_TEX := preload("res://CORE/Assets/Art/UI/GameOver/play_again_r.png")
 const PLAY_AGAIN_RECORD_TEX := preload("res://CORE/Assets/Art/UI/GameOver/play_again_record_r.png")
 const REVIVE_TEX := preload("res://CORE/Assets/Art/UI/GameOver/revive_r.png")
@@ -84,11 +89,11 @@ func set_speedrun_mode(record: int, is_record: bool) -> void:
 		return
 	# speedrun senza record: sfondo rosso (come il gameplay) + X rossa + PLAY AGAIN (come mode 1)
 	# (il tasto REVIVE è riservato al caso "revive col timer di 5s")
-	$Items/BG.color = Color(147.0 / 255.0, 32.0 / 255.0, 20.0 / 255.0, 1.0)
+	$Items/BG.color = SPEEDRUN_BG
 	if has_node("Items/CloseButton"):
 		$Items/CloseButton.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x_red.png")
-	_set_play_texture(PLAY_AGAIN_TEX)
-	var light_red := Color(1.0, 0.5, 0.45)   # "SCORE"/"RECORD" rosso chiaro
+	_set_play_texture(PLAY_AGAIN_GOLD_NEW)
+	var light_red := Color(1.0, 0.7, 0.5)   # "SCORE"/"RECORD" rosso chiaro
 	var title := get_node_or_null("Items/L_GameOver") as Label
 	if title:
 		title.text = "GAME OVER"   # la modalità la mostra l'etichetta ModeTag in alto
@@ -167,19 +172,19 @@ func show_result(is_new_record: bool) -> void:
 		$Items/LinkButton.visible = false
 	if has_node("Items/CloseButton"):
 		var cb: TextureButton = $Items/CloseButton
-		cb.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x.png")
+		cb.texture_normal = X_CLASSIC
 		cb.ignore_texture_size = true
 		cb.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 	if is_new_record:
 		_apply_new_record_layout()
 		# NB: i coriandoli partono da grid.gd DOPO la chiusura dell'adv (play_confetti())
 	else:
-		# sconfitta normale: stesso sfondo del gameplay (classic = blu #00478E) + tasto
-		# "gioca ancora". In speedrun set_speedrun_mode() sovrascrive con rosso + PLAY AGAIN.
-		$Items/BG.color = Color(0.0, 71.0 / 255.0, 142.0 / 255.0, 1.0)
-		_set_play_texture(PLAY_AGAIN_TEX)
+		# GAME OVER CLASSIC: sfondo blu + tasto VERDE + X blu (grafiche fornite).
+		# In speedrun set_speedrun_mode() sovrascrive con rosso + tasto oro.
+		$Items/BG.color = CLASSIC_BG
+		_set_play_texture(PLAY_AGAIN_GREEN)
 		# "SCORE" / "BEST SCORE" in azzurro chiaro
-		var light_blue := Color(0.55, 0.82, 1.0)
+		var light_blue := Color(0.85, 0.93, 1.0)
 		var s_lbl := get_node_or_null("Items/Score") as Label
 		if s_lbl:
 			s_lbl.add_theme_color_override("font_color", light_blue)
@@ -266,8 +271,8 @@ func _apply_new_record_layout() -> void:
 	$Items/BestScore.visible = false
 	$Items/L_BestScoreNumber.visible = false
 
-	# Play Again "nuovo record" (centrato, aspect mantenuto)
-	_set_play_texture(PLAY_AGAIN_RECORD_TEX)
+	# Play Again "nuovo record" ORO (centrato, aspect mantenuto)
+	_set_play_texture(PLAY_AGAIN_GOLD_NEW)
 
 
 # Etichetta MODALITÀ in alto ("CLASSIC" / "SPEEDRUN"): così negli screenshot del

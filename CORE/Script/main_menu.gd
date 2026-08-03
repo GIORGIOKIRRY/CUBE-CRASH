@@ -955,6 +955,8 @@ func _build_top_right() -> void:
 	_name_edit.size = Vector2(nf_w * 0.78, nf_h * 0.62)
 	_name_edit_base = _name_edit.position
 	add_child(_name_edit)
+	# se il fetch Creator è già arrivato, applica subito il nome verde brillante
+	_apply_creator_name_style()
 
 
 func _current_profile_icon_path() -> String:
@@ -1222,11 +1224,9 @@ func _close_profile() -> void:
 # icona profilo bloccata? (missione mensile non ancora riscossa)
 # --- Sblocco icona Creator (approvazione remota via admin) ---------------------
 var _creator_http: HTTPRequest = null
+var _creator_names: Dictionary = {}   # nome (minuscolo) -> true per i Creator approvati
 
 func _fetch_creator_approval() -> void:
-	# se già sbloccata non serve ricontrollare
-	if missions.is_icon_unlocked("creator"):
-		return
 	if _creator_http == null:
 		_creator_http = HTTPRequest.new()
 		add_child(_creator_http)
@@ -1242,18 +1242,50 @@ func _on_creator_approval(_result: int, code: int, _headers: PackedStringArray, 
 	if typeof(data) != TYPE_DICTIONARY or not data.has("creator_approved"):
 		return
 	var approved: Array = data["creator_approved"]
-	var me := _player_name.strip_edges().to_lower()
-	var matched := false
+	_creator_names.clear()
 	for n in approved:
-		if str(n).strip_edges().to_lower() == me:
-			matched = true
-			break
-	if not matched:
-		return
-	# concedi l'icona Creator e aggiorna la UI del profilo
-	if missions.unlock_icon("creator"):
-		if _profile_icon_btns.size() > 0:
+		var s := str(n).strip_edges().to_lower()
+		if s != "":
+			_creator_names[s] = true
+	# se questo giocatore è approvato: sblocca l'icona + nome verde brillante
+	if _is_creator(_player_name):
+		if missions.unlock_icon("creator") and _profile_icon_btns.size() > 0:
 			_update_profile_selection()
+		_apply_creator_name_style()
+
+func _is_creator(name: String) -> bool:
+	return bool(_creator_names.get(name.strip_edges().to_lower(), false))
+
+# Applica al nome nella home l'effetto verde "sbrilluccicato" (se sei un Creator)
+func _apply_creator_name_style() -> void:
+	if is_instance_valid(_name_edit) and _is_creator(_player_name):
+		_shimmer_name(_name_edit, ["font_color", "font_uneditable_color"])
+
+# Colore verde con luccichio animato su una Label / LineEdit
+func _shimmer_name(item: Control, keys: Array) -> void:
+	if item == null:
+		return
+	if item.is_inside_tree():
+		_run_shimmer(item, keys)
+	else:
+		item.tree_entered.connect(_run_shimmer.bind(item, keys), CONNECT_ONE_SHOT)
+
+func _run_shimmer(item: Control, keys: Array) -> void:
+	if not is_instance_valid(item):
+		return
+	var green := Color(0.28, 1.0, 0.36)
+	var pale := Color(0.80, 1.0, 0.85)
+	for k in keys:
+		item.add_theme_color_override(k, green)
+	item.add_theme_color_override("font_outline_color", Color(0.0, 0.22, 0.05))
+	item.add_theme_constant_override("outline_size", 5)
+	var setc := func(c: Color) -> void:
+		if is_instance_valid(item):
+			for k in keys:
+				item.add_theme_color_override(k, c)
+	var tw := item.create_tween().set_loops()
+	tw.tween_method(setc, green, pale, 0.75).set_trans(Tween.TRANS_SINE)
+	tw.tween_method(setc, pale, green, 0.75).set_trans(Tween.TRANS_SINE)
 
 func _is_profile_icon_locked(i: int) -> bool:
 	if not PROFILE_ICON_LOCK.has(i):
@@ -1587,8 +1619,11 @@ func _make_leader_row(e: Dictionary) -> Control:
 	# icona profilo (un po' più piccola)
 	var ic := LB_ROW_H * 0.62
 	row.add_child(_miss_tex(PROFILE_ICONS[clampi(int(e["icon"]), 0, PROFILE_ICONS.size() - 1)], Vector2(LB_ROW_W * 0.16, (LB_ROW_H - ic) * 0.5), Vector2(ic, ic), true))
-	# nome
-	row.add_child(_lb_label(str(e["name"]), 24, txt_col, Vector2(LB_ROW_W * 0.30, 0), Vector2(LB_ROW_W * 0.34, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT))
+	# nome (i Creator approvati hanno il nome verde "sbrilluccicato")
+	var name_lbl := _lb_label(str(e["name"]), 24, txt_col, Vector2(LB_ROW_W * 0.30, 0), Vector2(LB_ROW_W * 0.34, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT)
+	row.add_child(name_lbl)
+	if _is_creator(str(e["name"])):
+		_shimmer_name(name_lbl, ["font_color"])
 	# punteggio agganciato a destra: giallo chiaro + stroke nero
 	var sc := _lb_label(_fmt_score(int(e["score"])), 24, Color(1, 0.93, 0.5), Vector2(LB_ROW_W * 0.60, 0), Vector2(LB_ROW_W * 0.36, LB_ROW_H), HORIZONTAL_ALIGNMENT_RIGHT)
 	sc.add_theme_color_override("font_outline_color", Color(0, 0, 0))

@@ -774,6 +774,18 @@ func _thanks_content() -> Control:
 	_add_stroke(og_reward)
 	vb.add_child(og_reward)
 
+	# anteprima dell'icona OG esclusiva (per far vedere cosa si ottiene)
+	var og_icon_wrap := CenterContainer.new()
+	og_icon_wrap.custom_minimum_size = Vector2(cw, 172.0)
+	var og_icon := TextureRect.new()
+	og_icon.texture = load("res://CORE/Assets/Art/Home/Profile/profile_og.png")
+	og_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	og_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	og_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	og_icon.custom_minimum_size = Vector2(160.0, 160.0)
+	og_icon_wrap.add_child(og_icon)
+	vb.add_child(og_icon_wrap)
+
 	# modulo "manda il tuo nome" (SOPRA il follow, nascosto finché non premi FOLLOW ME)
 	vb.add_child(_build_submit_form(cw))
 

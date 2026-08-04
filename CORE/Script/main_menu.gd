@@ -740,13 +740,13 @@ func _build_test_gameover_button() -> void:
 		b.add_theme_stylebox_override("normal", sb)
 		b.add_theme_stylebox_override("hover", sb)
 		b.add_theme_stylebox_override("pressed", sb)
-		b.position = Vector2(x, 986.0)
-		b.size = Vector2(184.0, 34.0)
+		b.position = Vector2(x, 172.0)   # riga sotto al frame nome (zona vuota), cliccabile
+		b.size = Vector2(180.0, 40.0)
 		b.z_index = 500
-		b.modulate = Color(1, 1, 1, 0.92)
+		b.modulate = Color(1, 1, 1, 0.94)
 		b.pressed.connect(_on_test_gameover_pressed.bind(str(s["mode"]), str(s["kind"])))
 		add_child(b)
-		x += 188.0
+		x += 184.0
 
 func _on_test_gameover_pressed(mode: String, kind: String) -> void:
 	settings.button_feedback()
@@ -1068,9 +1068,9 @@ func _build_top_right() -> void:
 	var empty := StyleBoxEmpty.new()
 	_name_edit.add_theme_stylebox_override("normal", empty)
 	_name_edit.add_theme_stylebox_override("read_only", empty)
-	# nome in ALTO (dopo l'icona), allineato a sinistra; i tag vanno SOTTO
-	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.14, nf_h * 0.05)
-	_name_edit.size = Vector2(nf_w * 0.84, nf_h * 0.48)
+	# nome in ALTO (dopo l'icona), allineato a sinistra; i tag vanno SOTTO (vicini)
+	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.14, nf_h * 0.01)
+	_name_edit.size = Vector2(nf_w * 0.84, nf_h * 0.52)
 	_name_edit_base = _name_edit.position
 	add_child(_name_edit)
 	# se il fetch Creator è già arrivato, applica subito il nome verde brillante
@@ -1446,13 +1446,13 @@ func _apply_name_tags() -> void:
 	var tag_font := 18
 	var gap := 4.0
 	var x := _name_frame.size.x * 0.15
-	var y := _name_frame.size.y * 0.52
+	var y := _name_frame.size.y * 0.46
 	for s in specs:
 		var w: float = MODE_FONT.get_string_size(s["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, tag_font).x + 4.0
 		var lbl := _make_tag(s["t"], s["c"], tag_font)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		lbl.position = Vector2(x, y)
-		lbl.size = Vector2(w, _name_frame.size.y * 0.42)
+		lbl.size = Vector2(w, _name_frame.size.y * 0.40)
 		_name_frame.add_child(lbl)   # figlio del frame: segue l'affondamento alla pressione
 		_name_tags.append(lbl)
 		x += w + gap

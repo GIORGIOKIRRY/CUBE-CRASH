@@ -355,9 +355,10 @@ func play_confetti() -> void:
 		Color(0.45, 1.0, 0.45), Color(1.0, 0.55, 0.9), Color(1.0, 0.6, 0.12),
 		Color(1.0, 1.0, 1.0),
 	]
-	# 110 coriandoli, con ritardi fino a ~7s: pioggia LUNGA (~10s totali) con la
-	# FASCIA DENSA in alto (come nel mockup del nuovo record).
-	for i in 110:
+	# 130 coriandoli: partono BEN sopra il bordo alto (fuori schermo su ogni
+	# dispositivo) con altezza sfalsata -> pioggia continua, MAI fermi in cima.
+	var END_Y := 760.0
+	for i in 130:
 		var c := ColorRect.new()
 		c.color = cols[i % cols.size()]
 		var sz := roundf(randf_range(12.0, 22.0))   # quadrati pixel
@@ -365,14 +366,15 @@ func play_confetti() -> void:
 		c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		c.pivot_offset = Vector2(sz, sz) * 0.5
 		var sx := randf_range(-300.0, 340.0)   # copre la larghezza (Items è centrato)
-		c.position = Vector2(sx, -560.0)       # parte appena sopra il bordo alto
+		var sy := randf_range(-1300.0, -640.0)   # ben fuori dallo schermo, in alto
+		c.position = Vector2(sx, sy)
 		c.rotation = randf_range(0.0, TAU)
 		cont.add_child(c)
-		var delay := randf_range(0.0, 7.0)          # spalmati nel tempo
-		var dur := randf_range(2.6, 4.2)            # caduta più lenta
+		var delay := randf_range(0.0, 5.0)          # spalmati nel tempo
+		var dur := (END_Y - sy) / 360.0             # velocità di caduta ~costante
 		var tw := c.create_tween()
 		tw.tween_interval(delay)
-		tw.tween_property(c, "position:y", 660.0, dur).set_trans(Tween.TRANS_LINEAR)
+		tw.tween_property(c, "position:y", END_Y, dur).set_trans(Tween.TRANS_LINEAR)
 		tw.parallel().tween_property(c, "position:x", sx + randf_range(-70.0, 70.0), dur)\
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		tw.parallel().tween_property(c, "rotation", c.rotation + randf_range(-8.0, 8.0), dur)

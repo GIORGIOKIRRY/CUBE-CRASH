@@ -1077,7 +1077,7 @@ func _build_top_right() -> void:
 	# se il fetch Creator è già arrivato, applica subito il nome verde brillante
 	_apply_creator_name_style()
 	# se il fetch OG è già arrivato, applica subito il tag [OG] dorato
-	_apply_og_name_tag()
+	_apply_name_tags()
 
 
 func _current_profile_icon_path() -> String:
@@ -1368,11 +1368,12 @@ func _on_creator_approval(_result: int, code: int, _headers: PackedStringArray, 
 		var s := str(n).strip_edges().to_lower()
 		if s != "":
 			_creator_names[s] = true
-	# se questo giocatore è approvato: sblocca l'icona + nome verde brillante
+	# se questo giocatore è approvato: sblocca l'icona + nome verde brillante + tag [CC]
 	if _is_creator(_player_name):
 		if missions.unlock_icon("creator") and _profile_icon_btns.size() > 0:
 			_update_profile_selection()
 		_apply_creator_name_style()
+	_apply_name_tags()
 
 func _is_creator(name: String) -> bool:
 	return bool(_creator_names.get(name.strip_edges().to_lower(), false))
@@ -1404,59 +1405,63 @@ func _on_og_fetched(_result: int, code: int, _headers: PackedStringArray, body: 
 		if s != "":
 			_og_names[s] = true
 	# aggiorna il tag [OG] sul nome in home (se questo giocatore è un OG)
-	_apply_og_name_tag()
+	_apply_name_tags()
 
 func _is_og(name: String) -> bool:
 	return bool(_og_names.get(name.strip_edges().to_lower(), false))
 
 # Etichetta dorata "[OG]" (stile oro con contorno scuro)
-func _make_og_tag(size: int, pos: Vector2, sz: Vector2, halign: int) -> Label:
+func _make_tag(txt: String, col: Color, size: int) -> Label:
 	var l := Label.new()
-	l.text = "[OG]"
+	l.text = txt
 	l.add_theme_font_override("font", MODE_FONT)
 	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", Color(1.0, 0.82, 0.15))   # oro
-	l.add_theme_color_override("font_outline_color", Color(0.30, 0.18, 0.0))
+	l.add_theme_color_override("font_color", col)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	l.add_theme_constant_override("outline_size", 5)
-	l.horizontal_alignment = halign
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	l.position = pos
-	l.size = sz
 	return l
 
-# Mostra "[OG]" dorato accanto al nome in HOME, se il giocatore è un OG supporter
-var _og_home_tag: Label = null
-func _apply_og_name_tag() -> void:
-	if not is_instance_valid(_name_edit):
+# Tag del profilo in HOME, come piccoli badge in ALTO A DESTRA del frame nome
+# (uno dopo l'altro). [CC] = Creator (verde), [OG] = OG supporter (oro).
+# Il nome resta CENTRATO a dimensione piena.
+var _name_tags: Array = []
+func _apply_name_tags() -> void:
+	for t in _name_tags:
+		if is_instance_valid(t):
+			t.queue_free()
+	_name_tags.clear()
+	if not is_instance_valid(_name_edit) or not is_instance_valid(_name_frame):
 		return
-	if is_instance_valid(_og_home_tag):
-		_og_home_tag.queue_free()
-		_og_home_tag = null
-	# ripristina il font pieno del nome (potrebbe essere stato rimpicciolito prima)
-	_name_edit.add_theme_font_size_override("font_size", 30)
-	if not _is_og(_player_name):
+	_name_edit.add_theme_font_size_override("font_size", 30)   # nome pieno, centrato
+	var specs: Array = []
+	if _is_creator(_player_name):
+		specs.append({"t": "[CC]", "c": Color(0.30, 1.0, 0.38)})   # verde
+	if _is_og(_player_name):
+		specs.append({"t": "[OG]", "c": Color(1.0, 0.82, 0.15)})   # oro
+	if specs.is_empty():
 		return
-	# il tag è FIGLIO del nome: segue tutte le sue animazioni. Deve stare ATTACCATO
-	# al nome ma SEMPRE dentro il box: se il nome è lungo, si rimpicciolisce il nome
-	# quel tanto che basta perché nome + [OG] restino dentro (niente sovrapposizioni).
-	_name_edit.clip_contents = false
-	var box_w := _name_edit.size.x
-	var gap := 5.0
-	var tag_font := 20
-	var tag_w := MODE_FONT.get_string_size("[OG]", HORIZONTAL_ALIGNMENT_LEFT, -1, tag_font).x
-	var name_font := 30
-	var name_w := MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_font).x
-	# spazio massimo per il nome (centrato) lasciando posto al tag a destra DENTRO il box
-	var avail := box_w - 2.0 * (gap + tag_w)
-	if avail > 10.0 and name_w > avail:
-		name_font = maxi(12, int(round(name_font * avail / name_w)))
-		_name_edit.add_theme_font_size_override("font_size", name_font)
-		name_w = MODE_FONT.get_string_size(_player_name, HORIZONTAL_ALIGNMENT_LEFT, -1, name_font).x
-	var tag_x := box_w * 0.5 + name_w * 0.5 + gap
-	var tag := _make_og_tag(tag_font, Vector2(tag_x, 0.0), Vector2(tag_w + 8.0, _name_edit.size.y), HORIZONTAL_ALIGNMENT_LEFT)
-	_name_edit.add_child(tag)
-	_og_home_tag = tag
+	var tag_font := 17
+	var gap := 3.0
+	var widths: Array = []
+	var total := 0.0
+	for s in specs:
+		var w: float = MODE_FONT.get_string_size(s["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, tag_font).x + 4.0
+		widths.append(w)
+		total += w
+	total += gap * float(specs.size() - 1)
+	# in alto a destra del frame: la riga di tag finisce vicino al bordo destro
+	var x := _name_frame.size.x - total - 2.0
+	var y := -2.0
+	for i in specs.size():
+		var lbl := _make_tag(specs[i]["t"], specs[i]["c"], tag_font)
+		lbl.position = Vector2(x, y)
+		lbl.size = Vector2(widths[i], 24.0)
+		_name_frame.add_child(lbl)   # figlio del frame: segue l'affondamento alla pressione
+		_name_tags.append(lbl)
+		x += widths[i] + gap
 
 # Applica al nome nella home l'effetto verde "sbrilluccicato" (se sei un Creator)
 func _apply_creator_name_style() -> void:

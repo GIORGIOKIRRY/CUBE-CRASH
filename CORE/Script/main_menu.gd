@@ -95,12 +95,13 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Profile/profile_cupgreen.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_creator.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_beta.png",
+	"res://CORE/Assets/Art/Home/Profile/profile_og.png",
 ]
 # icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
 # Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
-# "creator" NON viene dalle missioni: si sblocca da remoto quando l'admin
-# approva la richiesta Creator (vedi _fetch_creator_approval).
-const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator", 8: "beta"}
+# "creator"/"og" NON vengono dalle missioni: si sbloccano da remoto (approvazione
+# Creator / lista OG supporters).
+const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator", 8: "beta", 9: "og"}
 const CREATOR_BIN_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
@@ -1337,7 +1338,11 @@ func _on_og_fetched(_result: int, code: int, _headers: PackedStringArray, body: 
 		var s := str(n).strip_edges().to_lower()
 		if s != "":
 			_og_names[s] = true
-	# aggiorna il tag [OG] sul nome in home (se questo giocatore è un OG)
+	# se questo giocatore è un OG: sblocca l'icona OG + tag [OG]
+	if _is_og(_player_name):
+		if missions.unlock_icon("og") and _profile_icon_btns.size() > 0:
+			_update_profile_selection()
+	# aggiorna il tag [OG] sul nome in home
 	_apply_name_tags()
 
 func _is_og(name: String) -> bool:

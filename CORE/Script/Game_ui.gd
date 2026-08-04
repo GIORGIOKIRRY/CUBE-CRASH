@@ -12,33 +12,6 @@ func _ready() -> void:
 	# tasti UI di gioco: animazione verso il basso + vibrazione alla pressione
 	_press_fx(get_node_or_null("BackButton"))
 	_press_fx(get_node_or_null("SettingsButton"))
-	_build_test_lose_button()   # DEBUG: tasto per perdere subito (rimuovere prima release)
-
-# DEBUG: tasto "PERDI" per terminare subito la partita (test veloce del game over)
-func _build_test_lose_button() -> void:
-	var b := Button.new()
-	b.text = "PERDI"
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_font_override("font", MODE_FONT)
-	b.add_theme_font_size_override("font_size", 22)
-	b.add_theme_color_override("font_color", Color(1, 1, 1))
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.85, 0.15, 0.15)
-	sb.set_corner_radius_all(8)
-	b.add_theme_stylebox_override("normal", sb)
-	b.add_theme_stylebox_override("hover", sb)
-	b.add_theme_stylebox_override("pressed", sb)
-	b.position = Vector2(230.0, 6.0)   # in alto al centro, tra i due tasti
-	b.size = Vector2(116.0, 48.0)
-	b.z_index = 500
-	b.pressed.connect(_on_test_lose_pressed)
-	add_child(b)
-
-func _on_test_lose_pressed() -> void:
-	settings.button_feedback()
-	var g = get_node_or_null("../grid")
-	if g and not g.get("is_game_over") and g.has_method("_trigger_game_over"):
-		g._trigger_game_over("no_space")
 
 func _press_fx(b: BaseButton) -> void:
 	if b == null:

@@ -716,70 +716,6 @@ func _on_play_pressed() -> void:
 	_start_mode(MODES[_mode_index]["mode"])
 
 
-# --- DEBUG: 3 tasti TEST per le schermate di fine partita (rimuovere prima release) --
-# Ognuno lancia direttamente la relativa schermata: Game Over CLASSIC, Game Over
-# SPEEDRUN, NUOVO RECORD (con coriandoli). Da rimuovere prima della release.
-func _build_test_gameover_button() -> void:
-	var specs := [
-		{"t": "GO CLASSIC", "mode": "mode_c", "kind": "classic", "col": Color(0.2, 0.6, 1.0)},
-		{"t": "GO SPEED", "mode": "speedrun", "kind": "speedrun", "col": Color(1.0, 0.35, 0.2)},
-		{"t": "NEW RECORD", "mode": "speedrun", "kind": "record", "col": Color(0.7, 0.3, 1.0)},
-	]
-	# riga orizzontale in basso (spazio design, non copre nome/griglia)
-	var x := 8.0
-	for s in specs:
-		var b := Button.new()
-		b.text = s["t"]
-		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_font_override("font", MODE_FONT)
-		b.add_theme_font_size_override("font_size", 17)
-		b.add_theme_color_override("font_color", Color(1, 1, 1))
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = s["col"]
-		sb.set_corner_radius_all(6)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_stylebox_override("hover", sb)
-		b.add_theme_stylebox_override("pressed", sb)
-		b.position = Vector2(x, 172.0)   # riga sotto al frame nome (zona vuota), cliccabile
-		b.size = Vector2(180.0, 40.0)
-		b.z_index = 500
-		b.modulate = Color(1, 1, 1, 0.94)
-		b.pressed.connect(_on_test_gameover_pressed.bind(str(s["mode"]), str(s["kind"])))
-		add_child(b)
-		x += 184.0
-
-func _on_test_gameover_pressed(mode: String, kind: String) -> void:
-	settings.button_feedback()
-	# istanzia DIRETTAMENTE la schermata di fine partita con i parametri giusti,
-	# così ogni tasto mostra in modo affidabile la sua grafica (classic/speedrun/record).
-	var scene: PackedScene = load("res://CORE/Scene/game_over_screen.tscn")
-	var go: Control = scene.instantiate()
-	var lay := CanvasLayer.new()
-	lay.layer = 300
-	add_child(lay)
-	lay.add_child(go)
-	go.set_anchors_preset(Control.PRESET_FULL_RECT)
-	var is_rec := kind == "record"
-	var sc := go.get_node_or_null("Items/L_ScoreNumber") as Label
-	if sc:
-		sc.text = "215420" if is_rec else "32030"
-	var bs := go.get_node_or_null("Items/L_BestScoreNumber") as Label
-	if bs:
-		bs.text = "180000"
-	if go.has_method("set_end_bonus"):
-		go.set_end_bonus(215420 if is_rec else 32030, 0, 100)
-	if go.has_method("set_session_stats"):
-		go.set_session_stats("5:43  ·  26 pose  ·  32030 pt")
-	if go.has_method("show_result"):
-		go.show_result(is_rec)
-	if mode == "speedrun" and not is_rec and go.has_method("set_speedrun_mode"):
-		go.set_speedrun_mode(180000, false)
-	if go.has_method("set_mode_tag"):
-		go.set_mode_tag(mode)
-	if is_rec and go.has_method("play_confetti"):
-		go.play_confetti()
-
-
 # --- Tasto CUBE DECK -----------------------------------------------------------
 func _on_deck_down() -> void:
 	settings.button_feedback()
@@ -958,8 +894,6 @@ func _build_top_right() -> void:
 	# IMPOSTAZIONI (nuova icona)
 	_settings_btn2 = _make_icon_button("res://CORE/Assets/Art/UI/Menu/settings_new.png", Vector2(474.0, 74.0), 78.0)
 	_settings_btn2.pressed.connect(_on_settings_button_pressed)
-
-	_build_test_gameover_button()
 
 	# PROFILE PICTURE a SINISTRA (mostra l'icona scelta; tap -> schermata EDIT PROFILE)
 	_load_player_name()

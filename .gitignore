@@ -2,3 +2,5 @@
 .godot/
 /android/
 EXPORT/
+.DS_Store
+**/.DS_Store

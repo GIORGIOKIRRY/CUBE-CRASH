@@ -720,21 +720,19 @@ func _on_play_pressed() -> void:
 # Ognuno lancia direttamente la relativa schermata: Game Over CLASSIC, Game Over
 # SPEEDRUN, NUOVO RECORD (con coriandoli). Da rimuovere prima della release.
 func _build_test_gameover_button() -> void:
-	var lay := CanvasLayer.new()   # screen-space: sempre visibile su ogni dispositivo
-	lay.layer = 200
-	add_child(lay)
 	var specs := [
 		{"t": "GO CLASSIC", "mode": "mode_c", "kind": "classic", "col": Color(0.2, 0.6, 1.0)},
 		{"t": "GO SPEED", "mode": "speedrun", "kind": "speedrun", "col": Color(1.0, 0.35, 0.2)},
 		{"t": "NEW RECORD", "mode": "speedrun", "kind": "record", "col": Color(0.7, 0.3, 1.0)},
 	]
-	var y := 120.0
+	# riga orizzontale in basso (spazio design, non copre nome/griglia)
+	var x := 8.0
 	for s in specs:
 		var b := Button.new()
 		b.text = s["t"]
 		b.focus_mode = Control.FOCUS_NONE
 		b.add_theme_font_override("font", MODE_FONT)
-		b.add_theme_font_size_override("font_size", 20)
+		b.add_theme_font_size_override("font_size", 17)
 		b.add_theme_color_override("font_color", Color(1, 1, 1))
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = s["col"]
@@ -742,11 +740,13 @@ func _build_test_gameover_button() -> void:
 		b.add_theme_stylebox_override("normal", sb)
 		b.add_theme_stylebox_override("hover", sb)
 		b.add_theme_stylebox_override("pressed", sb)
-		b.position = Vector2(8, y)
-		b.size = Vector2(150, 46)
-		b.modulate = Color(1, 1, 1, 0.9)
+		b.position = Vector2(x, 986.0)
+		b.size = Vector2(184.0, 34.0)
+		b.z_index = 500
+		b.modulate = Color(1, 1, 1, 0.92)
 		b.pressed.connect(_on_test_gameover_pressed.bind(str(s["mode"]), str(s["kind"])))
-		lay.add_child(b)
+		add_child(b)
+		x += 188.0
 		y += 52.0
 
 func _on_test_gameover_pressed(mode: String, kind: String) -> void:
@@ -1059,7 +1059,7 @@ func _build_top_right() -> void:
 	_name_edit = LineEdit.new()
 	_name_edit.text = _player_name
 	_name_edit.max_length = 12
-	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_name_edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_name_edit.editable = false
 	_name_edit.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_edit.add_theme_font_override("font", MODE_FONT)
@@ -1069,9 +1069,9 @@ func _build_top_right() -> void:
 	var empty := StyleBoxEmpty.new()
 	_name_edit.add_theme_stylebox_override("normal", empty)
 	_name_edit.add_theme_stylebox_override("read_only", empty)
-	# centrato nel frame, leggermente spostato a destra
-	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.12, nf_h * 0.12)
-	_name_edit.size = Vector2(nf_w * 0.78, nf_h * 0.62)
+	# nome in ALTO (dopo l'icona), allineato a sinistra; i tag vanno SOTTO
+	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.14, nf_h * 0.05)
+	_name_edit.size = Vector2(nf_w * 0.84, nf_h * 0.48)
 	_name_edit_base = _name_edit.position
 	add_child(_name_edit)
 	# se il fetch Creator è già arrivato, applica subito il nome verde brillante
@@ -1437,31 +1437,26 @@ func _apply_name_tags() -> void:
 		return
 	_name_edit.add_theme_font_size_override("font_size", 30)   # nome pieno, centrato
 	var specs: Array = []
-	if _is_creator(_player_name):
-		specs.append({"t": "[CC]", "c": Color(0.30, 1.0, 0.38)})   # verde
 	if _is_og(_player_name):
 		specs.append({"t": "[OG]", "c": Color(1.0, 0.82, 0.15)})   # oro
+	if _is_creator(_player_name):
+		specs.append({"t": "[CC]", "c": Color(0.30, 1.0, 0.38)})   # verde
 	if specs.is_empty():
 		return
-	var tag_font := 17
-	var gap := 3.0
-	var widths: Array = []
-	var total := 0.0
+	# tag SOTTO il nome, in fila partendo da SINISTRA (allineati col nome)
+	var tag_font := 18
+	var gap := 4.0
+	var x := _name_frame.size.x * 0.15
+	var y := _name_frame.size.y * 0.52
 	for s in specs:
 		var w: float = MODE_FONT.get_string_size(s["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, tag_font).x + 4.0
-		widths.append(w)
-		total += w
-	total += gap * float(specs.size() - 1)
-	# in alto a destra del frame: la riga di tag finisce vicino al bordo destro
-	var x := _name_frame.size.x - total - 2.0
-	var y := -2.0
-	for i in specs.size():
-		var lbl := _make_tag(specs[i]["t"], specs[i]["c"], tag_font)
+		var lbl := _make_tag(s["t"], s["c"], tag_font)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		lbl.position = Vector2(x, y)
-		lbl.size = Vector2(widths[i], 24.0)
+		lbl.size = Vector2(w, _name_frame.size.y * 0.42)
 		_name_frame.add_child(lbl)   # figlio del frame: segue l'affondamento alla pressione
 		_name_tags.append(lbl)
-		x += widths[i] + gap
+		x += w + gap
 
 # Applica al nome nella home l'effetto verde "sbrilluccicato" (se sei un Creator)
 func _apply_creator_name_style() -> void:
@@ -1832,18 +1827,22 @@ func _make_leader_row(e: Dictionary) -> Control:
 	row.add_child(name_lbl)
 	if _is_creator(str(e["name"])):
 		_shimmer_name(name_lbl, ["font_color"])
-	# tag [CC]/[OG] subito dopo il nome in classifica (uno dopo l'altro)
+	# tag [CC]/[OG] ATTACCATI al nome in classifica (uno dopo l'altro)
 	var nw := MODE_FONT.get_string_size(str(e["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
-	var tx := nm_x + nw + 6.0
+	var tx := nm_x + nw + 3.0
+	var lb_specs: Array = []
 	if _is_creator(str(e["name"])):
-		var cc := _make_tag("[CC]", Color(0.30, 1.0, 0.38), 18)
-		cc.position = Vector2(tx, 0); cc.size = Vector2(52, LB_ROW_H)
-		row.add_child(cc)
-		tx += 52.0
+		lb_specs.append({"t": "[CC]", "c": Color(0.30, 1.0, 0.38)})
 	if _is_og(str(e["name"])):
-		var og := _make_tag("[OG]", Color(1.0, 0.82, 0.15), 18)
-		og.position = Vector2(tx, 0); og.size = Vector2(52, LB_ROW_H)
-		row.add_child(og)
+		lb_specs.append({"t": "[OG]", "c": Color(1.0, 0.82, 0.15)})
+	for s in lb_specs:
+		var tw := MODE_FONT.get_string_size(s["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 2.0
+		var tg := _make_tag(s["t"], s["c"], 18)
+		tg.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		tg.position = Vector2(tx, 0)
+		tg.size = Vector2(tw, LB_ROW_H)
+		row.add_child(tg)
+		tx += tw + 2.0
 	# punteggio agganciato a destra: giallo chiaro + stroke nero
 	var sc := _lb_label(_fmt_score(int(e["score"])), 24, Color(1, 0.93, 0.5), Vector2(LB_ROW_W * 0.60, 0), Vector2(LB_ROW_W * 0.36, LB_ROW_H), HORIZONTAL_ALIGNMENT_RIGHT)
 	sc.add_theme_color_override("font_outline_color", Color(0, 0, 0))
@@ -2336,6 +2335,69 @@ func _make_mission_row(index: int, m: Dictionary, kind: String = "daily") -> Con
 	return row
 
 
+# Animazione ricompensa ICONA: l'icona sbloccata compare grande, rimbalza e si
+# ingrandisce (con "È TUA!"), per far capire che ora è del giocatore.
+func _play_icon_reward_anim(icon_id: String) -> void:
+	var path := "res://CORE/Assets/Art/Home/Profile/profile_%s.png" % icon_id
+	if not ResourceLoader.exists(path):
+		return
+	var lay := CanvasLayer.new()
+	lay.layer = 250
+	add_child(lay)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	lay.add_child(dim)
+	var vp := get_viewport().get_visible_rect().size
+	var sz := 280.0
+	var icon := TextureRect.new()
+	icon.texture = load(path)
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.size = Vector2(sz, sz)
+	icon.pivot_offset = Vector2(sz, sz) * 0.5
+	var base_pos := Vector2((vp.x - sz) * 0.5, (vp.y - sz) * 0.5 - 30.0)
+	icon.position = base_pos
+	icon.scale = Vector2(0.1, 0.1)
+	lay.add_child(icon)
+	var lbl := Label.new()
+	lbl.text = "È TUA!"
+	lbl.add_theme_font_override("font", MODE_FONT)
+	lbl.add_theme_font_size_override("font_size", 56)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.15))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	lbl.add_theme_constant_override("outline_size", 8)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.position = Vector2((vp.x - 400.0) * 0.5, base_pos.y + sz + 6.0)
+	lbl.size = Vector2(400.0, 70.0)
+	lbl.modulate.a = 0.0
+	lay.add_child(lbl)
+	var tw := icon.create_tween()
+	tw.parallel().tween_property(dim, "color", Color(0, 0, 0, 0.72), 0.2)
+	# pop in con rimbalzo
+	tw.tween_property(icon, "scale", Vector2(1.2, 1.2), 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(icon, "scale", Vector2(1.0, 1.0), 0.14).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(lbl, "modulate:a", 1.0, 0.2)
+	# due rimbalzi verticali
+	tw.tween_property(icon, "position:y", base_pos.y - 34.0, 0.22).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(icon, "position:y", base_pos.y, 0.30).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(icon, "position:y", base_pos.y - 16.0, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(icon, "position:y", base_pos.y, 0.20).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	tw.tween_interval(0.7)
+	tw.parallel().tween_property(icon, "modulate:a", 0.0, 0.4)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.4)
+	tw.parallel().tween_property(dim, "color", Color(0, 0, 0, 0), 0.4)
+	tw.tween_callback(lay.queue_free)
+	settings.vibrate(40)
+	# tap per chiudere subito
+	dim.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventScreenTouch and e.pressed and is_instance_valid(lay):
+			lay.queue_free())
+
 func _claim_mission(index: int, kind: String = "daily", src: Control = null) -> void:
 	# MENSILE: ricompensa = icona profilo sbloccata (niente monete volanti)
 	if kind == "monthly":
@@ -2344,6 +2406,7 @@ func _claim_mission(index: int, kind: String = "daily", src: Control = null) -> 
 			settings.play_mission()   # missione completata riscossa
 			_populate_missions()
 			_update_mission_badges()
+			_play_icon_reward_anim(icon_id)   # icona che rimbalza: "ora è tua!"
 		return
 	var before := missions.coins
 	# posizione di partenza delle monete (riga riscattata), prima che _populate_missions la rimuova

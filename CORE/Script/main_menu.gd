@@ -1069,7 +1069,7 @@ func _build_top_right() -> void:
 	_name_edit.add_theme_stylebox_override("normal", empty)
 	_name_edit.add_theme_stylebox_override("read_only", empty)
 	# nome in ALTO (dopo l'icona), allineato a sinistra; i tag vanno SOTTO (vicini)
-	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.14, nf_h * 0.09)
+	_name_edit.position = _name_frame.position + Vector2(nf_w * 0.14, nf_h * 0.18)
 	_name_edit.size = Vector2(nf_w * 0.84, nf_h * 0.50)
 	_name_edit_base = _name_edit.position
 	add_child(_name_edit)

@@ -191,8 +191,18 @@ func show_result(is_new_record: bool) -> void:
 		var bs_lbl := get_node_or_null("Items/BestScore") as Label
 		if bs_lbl:
 			bs_lbl.add_theme_color_override("font_color", light_blue)
+	_lower_content(55.0)   # abbassa il blocco (titolo/punteggi/tasto) un po' più giù
 	visible = true
 	_play_end_bonus_anim()   # dopo il layout: anima le mosse rimaste in punteggio
+
+# Abbassa di "d" px il blocco centrale (titolo, punteggi, tasto, statistiche),
+# lasciando in alto la X e l'etichetta modalità.
+func _lower_content(d: float) -> void:
+	for n in ["L_GameOver", "Score", "L_ScoreNumber", "BestScore", "L_BestScoreNumber", "PlayAgainButton", "SessionStats"]:
+		var node := get_node_or_null("Items/" + n) as Control
+		if node:
+			node.offset_top += d
+			node.offset_bottom += d
 
 
 func _play_end_bonus_anim() -> void:
@@ -241,13 +251,14 @@ func _apply_new_record_layout() -> void:
 	if has_node("Items/CloseButton"):
 		$Items/CloseButton.texture_normal = X_NEWRECORD_TEX
 
-	# Titolo -> "BEST SCORE!" giallo, centrato
+	# Titolo -> "BEST SCORE!" giallo, centrato, un po' più piccolo (proporzioni abbassate)
 	var title: Label = $Items/L_GameOver
 	title.text = "BEST SCORE!"
+	title.add_theme_font_size_override("font_size", 96)
 	title.add_theme_color_override("font_color", RECORD_YELLOW)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.offset_left = -290.0
-	title.offset_right = 330.0
+	title.offset_left = -300.0
+	title.offset_right = 340.0
 	# (verticale invariato: resta in alto come nel mockup)
 
 	# Etichetta "SCORE" -> lavanda, centrata, spostata al centro schermo
@@ -285,18 +296,19 @@ func set_mode_tag(mode: String) -> void:
 		lbl = Label.new()
 		lbl.name = "ModeTag"
 		lbl.add_theme_font_override("font", STATS_FONT)
-		lbl.add_theme_font_size_override("font_size", 40)
+		lbl.add_theme_font_size_override("font_size", 62)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		lbl.add_theme_constant_override("outline_size", 8)
 		lbl.offset_left = -290.0
 		lbl.offset_right = 330.0
-		lbl.offset_top = -392.0
-		lbl.offset_bottom = -334.0
+		lbl.offset_top = -402.0
+		lbl.offset_bottom = -320.0
 		$Items.add_child(lbl)
 	lbl.text = txt
-	lbl.add_theme_color_override("font_color", Color(1.0, 0.62, 0.2) if is_sr else Color(0.82, 0.62, 1.0))
+	# classic -> bianco · speedrun -> arancione
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.62, 0.2) if is_sr else Color(1, 1, 1))
 	lbl.visible = true
 
 

@@ -747,7 +747,6 @@ func _build_test_gameover_button() -> void:
 		b.pressed.connect(_on_test_gameover_pressed.bind(str(s["mode"]), str(s["kind"])))
 		add_child(b)
 		x += 188.0
-		y += 52.0
 
 func _on_test_gameover_pressed(mode: String, kind: String) -> void:
 	settings.button_feedback()

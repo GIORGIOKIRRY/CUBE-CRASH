@@ -764,6 +764,16 @@ func _thanks_content() -> Control:
 	_add_stroke(invite)
 	vb.add_child(invite)
 
+	# ricompensa OG: tag [OG] + icona profilo esclusiva
+	var og_reward := _make_text(
+		"Once you're added to the OG list you unlock the [OG] tag next to your name and the exclusive OG profile icon! 👑",
+		Color(1.0, 0.86, 0.2), 24)
+	og_reward.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	og_reward.add_theme_font_override("font", _pixel_emoji_font())
+	og_reward.custom_minimum_size = Vector2(cw, 0)
+	_add_stroke(og_reward)
+	vb.add_child(og_reward)
+
 	# modulo "manda il tuo nome" (SOPRA il follow, nascosto finché non premi FOLLOW ME)
 	vb.add_child(_build_submit_form(cw))
 

@@ -1832,10 +1832,18 @@ func _make_leader_row(e: Dictionary) -> Control:
 	row.add_child(name_lbl)
 	if _is_creator(str(e["name"])):
 		_shimmer_name(name_lbl, ["font_color"])
-	# tag dorato [OG] subito dopo il nome, per gli OG supporters
+	# tag [CC]/[OG] subito dopo il nome in classifica (uno dopo l'altro)
+	var nw := MODE_FONT.get_string_size(str(e["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
+	var tx := nm_x + nw + 6.0
+	if _is_creator(str(e["name"])):
+		var cc := _make_tag("[CC]", Color(0.30, 1.0, 0.38), 18)
+		cc.position = Vector2(tx, 0); cc.size = Vector2(52, LB_ROW_H)
+		row.add_child(cc)
+		tx += 52.0
 	if _is_og(str(e["name"])):
-		var nw := MODE_FONT.get_string_size(str(e["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x
-		row.add_child(_make_og_tag(18, Vector2(nm_x + nw + 6.0, 0), Vector2(64, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT))
+		var og := _make_tag("[OG]", Color(1.0, 0.82, 0.15), 18)
+		og.position = Vector2(tx, 0); og.size = Vector2(52, LB_ROW_H)
+		row.add_child(og)
 	# punteggio agganciato a destra: giallo chiaro + stroke nero
 	var sc := _lb_label(_fmt_score(int(e["score"])), 24, Color(1, 0.93, 0.5), Vector2(LB_ROW_W * 0.60, 0), Vector2(LB_ROW_W * 0.36, LB_ROW_H), HORIZONTAL_ALIGNMENT_RIGHT)
 	sc.add_theme_color_override("font_outline_color", Color(0, 0, 0))

@@ -120,6 +120,8 @@ var _profile_grid: GridContainer
 var _profile_cancel: TextureButton
 var _profile_confirm: TextureButton
 var _profile_icon_btns: Array = []
+var _profile_lock_overlays: Array = []   # lucchetto sopra le icone ancora bloccate
+var _lock_tex: ImageTexture = null       # texture pixel-art del lucchetto (generata una volta)
 var _leader_menu: Control
 var _leader_bg: ColorRect
 var _leader_panel: ColorRect
@@ -992,7 +994,7 @@ func _build_top_right() -> void:
 	# nome in SOLA LETTURA (si modifica solo in EDIT PROFILE), allineato a sinistra, più grande
 	_name_edit = LineEdit.new()
 	_name_edit.text = _player_name
-	_name_edit.max_length = 12
+	_name_edit.max_length = 14
 	_name_edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_name_edit.editable = false
 	_name_edit.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1157,7 +1159,7 @@ func _build_profile_menu() -> void:
 	_profile_name_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_profile_frame.add_child(_profile_name_title)
 	_profile_name_edit = LineEdit.new()
-	_profile_name_edit.max_length = 12
+	_profile_name_edit.max_length = 14
 	_profile_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_profile_name_edit.add_theme_font_override("font", MODE_FONT)
 	_profile_name_edit.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1188,8 +1190,14 @@ func _build_profile_menu() -> void:
 		var tex_path: String = _profile_icon_bw(i) if locked else PROFILE_ICONS[i]
 		var b := _ptbtn(tex_path, _select_profile_icon.bind(i))
 		b.disabled = locked   # bloccata: non cliccabile
+		b.clip_contents = false
 		_profile_grid.add_child(b)
 		_profile_icon_btns.append(b)
+		# lucchetto pixel-art sopra all'icona (visibile solo se bloccata)
+		var lock := _make_lock_overlay()
+		lock.visible = locked
+		b.add_child(lock)
+		_profile_lock_overlays.append(lock)
 	# cancel / confirm
 	_profile_cancel = _ptbtn(PROFILE_DIR + "cancel.png", _close_profile)
 	_profile_frame.add_child(_profile_cancel)
@@ -1268,6 +1276,7 @@ func _open_profile() -> void:
 	settings.button_feedback()
 	_profile_sel_index = _profile_icon_index
 	_profile_name_edit.text = _player_name
+	_reset_name_title()
 	_update_profile_selection()
 	_layout_profile()
 	_profile_menu.visible = true
@@ -1435,6 +1444,63 @@ func _is_profile_icon_locked(i: int) -> bool:
 func _profile_icon_bw(i: int) -> String:
 	return PROFILE_ICONS[i].replace(".png", "_bw.png")
 
+# Overlay (velo scuro + lucchetto pixel-art) da mettere sopra un'icona bloccata.
+func _make_lock_overlay() -> Control:
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# (niente velo scuro: solo il lucchetto sopra l'icona già in B/N)
+	var tr := TextureRect.new()
+	tr.texture = _make_lock_texture()
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # pixel netti
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# riquadro centrato ~58% della cella
+	tr.anchor_left = 0.21
+	tr.anchor_right = 0.79
+	tr.anchor_top = 0.21
+	tr.anchor_bottom = 0.79
+	root.add_child(tr)
+	return root
+
+# Lucchetto pixel-art 16x16 generato in codice (nessun asset da importare).
+func _make_lock_texture() -> ImageTexture:
+	if _lock_tex != null:
+		return _lock_tex
+	var rows := [
+		"................",
+		".....######.....",
+		"....##....##....",
+		"....##....##....",
+		"....##....##....",
+		"....##....##....",
+		"..############..",
+		"..#oooooooooo#..",
+		"..#oooooooooo#..",
+		"..#oooo##oooo#..",
+		"..#oooo##oooo#..",
+		"..#oooo##oooo#..",
+		"..#oooooooooo#..",
+		"..#oooooooooo#..",
+		"..############..",
+		"................",
+	]
+	var img := Image.create(16, 16, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var white := Color(1, 1, 1, 1)
+	var dark := Color(0.05, 0.05, 0.09, 1)
+	for y in rows.size():
+		var line: String = rows[y]
+		for x in line.length():
+			var ch: String = line[x]
+			if ch == "#":
+				img.set_pixel(x, y, dark)
+			elif ch == "o":
+				img.set_pixel(x, y, white)
+	_lock_tex = ImageTexture.create_from_image(img)
+	return _lock_tex
+
 func _select_profile_icon(i: int) -> void:
 	if _is_profile_icon_locked(i):
 		# bloccata: non selezionabile finché non completi la missione mensile
@@ -1455,25 +1521,58 @@ func _update_profile_selection() -> void:
 			b.modulate = Color(0.6, 0.6, 0.6)   # bloccata: spenta
 		else:
 			b.modulate = Color(1, 1, 1) if k == _profile_sel_index else Color(0.5, 0.5, 0.5)
+		# lucchetto: visibile solo finché l'icona è bloccata
+		if k < _profile_lock_overlays.size():
+			_profile_lock_overlays[k].visible = locked
 	if _profile_prev:
 		_profile_prev.texture = load(PROFILE_ICONS[clampi(_profile_sel_index, 0, PROFILE_ICONS.size() - 1)])
 
 func _profile_edit_name() -> void:
 	settings.button_feedback()
+	_reset_name_title()
 	if _profile_name_edit:
+		# SVUOTA il campo: così la tastiera iOS parte da 0 e puoi scrivere un nome pieno
+		# (col vecchio testo la tastiera nativa lasciava aggiungere solo pochi caratteri).
+		_profile_name_edit.placeholder_text = _player_name   # mostra com'era
+		_profile_name_edit.clear()
 		_profile_name_edit.grab_focus()
-		_profile_name_edit.select_all()
+
+func _reset_name_title() -> void:
+	if _profile_name_title:
+		_profile_name_title.text = "NOME GIOCATORE"
+		_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
 
 func _confirm_profile() -> void:
 	settings.button_feedback()
-	# nome
+	# nome (se lasci vuoto tieni quello attuale, non resettare a un nome a caso)
 	var n := _profile_name_edit.text.strip_edges()
 	if n == "":
-		n = _default_player_name()
+		n = _player_name if _player_name.strip_edges() != "" else _default_player_name()
+	# nome invariato → nessun controllo unicità, applica e chiudi
+	if n == _player_name:
+		_apply_profile(n)
+		return
+	# nome CAMBIATO → controllo unicità sul server (async)
+	if _profile_name_title:
+		_profile_name_title.text = "CONTROLLO..."
+		_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
+	if _profile_confirm:
+		_profile_confirm.disabled = true
+	leaderboard.check_and_claim_name(n, func(ok: bool) -> void:
+		if _profile_confirm:
+			_profile_confirm.disabled = false
+		if ok:
+			_apply_profile(n)
+		elif _profile_name_title:
+			_profile_name_title.text = "NOME GIA IN USO!"
+			_profile_name_title.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
+			settings.vibrate(30))
+
+# Applica nome + icona scelti e chiude la schermata.
+func _apply_profile(n: String) -> void:
 	_player_name = n
 	if _name_edit:
 		_name_edit.text = _player_name   # aggiorna la home
-	# icona
 	_profile_icon_index = _profile_sel_index
 	if _profile_pic:
 		_profile_pic.texture = load(_current_profile_icon_path())

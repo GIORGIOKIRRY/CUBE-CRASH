@@ -110,6 +110,52 @@ func submit_best(mode: String, score: int) -> void:
 		getreq.queue_free()
 
 # ============================================================
+# UNICITÀ NOME UTENTE (registro /usernames/{nome} = player_id)
+# ============================================================
+# Chiave Firebase sicura dal nome (no . $ # [ ] / e minuscolo).
+func _name_key(name: String) -> String:
+	var k := name.to_lower().strip_edges()
+	for ch in [".", "$", "#", "[", "]", "/", " "]:
+		k = k.replace(ch, "_")
+	return k
+
+# Controlla se il nome è libero (o già TUO); se sì lo "reclama" e chiama cb(true).
+# Se è di un altro giocatore chiama cb(false). Offline / DB assente → cb(true) (best effort).
+func check_and_claim_name(name: String, cb: Callable) -> void:
+	var key := _name_key(name)
+	if DB_URL.is_empty() or _player_id.is_empty() or key.is_empty():
+		cb.call(true)
+		return
+	var url := "%s/usernames/%s.json" % [DB_URL, key.uri_encode()]
+	var getreq := HTTPRequest.new()
+	getreq.timeout = 6.0
+	add_child(getreq)
+	getreq.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+		var owner := ""
+		if code == 200:
+			var v: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if v is String:
+				owner = v
+		if owner != "" and owner != _player_id:
+			getreq.queue_free()
+			cb.call(false)   # nome già preso da un ALTRO
+			return
+		# libero o già mio → reclama (PUT del mio id)
+		var putreq := HTTPRequest.new()
+		add_child(putreq)
+		putreq.request_completed.connect(func(_a, _b, _c, _d) -> void:
+			putreq.queue_free()
+			getreq.queue_free()
+			cb.call(true))
+		if putreq.request(url, ["Content-Type: application/json"], HTTPClient.METHOD_PUT, JSON.stringify(_player_id)) != OK:
+			putreq.queue_free()
+			getreq.queue_free()
+			cb.call(true))
+	if getreq.request(url) != OK:
+		getreq.queue_free()
+		cb.call(true)
+
+# ============================================================
 # LETTURA TOP 100 (async; [] se offline / errore / DB non configurato)
 # ============================================================
 func fetch_top(mode: String) -> Array:

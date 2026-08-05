@@ -129,6 +129,40 @@ const SAVE_PATH := "user://save.cfg"
 
 var can_move = true
 
+# ---- Mini-tutorial della PRIMA partita (solo primo avvio, solo CLASSIC) ----
+# Consigli CONTESTUALI: avanzano quando il giocatore compie l'azione (piazza,
+# fa match, scambia, combo) invece di comparire "a caso" ogni N secondi → si
+# capisce facendo, e finisce da solo appena hai imparato (cap 10 minuti).
+const TUT_CFG := "user://tutorial.cfg"
+const TUT_VERSION := 5                 # bumpare per FAR RICOMPARIRE il tutorial a tutti
+                                       # (installazioni nuove: ver=0 < TUT_VERSION → lo vedono sempre)
+var _tut_active := false
+var _tut_layer: Node = null
+var _tut_panel: Control = null    # banda nera a tutta larghezza (contenitore del testo)
+var _tut_label: Label = null
+var _tut_phase := 0               # 0=piazza, 1=scambia, 2=fatto
+var _tut_phase_done := false      # match avvenuto nella fase corrente
+var _tut_need_color := ""         # colore da tenere nel tray durante il tutorial
+var _tut_decor: Array = []        # cubi decorativi (tray B/N non toccabile in fase swap)
+var _tut_gray_mat: ShaderMaterial = null   # shader grigio per i cubi decorativi
+var _tut_target_cell: Vector2i = Vector2i(-1, -1)   # cella valida per il drop in fase 0
+# DEMO ABILITÀ (dopo la combo): per ogni speciale prima lo MOSTRA, poi lo fa ESPLODERE
+# su una mappa piena così si vede l'effetto (colonna/riga/3x3/X/angoli).
+const TUT_DEMO := [
+	{"type": "show", "paths": ["res://CORE/Scene/PieceScene/blue_plus_1.tscn", "res://CORE/Scene/PieceScene/red_plus_2.tscn"], "text": "FRECCE\nDistruggono una colonna o una riga"},
+	{"type": "explode", "path": "res://CORE/Scene/PieceScene/blue_plus_1.tscn", "val": 1, "text": "Freccia VERTICALE\ndistrugge tutta la colonna"},
+	{"type": "explode", "path": "res://CORE/Scene/PieceScene/red_plus_2.tscn", "val": 2, "text": "Freccia ORIZZONTALE\ndistrugge tutta la riga"},
+	{"type": "show", "paths": ["res://CORE/Scene/PieceScene/green_plus_3.tscn"], "text": "BOMBA\nDistrugge i cubi tutt'intorno"},
+	{"type": "explode", "path": "res://CORE/Scene/PieceScene/green_plus_3.tscn", "val": 3, "text": "BOMBA\nesplosione 3x3"},
+	{"type": "show", "paths": ["res://CORE/Scene/PieceScene/purple_xbomb.tscn"], "text": "BOMBA X\nDistrugge lungo le diagonali"},
+	{"type": "explode", "path": "res://CORE/Scene/PieceScene/purple_xbomb.tscn", "val": 4, "text": "BOMBA X\nesplode a forma di X"},
+	{"type": "show", "paths": ["res://CORE/Scene/PieceScene/orange_angles.tscn"], "text": "BOMBA ANGOLI\nColpisce i quattro angoli"},
+	{"type": "explode", "path": "res://CORE/Scene/PieceScene/orange_angles.tscn", "val": 5, "text": "BOMBA ANGOLI\ncolpisce i quattro angoli"},
+]
+# TEST: nei build DEBUG il tutorial parte SEMPRE (per Giorgio). Mettere a false per tornare
+# al comportamento normale (una volta sola per utente). Non tocca i build di release.
+const TUT_ALWAYS_TEST := true
+
 func _load_scores() -> void:
 	var cfg := ConfigFile.new()
 	var err := cfg.load(SAVE_PATH)
@@ -380,10 +414,14 @@ func _ready() -> void:
 		inst.free()
 	if _is_mode_c:
 		_build_mode_c_pools()
-		_spawn_mode_c_start()      # griglia iniziale casuale/varia (non scacchiera)
+		if _tutorial_should_run():
+			_tut_begin()           # TUTORIAL guidato: board + tray scriptati (niente random)
+		else:
+			_spawn_mode_c_start()  # griglia iniziale casuale/varia (non scacchiera)
+			_spawn_bottom_pieces()
 	else:
 		_spawn_checkerboard()
-	_spawn_bottom_pieces()
+		_spawn_bottom_pieces()
 	update_moves_label()
 	_load_scores()
 	_prev_high_score = high_score   # record da battere in questa partita
@@ -617,7 +655,15 @@ func _spawn_bottom_pieces() -> void:
 
 func _replenish_bottom_slot(slot_idx: int) -> void:
 	if bottom_pieces[slot_idx] == null:
-		var piece = _pick_bottom_piece().instantiate()
+		# TUTORIAL: rifornisci col colore richiesto dalla fase (o niente se la fase non usa il tray)
+		var _scene: PackedScene
+		if _tut_active:
+			if _tut_need_color == "" or not _color_to_scene.has(_tut_need_color):
+				return
+			_scene = _color_to_scene[_tut_need_color]
+		else:
+			_scene = _pick_bottom_piece()
+		var piece = _scene.instantiate()
 		add_child(piece)
 		piece.position = _bottom_slot_pixel(slot_idx)
 		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
@@ -785,6 +831,8 @@ func destroy_matched() -> Array:
 
 	# Applica punteggio
 	if destroyed_count > 0:
+		if _tut_active:
+			_tut_phase_done = true   # tutorial guidato: la fase corrente è completata
 		_combo_count += 1   # una wave di match = una combo nella catena (per la ricompensa)
 		# SFX + vibrazione: distruzione cubi (più intensa, scala col numero distrutto)
 		settings.play_destroy()
@@ -1057,6 +1105,18 @@ func _spawn_empty_drop(x: int, from_row: int, to_row: int) -> void:
 func _on_destroy_timer_timeout() -> void:
 	var destroyed_cells = destroy_matched()
 
+	# TUTORIAL guidato: niente gravità/refill/cascate — la board resta controllata.
+	# La distruzione è avvenuta (_tut_phase_done), _tut_scripted_tick farà avanzare la fase.
+	if _tut_active:
+		is_resolving = false
+		var _dtt = get_parent().get_node_or_null("DestroyTimer")
+		if _dtt:
+			_dtt.stop()
+		_combo_matches = 0
+		_find_wave = 0
+		_last_combo_shown = 0
+		return
+
 	# 1) collassa e riempie SOLO le colonne coinvolte:
 	#    i cubi cadono e nuovi cubi scendono dall'alto nelle celle ATTIVE, saltando i buchi
 	_apply_local_gravity(destroyed_cells)
@@ -1213,6 +1273,8 @@ func _process(_delta: float) -> void:
 			_sr_music_pending = false
 	if is_game_over:
 		return
+	if _tut_active:
+		_tut_scripted_tick()
 	# recupero della soppressione bombe (dopo una bomba la prossima è meno probabile)
 	if _bomb_suppress > 0.0:
 		_bomb_suppress = maxf(0.0, _bomb_suppress - _delta * 0.05)   # ~20s per tornare normale
@@ -1244,19 +1306,25 @@ func _process(_delta: float) -> void:
 	if is_resolving:
 		return
 	_handle_grid_touch_swap()
-	_check_idle_hint()
+	if not _tut_active:
+		_check_idle_hint()
 
 # Suggerimenti se il player resta fermo troppo a lungo
 func _check_idle_hint() -> void:
 	if dragging_piece != null:
 		return
 	var now := Time.get_ticks_msec()
-	if now - _last_action_ms < IDLE_HINT_MS:
+	var interval := _hint_interval_ms()
+	if now - _last_action_ms < interval:
 		return
 	if now < _next_hint_ms:
 		return
-	_next_hint_ms = now + HINT_REPEAT_MS
+	_next_hint_ms = now + interval
 	_show_hint()
+
+# Ritmo dei consigli idle: ~5s all'INIZIO (primi 90s, per capire), poi ~12s più avanti.
+func _hint_interval_ms() -> int:
+	return 5000 if (Time.get_ticks_msec() - _game_start_ms) < 90000 else 12000
 
 # Swipe per scambiare due pezzi adiacenti nella griglia
 func _handle_grid_touch_swap() -> void:
@@ -1268,9 +1336,13 @@ func _handle_grid_touch_swap() -> void:
 				controlling = true
 
 	if Input.is_action_just_released("ui_touch"):
-		var g = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
-		if is_in_grid(g) and controlling:
+		if controlling:
 			controlling = false
+			# NB: la cella di rilascio può finire FUORI dalla griglia quando si "spinge"
+			# un cubo verso il bordo alto/basso (lo swipe esce dall'area di gioco). Non serve
+			# che sia dentro: basta la DIREZIONE dello swipe — swap_pieces verifica poi che la
+			# cella vicina esista davvero. Così gli scambi sui bordi (prima ignorati) funzionano.
+			var g = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
 			final_touch = g
 			_touch_difference(first_touch, final_touch)
 
@@ -1326,7 +1398,8 @@ func _input(event: InputEvent) -> void:
 
 			if is_in_grid(target_grid) \
 			and all_pieces[target_grid.x][target_grid.y] == null \
-			and (not _moves_enabled or current_moves > 0):
+			and (not _moves_enabled or current_moves > 0) \
+			and _tut_drop_allowed(dragging_piece, target_grid):
 				# Inserimento dalla BottomGrid: se spot vuoto, rimane anche senza match
 				dragging_piece.set_meta("origin", "grid")
 				_restore_normal_look(dragging_piece)   # sulla griglia: grafica cubo normale
@@ -1383,8 +1456,17 @@ func _input(event: InputEvent) -> void:
 				dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
 				_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
 				_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
+				# TUTORIAL: colore/posto sbagliato → il cubo TRABALLA e torna nel tray
+				if _tut_active:
+					settings.vibrate(25)
+					var _bx: float = dragging_piece.global_position.x
+					var _shk := dragging_piece.create_tween()
+					_shk.tween_property(dragging_piece, "global_position:x", _bx - 18.0, 0.05)
+					_shk.tween_property(dragging_piece, "global_position:x", _bx + 18.0, 0.05)
+					_shk.tween_property(dragging_piece, "global_position:x", _bx - 12.0, 0.05)
+					_shk.tween_property(dragging_piece, "global_position:x", _bx, 0.05)
 				# posto valido ma niente mosse -> scuoti "MOOVES" per farlo capire
-				if current_moves <= 0 and is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null:
+				elif current_moves <= 0 and is_in_grid(target_grid) and all_pieces[target_grid.x][target_grid.y] == null:
 					_shake_moves_label()
 
 			# Reset parametri di drag
@@ -1397,6 +1479,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 func check_game_over() -> void:
+	if _tut_active:
+		return   # nel tutorial guidato non si perde mai
 	if _is_speedrun:
 		# speedrun: si perde SOLO a tempo, mai per spazio. Se la board si riempie del tutto
 		# libera automaticamente qualche cella (valvola), così non si resta MAI bloccati.
@@ -1695,6 +1779,8 @@ func _any_valid_bottom_placement() -> bool:
 
 func _trigger_game_over(reason := "no_space") -> void:
 	is_game_over = true
+	if _tut_active:
+		_tutorial_end()   # sicurezza: chiudi eventuale tutorial ancora aperto
 
 	# Telemetria economia mosse (per calibrare il bilanciamento):
 	# mosse spese = piazzamenti; guadagnate = cubi-mossa matchati; residue = fine partita.
@@ -2219,7 +2305,7 @@ func _count_occupied() -> int:
 # Ogni BALANCE_INTERVAL mosse, se la tavola è piena oltre soglia, esplodono
 # alcuni blocchi casuali (più è piena, più ne toglie) per dare respiro al player.
 func _maybe_balance_board() -> void:
-	if is_game_over or is_resolving:
+	if is_game_over or is_resolving or _tut_active:
 		return
 	# mode_b / mode_c (block blast): niente auto-svuotamento, lo spazio è la minaccia
 	if _mode == "mode_b" or _is_mode_c:
@@ -2771,3 +2857,312 @@ func _count_new_match_groups() -> int:
 							if np != null and np.matched and np.get("color") == col:
 								stack.append(nb)
 	return groups
+
+
+# =========================================================
+# MINI-TUTORIAL GUIDATO (prima partita CLASSIC dopo l'installazione)
+# =========================================================
+# Board SCRIPTATA e semplice: si impara FACENDO. 3 fasi:
+#   0) PIAZZA  : due rossi al centro con un buco + tray col rosso → piazzalo = match
+#   1) SCAMBIA : setup verde/giallo → uno swap col dito fa match
+#   2) FATTO   : "buona partita" → parte la VERA partita random
+# Durante il tutorial: niente game over, niente gravità/refill/cascate, niente
+# bilanciamento. Il flag "visto" (ver) si salva solo alla FINE.
+func _tutorial_should_run() -> bool:
+	# solo CLASSIC (mode_c non-speedrun); gating per VERSIONE (salvato a fine tutorial)
+	if not _is_mode_c or _is_speedrun:
+		return false
+	if TUT_ALWAYS_TEST and OS.is_debug_build():
+		return true   # TEST (build debug): parte sempre
+	var cfg := ConfigFile.new()
+	cfg.load(TUT_CFG)
+	return int(cfg.get_value("tut", "ver", 0)) < TUT_VERSION
+
+func _tut_begin() -> void:
+	_tut_active = true
+	_tut_phase = 0
+	_tut_phase_done = false
+	_build_tutorial_ui()
+	_tut_setup_place()
+
+# --- Fase 0: PIAZZA un blocco per fare 3 in fila ---
+func _tut_setup_place() -> void:
+	_tut_clear_board()
+	_tut_phase_done = false
+	_tut_need_color = "red"
+	_tut_target_cell = Vector2i(3, 3)   # solo qui (e solo il rosso) si può piazzare
+	# due rossi al centro (riga 3) con un BUCO in mezzo: (2,3) _ (4,3) → piazza a (3,3)
+	_tut_place("red", 2, 3)
+	_tut_place("red", 4, 3)
+	# tray: il ROSSO da usare + due distrattori
+	_tut_set_tray(["red", "yellow", "orange"])
+	_tutorial_show_text("Trascina il cubo ROSSO in mezzo agli altri due")
+
+# --- Fase 1: SCAMBIA due blocchi per fare match ---
+func _tut_setup_swap() -> void:
+	_tut_clear_board()
+	_tut_phase_done = false
+	_tut_need_color = ""
+	_tut_set_tray([])   # niente tray attivo: qui si scambia sulla board
+	# ...ma lascio i 3 blocchi in basso in BIANCO/NERO e non toccabili, così si capisce
+	# che durante il gioco vero i 3 blocchi restano lì.
+	_tut_decor_tray(["purple", "yellow", "orange"])
+	# riga 3: verde giallo verde   ·   riga 4: giallo verde giallo
+	# scambiando i due centrali (3,3)↔(3,4) si formano DUE linee → match
+	_tut_place("green", 2, 3)
+	_tut_place("yellow", 3, 3)
+	_tut_place("green", 4, 3)
+	_tut_place("yellow", 2, 4)
+	_tut_place("green", 3, 4)
+	_tut_place("yellow", 4, 4)
+	_tutorial_show_text("Ora SCORRI col dito: scambia i 2 cubi al centro")
+
+# --- Fase 2: spiega la COMBO (lo swap ha fatto DUE linee insieme) → poi parte il gioco ---
+func _tut_show_done() -> void:
+	_tut_need_color = ""
+	_tutorial_show_text("Hai fatto una COMBO!\nPiu match di fila o insieme = tanti punti extra")
+	get_tree().create_timer(4.5).timeout.connect(_tut_demo_step.bind(0))
+
+# DEMO abilità: passo "show" (mostra il cubo) o "explode" (mappa piena → l'abilità esplode).
+func _tut_demo_step(idx: int) -> void:
+	if not _tut_active:
+		return
+	if idx >= TUT_DEMO.size():
+		_tut_show_goodbye()
+		return
+	var d: Dictionary = TUT_DEMO[idx]
+	_tut_clear_board()
+	_tut_need_color = ""
+	if str(d["type"]) == "show":
+		var paths: Array = d["paths"]
+		var cells := [Vector2i(3, 3)] if paths.size() == 1 else [Vector2i(2, 3), Vector2i(4, 3)]
+		for k in paths.size():
+			var scene = load(paths[k])
+			if scene:
+				var p = scene.instantiate()
+				add_child(p)
+				p.position = grid_to_pixel(cells[k].x, cells[k].y)
+				p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+				_tut_decor.append(p)   # decorativo: non in all_pieces → non toccabile
+		_tutorial_show_text(str(d["text"]))
+		get_tree().create_timer(2.6).timeout.connect(_tut_demo_step.bind(idx + 1))
+	else:
+		# ESPLODE: riempi una mappa finta, metti lo speciale al centro, poi fallo esplodere
+		_tut_fill_fake_board()
+		var center := Vector2i(3, 3)
+		var scene = load(str(d["path"]))
+		if scene:
+			# libera il cubo finto già presente al centro, altrimenti resta orfano/visibile
+			if all_pieces[center.x][center.y] != null and is_instance_valid(all_pieces[center.x][center.y]):
+				all_pieces[center.x][center.y].queue_free()
+			var sp = scene.instantiate()
+			add_child(sp)
+			sp.position = grid_to_pixel(center.x, center.y)
+			sp.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+			all_pieces[center.x][center.y] = sp
+			cell_active[center.x][center.y] = true
+		_tutorial_show_text(str(d["text"]))
+		get_tree().create_timer(0.9).timeout.connect(_tut_do_explode.bind(center, int(d["val"])))
+		get_tree().create_timer(3.4).timeout.connect(_tut_demo_step.bind(idx + 1))
+
+# Fa scattare l'abilità nel tutorial (riusa il vero motore dei power-up + beam per le frecce).
+func _tut_do_explode(center: Vector2i, val: int) -> void:
+	if not _tut_active:
+		return
+	if val == 1:
+		_spawn_special_beam(center, false, "blue")    # colonna
+	elif val == 2:
+		_spawn_special_beam(center, true, "red")       # riga
+	_trigger_powerup(center, val, [])
+
+# Riempie tutta la griglia con cubi colorati finti (solo per la demo abilità).
+func _tut_fill_fake_board() -> void:
+	var cols := ["blue", "red", "yellow", "green", "purple", "orange", "pink"]
+	for i in width:
+		for j in height:
+			var col: String = cols[(i * 3 + j * 5) % cols.size()]
+			if not _color_to_scene.has(col):
+				continue
+			var p = _color_to_scene[col].instantiate()
+			add_child(p)
+			p.position = grid_to_pixel(i, j)
+			p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+			all_pieces[i][j] = p
+			cell_active[i][j] = true
+
+func _tut_show_goodbye() -> void:
+	if not _tut_active:
+		return
+	_tutorial_show_text("Sei pronto!  Buona partita!")
+	get_tree().create_timer(2.2).timeout.connect(_tut_finish)
+
+func _tut_finish() -> void:
+	if not _tut_active:
+		return
+	_tut_clear_board()
+	_tut_active = false   # da qui: meccaniche di gioco normali
+	# la partita VERA inizia adesso: azzera il cronometro (stats + ritmo consigli idle)
+	_game_start_ms = Time.get_ticks_msec()
+	_last_action_ms = _game_start_ms
+	score = 0             # il tutorial non conta nel punteggio
+	_update_point_label()
+	# avvia la VERA partita random
+	_spawn_mode_c_start()
+	_spawn_bottom_pieces()
+	is_resolving = false
+	can_move = true
+	_tutorial_end()       # chiude la banda + salva "visto"
+
+# Avanza di fase quando la fase è completata (match avvenuto e board ferma).
+func _tut_scripted_tick() -> void:
+	if not _tut_active or is_resolving or not _tut_phase_done:
+		return
+	_tut_phase_done = false
+	_tut_phase += 1
+	if _tut_phase == 1:
+		_tut_setup_swap()
+	elif _tut_phase == 2:
+		_tut_show_done()
+
+# Durante il tutorial: un drop dal tray è valido SOLO se rispetta la fase.
+# Fase 0 (piazza): solo il colore richiesto (rosso) e SOLO nel buco previsto.
+# Altre fasi: nessun drop dal tray.
+func _tut_drop_allowed(piece, target: Vector2i) -> bool:
+	if not _tut_active:
+		return true
+	if _tut_need_color == "":
+		return false
+	return str(piece.get("color")) == _tut_need_color and target == _tut_target_cell
+
+# --- helper board/tray del tutorial ---
+func _tut_place(color: String, i: int, j: int) -> void:
+	if not is_in_grid(Vector2i(i, j)) or not _color_to_scene.has(color):
+		return
+	var p = _color_to_scene[color].instantiate()
+	add_child(p)
+	p.position = grid_to_pixel(i, j)
+	p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+	all_pieces[i][j] = p
+	cell_active[i][j] = true
+
+func _tut_set_tray(colors: Array) -> void:
+	for s in range(3):
+		if bottom_pieces[s] != null and is_instance_valid(bottom_pieces[s]):
+			bottom_pieces[s].queue_free()
+		bottom_pieces[s] = null
+	for s in range(mini(3, colors.size())):
+		if not _color_to_scene.has(colors[s]):
+			continue
+		var p = _color_to_scene[colors[s]].instantiate()
+		add_child(p)
+		p.position = _bottom_slot_pixel(s)
+		p.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		p.set_meta("origin", "bottom")
+		p.set_meta("slot_idx", s)
+		_apply_select_look(p)
+		bottom_pieces[s] = p
+
+func _tut_clear_board() -> void:
+	for p in _tut_decor:
+		if is_instance_valid(p):
+			p.queue_free()
+	_tut_decor.clear()
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null and is_instance_valid(all_pieces[i][j]):
+				all_pieces[i][j].queue_free()
+			all_pieces[i][j] = null
+			cell_active[i][j] = false
+
+# Cubi DECORATIVI in basso (tray) in bianco/nero, NON in bottom_pieces → non toccabili.
+func _tut_decor_tray(colors: Array) -> void:
+	var mat := _tut_gray_material()
+	for s in range(mini(3, colors.size())):
+		if not _color_to_scene.has(colors[s]):
+			continue
+		var p = _color_to_scene[colors[s]].instantiate()
+		add_child(p)
+		p.position = _bottom_slot_pixel(s)
+		p.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		p.modulate = Color(1, 1, 1, 0.85)   # un filo trasparente = "non attivo"
+		var spr = p.get_node_or_null("Sprite2D")
+		if spr:
+			spr.material = mat   # shader: desatura a bianco/nero
+		_tut_decor.append(p)
+
+# ShaderMaterial grayscale (creato una volta) per i cubi decorativi del tutorial.
+func _tut_gray_material() -> ShaderMaterial:
+	if _tut_gray_mat != null:
+		return _tut_gray_mat
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tfloat g = dot(c.rgb, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(vec3(g), c.a);\n}\n"
+	_tut_gray_mat = ShaderMaterial.new()
+	_tut_gray_mat.shader = sh
+	return _tut_gray_mat
+
+func _build_tutorial_ui() -> void:
+	# CanvasLayer PROPRIO (layer alto): garantisce che il banner sia sempre sopra il
+	# gameplay e in SCREEN-SPACE (posizione indipendente dalla camera del gioco).
+	var lay := CanvasLayer.new()
+	lay.layer = 100   # sopra il gameplay/UI, sotto la transizione a schermo (128)
+	add_child(lay)
+	_tut_layer = lay
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lay.add_child(root)
+
+	# BANDA nera translucida a TUTTA LARGHEZZA (stile striscia NO SPACE / NO MOVES):
+	# opacità bassa, riempie orizzontalmente lo schermo, testo bianco centrato.
+	_tut_panel = ColorRect.new()
+	_tut_panel.color = Color(0, 0, 0, 0.5)
+	_tut_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tut_panel.anchor_left = 0.0
+	_tut_panel.anchor_right = 1.0
+	_tut_panel.anchor_top = 0.30
+	_tut_panel.anchor_bottom = 0.30
+	_tut_panel.offset_left = 0.0
+	_tut_panel.offset_right = 0.0
+	_tut_panel.offset_top = 0.0
+	_tut_panel.offset_bottom = 108.0
+	root.add_child(_tut_panel)
+
+	_tut_label = Label.new()
+	_tut_label.add_theme_font_override("font", POP_FONT)
+	_tut_label.add_theme_font_size_override("font_size", 30)
+	_tut_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_tut_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_tut_label.add_theme_constant_override("outline_size", 6)
+	_tut_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tut_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tut_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tut_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_tut_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tut_panel.add_child(_tut_label)
+
+func _tutorial_show_text(txt: String) -> void:
+	if _tut_label == null:
+		return
+	_tut_label.text = txt
+	_tut_panel.modulate.a = 1.0   # la banda appare subito (come la striscia NO SPACE)
+
+func _tutorial_end() -> void:
+	# segna "visto" per questa versione (bumpare TUT_VERSION per rifarlo comparire)
+	var cfg := ConfigFile.new()
+	cfg.load(TUT_CFG)
+	cfg.set_value("tut", "ver", TUT_VERSION)
+	cfg.save(TUT_CFG)
+	# chiude la banda e libera il CanvasLayer del tutorial
+	if _tut_panel != null and is_instance_valid(_tut_panel):
+		var p := _tut_panel
+		var tw := create_tween()
+		tw.tween_property(p, "modulate:a", 0.0, 0.3)
+		tw.tween_callback(p.queue_free)
+	var lay = _tut_layer
+	if lay != null and is_instance_valid(lay):
+		get_tree().create_timer(0.5).timeout.connect(func() -> void:
+			if is_instance_valid(lay):
+				lay.queue_free())
+	_tut_panel = null
+	_tut_label = null
+	_tut_layer = null

@@ -37,6 +37,19 @@ const TEST_BANNER_ANDROID := "ca-app-pub-3940256099942544/6300978111"
 const TEST_INTERSTITIAL_ANDROID := "ca-app-pub-3940256099942544/1033173712"
 const TEST_REWARDED_ANDROID := "ca-app-pub-3940256099942544/5224354917"
 
+# ============================================================
+# INTERRUTTORE GENERALE PUBBLICITÀ.
+# false = NESSUNA chiamata al plugin nativo AdMob (banner/interstitial/rewarded
+#         diventano no-op sicuri). Serve perché:
+#   1) l'account AdMob NON è ancora approvato → gli annunci reali non vengono
+#      comunque serviti (no-fill), quindi non si perde nulla;
+#   2) mostrare un interstitial a schermo intero e SUBITO DOPO cambiare scena
+#      (uscita partita / game over) faceva CRASHARE l'app su iOS con il plugin
+#      Poing su Godot 4.7 (teardown della view nativa durante il cambio scena).
+# Rimettere a `true` quando l'account AdMob sarà approvato e il plugin testato.
+# ============================================================
+const ADS_ENABLED := false
+
 var _initialized: bool = false
 var _banner: AdView = null
 var _banner_wanted: bool = false        # richiesta arrivata prima dell'init
@@ -46,6 +59,8 @@ var _rewarded: RewardedAd = null
 var _rewarded_loader := RewardedAdLoader.new()
 
 func _ready() -> void:
+	if not ADS_ENABLED:
+		return   # pubblicità disattivate: non inizializzare mai l'SDK nativo
 	if OS.has_feature("web"):
 		return   # su WEB niente AdMob (build di test layout su browser)
 	_request_consent()
@@ -134,6 +149,8 @@ func _rewarded_id() -> String:
 # BANNER (ancorato in basso, adattivo a tutta larghezza)
 # ============================================================
 func show_banner() -> void:
+	if not ADS_ENABLED:
+		return
 	_banner_wanted = true
 	if not _initialized:
 		return   # verrà mostrato appena l'SDK è pronto
@@ -191,6 +208,8 @@ func is_interstitial_ready() -> bool:
 ## Mostra l'interstitial se pronto. Ritorna true se è stato mostrato;
 ## in ogni caso chi ascolta "interstitial_closed" riprende il flusso.
 func show_interstitial() -> bool:
+	if not ADS_ENABLED:
+		return false
 	if _interstitial == null:
 		return false
 	_interstitial.show()
@@ -230,6 +249,8 @@ func is_rewarded_ready() -> bool:
 ## Mostra il rewarded se pronto. Il premio arriva via "rewarded_earned";
 ## la chiusura (con o senza premio) via "rewarded_closed".
 func show_rewarded() -> bool:
+	if not ADS_ENABLED:
+		return false
 	if _rewarded == null:
 		return false
 	var listener := OnUserEarnedRewardListener.new()

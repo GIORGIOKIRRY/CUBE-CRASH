@@ -96,10 +96,10 @@ func set_speedrun_mode(record: int, is_record: bool) -> void:
 	var light_red := Color(1.0, 0.7, 0.5)   # "SCORE"/"RECORD" rosso chiaro
 	var title := get_node_or_null("Items/L_GameOver") as Label
 	if title:
-		title.text = "GAME OVER"   # la modalità la mostra l'etichetta ModeTag in alto
+		title.text = loc.t("GAME OVER")   # la modalità la mostra l'etichetta ModeTag in alto
 	var best_lbl := get_node_or_null("Items/BestScore") as Label
 	if best_lbl:
-		best_lbl.text = "NUOVO RECORD!" if is_record else "RECORD"
+		best_lbl.text = loc.t("NUOVO RECORD!") if is_record else loc.t("RECORD")
 		best_lbl.visible = true
 		best_lbl.add_theme_color_override("font_color", light_red)
 	var best_num := get_node_or_null("Items/L_BestScoreNumber") as Label
@@ -136,7 +136,7 @@ func set_revive_mode(seconds: int = 5) -> void:
 			x.visible = false
 	var title := get_node_or_null("Items/L_GameOver") as Label
 	if title:
-		title.text = "CONTINUA?"
+		title.text = loc.t("CONTINUA?")
 		title.add_theme_color_override("font_color", Color(1, 1, 1))
 		title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		title.add_theme_constant_override("outline_size", 8)
@@ -160,7 +160,7 @@ func set_revive_mode(seconds: int = 5) -> void:
 		sub.offset_top = 150.0
 		sub.offset_bottom = 240.0
 		$Items.add_child(sub)
-	sub.text = "Guarda una pubblicità\nper riprendere la partita"
+	sub.text = loc.t("Guarda una pubblicità\nper riprendere la partita")
 	sub.visible = true
 
 
@@ -253,7 +253,7 @@ func _apply_new_record_layout() -> void:
 
 	# Titolo -> "BEST SCORE!" giallo, centrato, un po' più piccolo (proporzioni abbassate)
 	var title: Label = $Items/L_GameOver
-	title.text = "BEST SCORE!"
+	title.text = loc.t("BEST SCORE!")
 	title.add_theme_font_size_override("font_size", 96)
 	title.add_theme_color_override("font_color", RECORD_YELLOW)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

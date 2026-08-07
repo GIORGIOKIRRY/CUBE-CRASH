@@ -19,12 +19,106 @@ const CAB_HOLD := 6.0    # 1s di animazione + 6s di pausa = ripete ~ogni 7s
 # Deck in basso (coord canvas 800x1400): tasto CUBE DECK (576x576) + tasto PLAY (1408x576)
 # AFFIANCATI, stessa altezza, centrati. Press = leggero scurimento (modulate).
 const PLAY_NEW_TEX := Vector2(1472.0, 576.0)
-const DECK_TEX := Vector2(576.0, 576.0)
+const DECK_TEX := Vector2(640.0, 576.0)
 const DECK_BTN_H_ART := 150.0                # altezza comune dei due tasti (più grandi)
 const DECK_GAP_ART := -4.0                    # attaccati (piccolo che chiude il seam, niente sovrapposizione visibile)
 const DECK_ROW_CENTER_ART := Vector2(399.0, 970.0)  # posizione tasto play (indipendente dal cabinato)
 const PRESS_SINK := 5.0                       # px di "affondamento" alla pressione
 const SPARKLE_OFFSET_Y := 0.0
+const DECK_GAP_ROW := 12.0                    # spazio tra tasto deck e tasto play
+
+# Tendina CUBE DECK (scorre dal basso). Frame 800x1088, card 704x960.
+const DECK_ASPECT := 800.0 / 1088.0
+const CARD_ASPECT := 704.0 / 960.0
+const DECK_PANEL_W := 548.0                   # larghezza interna fissa (riferimento card)
+const DECK_TOP_FRAC := 0.26                   # bordo alto della tendina (sotto il profilo)
+const DECK_BOTTOM_FRAC := 1.05                # bordo basso (>1 = sfora sotto lo schermo, riempie tutto)
+
+# Popup info cubo: pannello a dimensione di design (frame 624x976), scalato e centrato.
+const CI_PW := 624.0
+const CI_PH := 976.0                          # altezza cornice
+const CI_DESIGN_H := 1072.0                   # + spazio per il tasto OK che sporge sotto
+# Schede del deck (3 per riga, scorrevole). 7 cubi colorati + speciali.
+const DECK_CARDS := [
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Red/Red.svg",       "name": "CUBO ROSSO",   "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Orange/Orange.svg", "name": "CUBO ARANCIO", "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow.svg", "name": "CUBO GIALLO",  "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Green/Green.svg",   "name": "CUBO VERDE",   "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg",     "name": "CUBO BLU",     "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg", "name": "CUBO VIOLA",   "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg",     "name": "CUBO ROSA",    "special": false},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus1.svg", "name": "FRECCIA VERT.", "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus2.svg", "name": "FRECCIA ORIZ.", "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus3.svg", "name": "BOMBA",         "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Red_xbomb.svg",    "name": "BOMBA X",       "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Red_angles.svg",  "name": "BOMBA ANGOLI",  "special": true},
+]
+
+# Info dettagliata dei cubi (popup stile Clash Royale). Per ora SOLO il cubo rosso.
+# Info dei cubi CLASSICI (popup). Gli speciali non hanno il popup/doppia skin.
+const CUBE_INFO := {
+	"CUBO ROSSO": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Red/Red.svg", "name": "CUBO ROSSO", "color_key": "red",
+		"type": "CLASSICO", "color": Color(0.93, 0.26, 0.26),
+		"desc": "Rosso, quadrato e senza fronzoli. Nessun potere speciale: solo una gran voglia di essere abbinato.",
+	},
+	"CUBO ARANCIO": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Orange/Orange.svg", "name": "CUBO ARANCIO", "color_key": "orange",
+		"type": "CLASSICO", "color": Color(0.96, 0.55, 0.15),
+		"desc": "Arancione come un tramonto, utile come... un altro cubo. Fa numero, e lo fa benissimo.",
+	},
+	"CUBO GIALLO": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow.svg", "name": "CUBO GIALLO", "color_key": "yellow",
+		"type": "CLASSICO", "color": Color(0.98, 0.82, 0.20),
+		"desc": "Giallo acceso, personalita spenta. Non illumina la stanza, ma riempie la griglia.",
+	},
+	"CUBO VERDE": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Green/Green.svg", "name": "CUBO VERDE", "color_key": "green",
+		"type": "CLASSICO", "color": Color(0.36, 0.75, 0.30),
+		"desc": "Verde speranza: spera sempre che tu lo abbini in tempo. Nessun superpotere, tanta pazienza.",
+	},
+	"CUBO BLU": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg", "name": "CUBO BLU", "color_key": "blue",
+		"type": "CLASSICO", "color": Color(0.30, 0.68, 0.95),
+		"desc": "Blu come il lunedi. Fa il suo dovere senza lamentarsi (troppo).",
+	},
+	"CUBO VIOLA": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg", "name": "CUBO VIOLA", "color_key": "purple",
+		"type": "CLASSICO", "color": Color(0.66, 0.42, 0.90),
+		"desc": "Viola misterioso... ma il mistero e che non fa niente di speciale. Elegante, pero.",
+	},
+	"CUBO ROSA": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg", "name": "CUBO ROSA", "color_key": "pink",
+		"type": "CLASSICO", "color": Color(0.93, 0.40, 0.80),
+		"desc": "Rosa e fiero. Sembra tenero, ma sa il fatto suo quando si tratta di combo.",
+	},
+	# ABILITÀ (speciali): popup con SOLA skin base (niente doppia skin).
+	"FRECCIA VERT.": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus1.svg", "name": "FRECCIA VERT.", "color_key": "",
+		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"desc": "Distrugge tutta la COLONNA in cui si trova. Verticale e senza pieta.",
+	},
+	"FRECCIA ORIZ.": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus2.svg", "name": "FRECCIA ORIZ.", "color_key": "",
+		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"desc": "Spazza via l'intera RIGA. Orizzontale e implacabile.",
+	},
+	"BOMBA": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus3.svg", "name": "BOMBA", "color_key": "",
+		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"desc": "Esplode e distrugge i cubi tutt'intorno (3x3). Boom!",
+	},
+	"BOMBA X": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Red_xbomb.svg", "name": "BOMBA X", "color_key": "",
+		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"desc": "Esplode lungo le due diagonali, a forma di X.",
+	},
+	"BOMBA ANGOLI": {
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Red_angles.svg", "name": "BOMBA ANGOLI", "color_key": "",
+		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"desc": "Colpisce i quattro angoli dell'area. Sorpresa!",
+	},
+}
 
 # Frecce cambia-modalità ai lati dello schermo del cabinato (asset 88x136, punta a DESTRA).
 # La sinistra è la stessa freccia specchiata (flip_h).
@@ -44,6 +138,8 @@ const SCREEN_ANIM_FPS := 10.0
 const MODES := [
 	{"mode": "mode_c",   "label": "CLASSIC",  "sub": "combo + bombe",         "color": Color(0.70, 0.30, 0.80)},
 	{"mode": "speedrun", "label": "SPEEDRUN", "sub": "piu punti in 5 minuti", "color": Color(0.95, 0.35, 0.15)},
+	{"mode": "test",     "label": "TEST",     "sub": "sperimentale, bombe swap", "color": Color(0.20, 0.75, 0.45)},
+	{"mode": "test6",    "label": "TEST 6",   "sub": "classica, 4 colori",       "color": Color(0.90, 0.55, 0.15)},
 ]
 
 var _background: Sprite2D
@@ -63,10 +159,37 @@ var _deck_world_center := Vector2.ZERO
 var _deck_world_size := Vector2.ZERO
 var _deck_pressing := false
 var _deck_menu: Control
+var _deck_layer: CanvasLayer
+var _deck_panel: Control
+var _deck_dim: ColorRect
+var _deck_frame: TextureRect
+var _deck_title: Label
+var _deck_scroll: ScrollContainer
+var _deck_content: Control
+var _deck_anim: Tween
+var _deck_rest_pos := Vector2.ZERO
+var _deck_hidden_pos := Vector2.ZERO
+# Popup info cubo (Clash-Royale-style)
+var _ci_layer: CanvasLayer
+var _ci_menu: Control
+var _ci_dim: ColorRect
+var _ci_panel: Control
+var _ci_anim: Tween
+var _ci_video: TextureRect
+var _ci_video_frames: Array = []
+var _ci_video_idx := 0
+var _ci_video_timer: Timer
+var _ci_ok_btn: TextureButton
+var _ci_preview: TextureRect          # cubo grande in alto (preview della skin selezionata)
+var _ci_check: TextureRect            # spunta verde (spostata sulla skin selezionata)
+var _ci_skin_slots: Array = []        # [{btn, cube, data}]
+var _ci_cur_info: Dictionary = {}     # info del cubo aperto
 var _play_base_pos := Vector2.ZERO           # posizione base (non premuta) per il sink idempotente
 var _play_base_scale := Vector2.ONE          # scala base del tasto play (per il rimbalzo)
 var _play_bounce_tween: Tween                 # rimbalzo periodico "invito a giocare"
 var _deck_base_pos := Vector2.ZERO
+var _deck_base_scale := Vector2.ONE
+var _deck_bounce_tween: Tween
 
 # Barra in alto a destra: coin count + classifica + impostazioni
 var _coin_bar: TextureRect
@@ -195,6 +318,8 @@ var _nav_textures := {}
 var _tab := "home"
 var _shop_menu: Control
 var _shop_coins_label: Label
+var _shop_items: Dictionary = {}   # id -> {kind, box, sb, lbl, price}
+var _shop_msg: Label               # messaggio "monete insufficienti"
 
 var _art_pos := CAMERA_CENTER
 
@@ -217,6 +342,7 @@ func _ready() -> void:
 	_build_missions_menu()
 	_build_shop_menu()
 	_build_deck_menu()
+	_build_cubeinfo_menu()
 	_build_leader_menu()
 	_build_top_right()
 	_build_profile_menu()
@@ -308,6 +434,8 @@ func _layout() -> void:
 			s.scale = Vector2(ART_SCALE, ART_SCALE)
 
 	_position_play_button()
+	_layout_deck()
+	_layout_cubeinfo()
 	_position_arrows()
 	if _mode_screen:
 		_mode_screen.position = _art_to_world(SCREEN_CENTER_ART)
@@ -379,7 +507,21 @@ func _build_play_button() -> void:
 	_play_base.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_play_base.z_index = 0
 	add_child(_play_base)
-	# (Cube Deck rimosso)
+
+	# Tasto CUBE DECK a fianco del PLAY (apre la tendina). Input a mano in _input().
+	_deck_sprite = Sprite2D.new()
+	_deck_sprite.texture = load("res://CORE/Assets/Art/Home/cube_deck_icon.png")
+	_deck_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_deck_sprite.z_index = 0
+	add_child(_deck_sprite)
+
+	# rimbalzo periodico del tasto DECK (come il PLAY, invito a giocare)
+	var dbt := Timer.new()
+	dbt.wait_time = 5.0
+	dbt.one_shot = false
+	dbt.autostart = true
+	add_child(dbt)
+	dbt.timeout.connect(_deck_bounce)
 
 	# rimbalzo periodico del tasto PLAY per invitare a giocare
 	var bt := Timer.new()
@@ -403,6 +545,21 @@ func _play_bounce() -> void:
 	_play_bounce_tween.parallel().tween_property(_play_base, "scale", bs * 1.06, 0.16)
 	_play_bounce_tween.tween_property(_play_base, "position:y", bp.y, 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 	_play_bounce_tween.parallel().tween_property(_play_base, "scale", bs, 0.30)
+
+
+# Rimbalzo del tasto CUBE DECK (come il PLAY).
+func _deck_bounce() -> void:
+	if _deck_sprite == null or not _deck_sprite.visible or _deck_pressing:
+		return
+	if _deck_bounce_tween != null and _deck_bounce_tween.is_valid():
+		return
+	var bp := _deck_base_pos
+	var bs := _deck_base_scale
+	_deck_bounce_tween = create_tween()
+	_deck_bounce_tween.tween_property(_deck_sprite, "position:y", bp.y - 22.0, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_deck_bounce_tween.parallel().tween_property(_deck_sprite, "scale", bs * 1.06, 0.16)
+	_deck_bounce_tween.tween_property(_deck_sprite, "position:y", bp.y, 0.45).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	_deck_bounce_tween.parallel().tween_property(_deck_sprite, "scale", bs, 0.30)
 
 
 func _make_pixel_texture() -> ImageTexture:
@@ -441,18 +598,32 @@ func _make_sparkles(radius: float, amount: int, vmin: float, vmax: float, smin: 
 func _position_play_button() -> void:
 	if not _play_base:
 		return
-	# PLAY da solo, centrato (alzato un po': non troppo vicino alla nav bar)
-	var s := (DECK_BTN_H_ART / PLAY_NEW_TEX.y) * ART_SCALE
+	# DECK (quadrato) + PLAY affiancati, coppia centrata sotto lo schermo del cabinato.
+	var h := DECK_BTN_H_ART
+	var play_w := PLAY_NEW_TEX.x / PLAY_NEW_TEX.y * h   # larghezza art del PLAY a quest'altezza
+	var deck_w := DECK_TEX.x / DECK_TEX.y * h           # DECK quadrato
+	var total := deck_w + DECK_GAP_ROW + play_w
+	var left := DECK_ROW_CENTER_ART.x - total * 0.5
 	var y := DECK_ROW_CENTER_ART.y - 32.0
+	var deck_cx := left + deck_w * 0.5
+	var play_cx := left + deck_w + DECK_GAP_ROW + play_w * 0.5
 
-	_deck_world_size = Vector2.ZERO   # deck rimosso: nessuna hit-area
-
-	_play_base.position = _art_to_world(Vector2(DECK_ROW_CENTER_ART.x, y))
+	var s := (h / PLAY_NEW_TEX.y) * ART_SCALE
+	_play_base.position = _art_to_world(Vector2(play_cx, y))
 	_play_base.scale = Vector2(s, s)
 	_play_base_pos = _play_base.position
 	_play_base_scale = Vector2(s, s)
 	_play_world_center = _play_base.position
 	_play_world_size = PLAY_NEW_TEX * s
+
+	if _deck_sprite:
+		var ds := (h / DECK_TEX.y) * ART_SCALE
+		_deck_sprite.position = _art_to_world(Vector2(deck_cx, y))
+		_deck_sprite.scale = Vector2(ds, ds)
+		_deck_base_pos = _deck_sprite.position
+		_deck_base_scale = Vector2(ds, ds)
+		_deck_world_center = _deck_sprite.position
+		_deck_world_size = DECK_TEX * ds
 
 	if _sparkles:
 		_sparkles.position = _play_base.position
@@ -619,9 +790,9 @@ func _update_mode_screen() -> void:
 			_screen_title.visible = false
 		_mode_screen_label.visible = true
 		_mode_screen_sub.visible = true
-		_mode_screen_label.text = m["label"]
+		_mode_screen_label.text = loc.t(m["label"])
 		_mode_screen_label.add_theme_color_override("font_color", m["color"])
-		_mode_screen_sub.text = m["sub"]
+		_mode_screen_sub.text = loc.t(m["sub"])
 
 
 func _cycle_mode(dir: int) -> void:
@@ -722,6 +893,9 @@ func _on_play_pressed() -> void:
 # --- Tasto CUBE DECK -----------------------------------------------------------
 func _on_deck_down() -> void:
 	settings.button_feedback()
+	if _deck_bounce_tween != null and _deck_bounce_tween.is_valid():
+		_deck_bounce_tween.kill()
+	_deck_sprite.scale = _deck_base_scale
 	_deck_sprite.modulate = Color(0.85, 0.85, 0.85)
 	_deck_sprite.position = _deck_base_pos + Vector2(0, PRESS_SINK)
 
@@ -732,47 +906,548 @@ func _on_deck_up() -> void:
 
 
 func _on_deck_pressed() -> void:
-	if _deck_menu:
-		_deck_menu.visible = true
+	_open_deck()
 
 
+func _open_deck() -> void:
+	if _deck_menu == null:
+		return
+	_deck_menu.visible = true
+	_layout_deck()
+	if _deck_anim and _deck_anim.is_valid():
+		_deck_anim.kill()
+	_deck_panel.position = _deck_hidden_pos
+	_deck_dim.color.a = 0.0
+	# animazione CALIBRATA: sale, supera di poco (14px) e si assesta. Niente rimbalzo esagerato.
+	var over := _deck_rest_pos.y - 14.0
+	_deck_anim = create_tween()
+	_deck_anim.tween_property(_deck_panel, "position:y", over, 0.30) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_deck_anim.parallel().tween_property(_deck_dim, "color:a", 0.9, 0.26)
+	_deck_anim.tween_property(_deck_panel, "position:y", _deck_rest_pos.y, 0.14) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func _close_deck() -> void:
+	if _deck_menu == null or not _deck_menu.visible:
+		return
+	if _deck_anim and _deck_anim.is_valid():
+		_deck_anim.kill()
+	_deck_anim = create_tween()
+	_deck_anim.set_parallel(true)
+	_deck_anim.tween_property(_deck_panel, "position:y", _deck_hidden_pos.y, 0.28) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_deck_anim.tween_property(_deck_dim, "color:a", 0.0, 0.24)
+	_deck_anim.chain().tween_callback(func() -> void: _deck_menu.visible = false)
+
+
+# Crea i nodi UNA volta; dimensioni/posizioni e card sono in _layout_deck (responsive).
 func _build_deck_menu() -> void:
+	# CanvasLayer dedicato SOPRA tutto (nav bar=10, profilo=20, ecc.): il dim copre e
+	# blocca i tap ai tasti sottostanti; toccare fuori chiude e basta.
+	_deck_layer = CanvasLayer.new()
+	_deck_layer.layer = 200
+	add_child(_deck_layer)
+
 	_deck_menu = Control.new()
 	_deck_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_deck_menu.z_index = 960
 	_deck_menu.visible = false
-	add_child(_deck_menu)
-	var dim := ColorRect.new()
-	dim.color = Color(0.07, 0.13, 0.22, 0.98)
-	dim.offset_left = -600.0
-	dim.offset_top = -600.0
-	dim.offset_right = 1400.0
-	dim.offset_bottom = 2000.0
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(_on_deck_dim_input)
-	_deck_menu.add_child(dim)
-	var t := Label.new()
-	t.text = "CUBE DECK"
-	t.add_theme_font_override("font", MODE_FONT)
-	t.add_theme_font_size_override("font_size", 70)
-	t.add_theme_color_override("font_color", Color(1, 1, 1))
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.offset_left = 38.0
-	t.offset_right = 538.0
-	t.offset_top = 380.0
-	t.offset_bottom = 470.0
-	_deck_menu.add_child(t)
-	var s := Label.new()
-	s.text = "PROSSIMAMENTE\n(tocca per chiudere)"
-	s.add_theme_font_override("font", MODE_FONT)
-	s.add_theme_font_size_override("font_size", 30)
-	s.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	s.offset_left = 38.0
-	s.offset_right = 538.0
-	s.offset_top = 478.0
-	s.offset_bottom = 580.0
-	_deck_menu.add_child(s)
+	_deck_layer.add_child(_deck_menu)
+
+	# Sfondo scuro a tutto schermo (blocca l'input; tap = chiudi)
+	_deck_dim = ColorRect.new()
+	_deck_dim.color = Color(0.05, 0.10, 0.18, 0.9)
+	_deck_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_deck_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_deck_dim.gui_input.connect(_on_deck_dim_input)
+	_deck_menu.add_child(_deck_dim)
+
+	# Pannello tendina (dimensioni calcolate in _layout_deck; niente scale)
+	_deck_panel = Control.new()
+	_deck_menu.add_child(_deck_panel)
+
+	# Frame (cornice pergamena blu). Riempie il pannello; assorbe i tap.
+	_deck_frame = TextureRect.new()
+	_deck_frame.texture = load("res://CORE/Assets/Art/Home/Deck/deck_frame.png")
+	_deck_frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_deck_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_deck_frame.stretch_mode = TextureRect.STRETCH_SCALE
+	_deck_frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	_deck_panel.add_child(_deck_frame)
+
+	# Titolo sul header giallo: BIANCO con contorno nero
+	_deck_title = Label.new()
+	_deck_title.text = loc.t("CUBE DECK")
+	_deck_title.add_theme_font_override("font", MODE_FONT)
+	_deck_title.add_theme_font_size_override("font_size", 58)
+	_deck_title.add_theme_color_override("font_color", Color(1, 1, 1))
+	_deck_title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_deck_title.add_theme_constant_override("outline_size", 14)
+	_deck_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_deck_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_deck_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_deck_panel.add_child(_deck_title)
+
+	# Corpo scrollabile (barra nascosta; scroll al tocco)
+	_deck_scroll = ScrollContainer.new()
+	_deck_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_deck_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_deck_panel.add_child(_deck_scroll)
+	var vsb := _deck_scroll.get_v_scroll_bar()
+	if vsb:
+		vsb.modulate = Color(1, 1, 1, 0)          # invisibile ma ancora scrollabile
+		vsb.add_theme_stylebox_override("scroll", StyleBoxEmpty.new())
+		vsb.add_theme_stylebox_override("grabber", StyleBoxEmpty.new())
+		vsb.add_theme_stylebox_override("grabber_highlight", StyleBoxEmpty.new())
+		vsb.add_theme_stylebox_override("grabber_pressed", StyleBoxEmpty.new())
+
+	_deck_content = Control.new()
+	_deck_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_deck_scroll.add_child(_deck_content)
+
+	_layout_deck()
+
+
+# Responsive: larghezza = quasi tutto lo schermo (si adatta ai lati), altezza GRANDE (può
+# uscire sopra), ATTACCATO in basso. Le card mantengono le loro proporzioni (non deformate).
+func _layout_deck() -> void:
+	if _deck_panel == null:
+		return
+	var view := get_viewport_rect().size
+	# larghezza = TUTTO lo schermo (lati flush); riempie tutto ma parte PIÙ IN BASSO e
+	# sfora sotto il bordo inferiore (il top non arriva così in alto).
+	var pwd := view.x
+	var top_y := view.y * DECK_TOP_FRAC           # il bordo alto (con l'header) parte qui (sotto il profilo)
+	var phd := view.y * DECK_BOTTOM_FRAC - top_y  # fino a poco sotto il bordo schermo
+	_deck_panel.size = Vector2(pwd, phd)
+	_deck_frame.position = Vector2.ZERO
+	_deck_frame.size = Vector2(pwd, phd)
+	_deck_rest_pos = Vector2((view.x - pwd) * 0.5, top_y)
+	_deck_hidden_pos = Vector2(_deck_rest_pos.x, view.y + 40.0)
+
+	# titolo nell'header giallo (leggermente più in alto)
+	_deck_title.position = Vector2(pwd * 0.10, phd * 0.016)
+	_deck_title.size = Vector2(pwd * 0.80, maxf(56.0, phd * 0.062))
+
+	# corpo scrollabile: il CLIP (top dell'area) sta proprio al confine giallo/blu dell'header,
+	# così scorrendo i cubi spariscono SOTTO il titolo. Il fondo arriva al bordo basso schermo.
+	var gap := 14.0
+	var bx := pwd * 0.09
+	var by := phd * 0.095                         # clip dello scroll
+	var bw := pwd * 0.82
+	var bh := view.y - top_y - by                 # il fondo dell'area = fondo schermo
+	_deck_scroll.position = Vector2(bx, by)
+	_deck_scroll.size = Vector2(bw, bh)
+
+	# ricostruisci le card a dimensione reale (3 per riga)
+	for ch in _deck_content.get_children():
+		_deck_content.remove_child(ch)
+		ch.queue_free()
+	var pad_top := phd * 0.045                     # i cubi partono un filo più in basso (ma clippano in alto)
+	var pad_bottom := phd * 0.04
+	var cols := 3
+	var card_w := (bw - float(cols - 1) * gap) / float(cols)
+	var card_h := card_w / CARD_ASPECT
+	var n := DECK_CARDS.size()
+	var rows := int(ceil(float(n) / float(cols)))
+	var content_h := pad_top + float(rows) * card_h + float(maxi(rows - 1, 0)) * gap + pad_bottom
+	_deck_content.custom_minimum_size = Vector2(bw, content_h)
+	_deck_content.size = Vector2(bw, maxf(content_h, bh))
+	for i in n:
+		var row := i / cols
+		var col := i % cols
+		var in_row := mini(cols, n - row * cols)   # l'ultima riga può averne meno: la centro
+		var row_w := float(in_row) * card_w + float(in_row - 1) * gap
+		var start_x := (bw - row_w) * 0.5
+		var cx := start_x + float(col) * (card_w + gap)
+		var cy := pad_top + float(row) * (card_h + gap)
+		var card := _make_deck_card(DECK_CARDS[i], card_w, card_h)
+		card.position = Vector2(cx, cy)
+		_deck_content.add_child(card)
+
+	if _deck_anim and _deck_anim.is_valid():
+		return   # non toccare la posizione durante lo slide
+	_deck_panel.position = _deck_rest_pos if (_deck_menu and _deck_menu.visible) else _deck_hidden_pos
+
+
+# Scheda del deck = Button CLICCABILE (per una sezione futura). Cornice + cubo piccolo + nome.
+func _make_deck_card(c: Dictionary, cw: float, ch: float) -> Control:
+	var card := Button.new()
+	card.custom_minimum_size = Vector2(cw, ch)
+	card.size = Vector2(cw, ch)
+	card.focus_mode = Control.FOCUS_NONE
+	card.flat = true
+	# PASS: il tap sulla card funziona, ma il drag passa allo ScrollContainer (scroll fluido)
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
+	# niente chrome del bottone: la grafica è la cornice
+	for st in ["normal", "hover", "pressed", "focus", "disabled"]:
+		card.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	card.pressed.connect(_on_deck_card_pressed.bind(c))
+	# effetto "vero tasto": alla pressione affonda un filo e si scurisce
+	card.button_down.connect(func() -> void:
+		card.position += Vector2(0, 4.0)
+		card.modulate = Color(0.86, 0.86, 0.86))
+	card.button_up.connect(func() -> void:
+		card.position -= Vector2(0, 4.0)
+		card.modulate = Color(1, 1, 1))
+	var special: bool = c.get("special", false)
+	var frame := TextureRect.new()
+	frame.texture = load("res://CORE/Assets/Art/Home/Deck/card_special.png" if special \
+		else "res://CORE/Assets/Art/Home/Deck/card_classic.png")
+	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	frame.stretch_mode = TextureRect.STRETCH_SCALE
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.position = Vector2.ZERO
+	frame.size = Vector2(cw, ch)
+	card.add_child(frame)
+	# Cubo PICCOLO, CENTRATO in orizzontale nella parte alta (aspetto conservato, omogeneo).
+	# expand_mode IGNORE_SIZE: il TextureRect rispetta la size piccola (altrimenti usa quella
+	# nativa della texture e trabocca a destra, enorme).
+	var cube := TextureRect.new()
+	cube.texture = load(_skin_static_for(c.get("name", ""), c["tex"]))
+	cube.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	cube.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	cube.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	cube.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cube.position = Vector2(cw * 0.24, ch * 0.16)   # un po' più grande e più basso
+	cube.size = Vector2(cw * 0.52, ch * 0.36)
+	card.add_child(cube)
+	# Nome sotto: PIÙ GRANDE (bianco, contorno nero)
+	var nm := Label.new()
+	nm.text = loc.t(c["name"])
+	nm.add_theme_font_override("font", MODE_FONT)
+	nm.add_theme_font_size_override("font_size", 26)
+	nm.add_theme_color_override("font_color", Color(1, 1, 1))
+	nm.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	nm.add_theme_constant_override("outline_size", 6)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nm.position = Vector2(cw * 0.03, ch * 0.56)
+	nm.size = Vector2(cw * 0.94, ch * 0.40)
+	card.add_child(nm)
+	return card
+
+
+# Tap su una scheda del deck: apre il popup info-cubo (per ora solo il cubo rosso).
+func _on_deck_card_pressed(c: Dictionary) -> void:
+	settings.button_feedback()
+	var key: String = c.get("name", "")
+	if CUBE_INFO.has(key):
+		_open_cubeinfo(CUBE_INFO[key])
+
+
+# ============ POPUP INFO CUBO (stile Clash Royale) ============
+func _build_cubeinfo_menu() -> void:
+	_ci_layer = CanvasLayer.new()
+	_ci_layer.layer = 210   # sopra il deck (200)
+	add_child(_ci_layer)
+	_ci_menu = Control.new()
+	_ci_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ci_menu.visible = false
+	_ci_layer.add_child(_ci_menu)
+	# dim scuro: tap fuori = chiudi
+	_ci_dim = ColorRect.new()
+	_ci_dim.color = Color(0.03, 0.06, 0.12, 0.78)
+	_ci_dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ci_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_ci_dim.gui_input.connect(_on_ci_dim_input)
+	_ci_menu.add_child(_ci_dim)
+	# pannello (contenuto ricostruito ad ogni apertura)
+	_ci_panel = Control.new()
+	_ci_panel.size = Vector2(CI_PW, CI_DESIGN_H)
+	_ci_menu.add_child(_ci_panel)
+	# timer del "video" in loop (placeholder = animazione schermo gameplay)
+	_ci_video_timer = Timer.new()
+	_ci_video_timer.wait_time = 0.12
+	_ci_video_timer.one_shot = false
+	add_child(_ci_video_timer)
+	_ci_video_timer.timeout.connect(_ci_advance_video)
+	# video demo: cubo rosso che fa match in gameplay (loop)
+	for i in range(1, 17):
+		var p := "res://CORE/Assets/Art/Home/CubeInfo/RedDemo/demo_%02d.png" % i
+		if ResourceLoader.exists(p):
+			_ci_video_frames.append(load(p))
+
+
+func _ci_advance_video() -> void:
+	if _ci_video == null or _ci_video_frames.is_empty():
+		return
+	_ci_video_idx = (_ci_video_idx + 1) % _ci_video_frames.size()
+	_ci_video.texture = _ci_video_frames[_ci_video_idx]
+
+
+func _ci_label(text: String, pos: Vector2, sz: Vector2, fsize: int, halign: int, top: bool = false, col: Color = Color(1, 1, 1)) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", MODE_FONT)
+	l.add_theme_font_size_override("font_size", fsize)
+	l.add_theme_color_override("font_color", col)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	l.add_theme_constant_override("outline_size", 5)
+	l.horizontal_alignment = halign
+	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP if top else VERTICAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.position = pos
+	l.size = sz
+	_ci_panel.add_child(l)
+	return l
+
+
+# Piccola pressione (affonda + scurisce) per i tasti del popup.
+func _ci_press_fx(btn: BaseButton, sink: float = 5.0) -> void:
+	var base := btn.position
+	btn.button_down.connect(func() -> void:
+		btn.position = base + Vector2(0, sink)
+		btn.modulate = Color(0.85, 0.85, 0.85))
+	btn.button_up.connect(func() -> void:
+		btn.position = base
+		btn.modulate = Color(1, 1, 1))
+
+
+func _ci_texbtn(tex: String, pos: Vector2, sz: Vector2, cb: Callable) -> TextureButton:
+	var b := TextureButton.new()
+	b.texture_normal = load(tex)
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_SCALE
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.position = pos
+	b.size = sz
+	b.pressed.connect(cb)
+	_ci_panel.add_child(b)
+	return b
+
+
+func _ci_texrect(tex: String, pos: Vector2, sz: Vector2, mode: int) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = load(tex)
+	t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = mode
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	t.position = pos
+	t.size = sz
+	_ci_panel.add_child(t)
+	return t
+
+
+const CI_DIR := "res://CORE/Assets/Art/Home/CubeInfo/"
+
+func _build_cubeinfo_content(info: Dictionary) -> void:
+	# cornice
+	_ci_texrect(CI_DIR + "popup_frame.png", Vector2(0, 0), Vector2(CI_PW, CI_PH), TextureRect.STRETCH_SCALE)
+	# titolo CUBE INFO CENTRATO nel frame (più grande), alla stessa altezza della X
+	_ci_label(loc.t("CUBE INFO"), Vector2(CI_PW * 0.5 - 180.0, 20.0), Vector2(360.0, 78.0), 46, HORIZONTAL_ALIGNMENT_CENTER)
+	# tasto X in alto a destra
+	var xbtn := _ci_texbtn(CI_DIR + "close_x.png", Vector2(CI_PW - 92.0, 24.0), Vector2(72.0, 72.0), _close_cubeinfo)
+	_ci_press_fx(xbtn, 4.0)
+
+	# --- sezione alta (un po' più in basso): cubo grande a sx, nome/tipo/descrizione a dx ---
+	_ci_cur_info = info
+	var cur_static := _skin_static_for(info["name"], info["cube"])
+	_ci_preview = _ci_texrect(cur_static, Vector2(40.0, 132.0), Vector2(206.0, 206.0), TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	var rx := 280.0
+	var rw := CI_PW - rx - 38.0
+	var name_col: Color = info.get("color", Color(1, 1, 1))
+	_ci_label(loc.t(info["name"]), Vector2(rx, 138.0), Vector2(rw, 58.0), 48, HORIZONTAL_ALIGNMENT_LEFT, false, name_col)
+	_ci_label(loc.t("TIPO:") + " " + loc.t(info["type"]), Vector2(rx, 202.0), Vector2(rw, 42.0), 32, HORIZONTAL_ALIGNMENT_LEFT)
+	_ci_label(loc.t(info["desc"]), Vector2(rx, 250.0), Vector2(rw, 110.0), 22, HORIZONTAL_ALIGNMENT_LEFT, true)
+
+	# --- sezione video: riquadro VERDE pieno + BORDO (interno trasparente) sopra ---
+	# (l'animazione la fornirà l'utente; il verde serve solo per allineare)
+	var vw := 540.0                    # sezione video un po' più piccola
+	var vh := vw * 0.5                 # aspetto del bordo 2:1
+	var vx := (CI_PW - vw) * 0.5
+	var vy := 376.0
+	_ci_video = null
+	# verde che riempie tutto il rettangolo (il bordo sopra lo incornicia)
+	var green := ColorRect.new()
+	green.color = Color(0.16, 0.80, 0.28)
+	green.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	green.position = Vector2(vx, vy)
+	green.size = Vector2(vw, vh)
+	_ci_panel.add_child(green)
+	# bordo navy (interno trasparente) sopra il verde
+	_ci_texrect(CI_DIR + "video_border.png", Vector2(vx, vy), Vector2(vw, vh), TextureRect.STRETCH_SCALE)
+
+	# --- sezione skin (spunta verde sulla selezionata; tap = animazione) ---
+	var sy := vy + vh + 2.0
+	_ci_label(loc.t("SKIN"), Vector2(52.0, sy), Vector2(340.0, 56.0), 46, HORIZONTAL_ALIGNMENT_LEFT)
+	var slot := 150.0
+	var slot_h := slot * (368.0 / 352.0)
+	var slot_y := sy + 60.0
+	var ck: String = info.get("color_key", "")
+	var skins: Array = settings.CUBE_SKINS.get(ck, [])
+	if skins.is_empty():   # abilità: solo skin base (l'immagine del cubo stesso)
+		skins = [{"static": info["cube"], "frames": []}]
+	_ci_skin_slots.clear()
+	for i in skins.size():
+		var sd: Dictionary = skins[i]
+		var sx := 56.0 + float(i) * (slot + 20.0)
+		var sb := TextureButton.new()
+		sb.texture_normal = load(CI_DIR + "skin_frame.png")
+		sb.ignore_texture_size = true
+		sb.stretch_mode = TextureButton.STRETCH_SCALE
+		sb.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sb.position = Vector2(sx, slot_y)
+		sb.size = Vector2(slot, slot_h)
+		sb.pivot_offset = Vector2(slot * 0.5, slot_h * 0.5)
+		sb.pressed.connect(_ci_select_skin.bind(i))
+		_ci_panel.add_child(sb)
+		var cu := TextureRect.new()
+		cu.texture = load(sd["static"])
+		cu.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		cu.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		cu.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cu.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cu.position = Vector2(slot * 0.2, slot_h * 0.18)
+		cu.size = Vector2(slot * 0.6, slot_h * 0.55)
+		sb.add_child(cu)
+		_ci_skin_slots.append({"btn": sb, "cube": cu, "data": sd})
+	# spunta verde UNICA, sulla skin selezionata (spostabile)
+	_ci_check = TextureRect.new()
+	_ci_check.texture = load(CI_DIR + "skin_check.png")
+	_ci_check.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_ci_check.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_ci_check.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_ci_check.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ci_check.size = Vector2(58.0, 58.0)
+	var sel: int = settings.get_skin_index(ck)
+	_ci_place_check(clampi(sel, 0, maxi(skins.size() - 1, 0)))
+
+	# --- tasto OK (sporge sotto la cornice, alzato un po') ---
+	var okw := 300.0
+	var okh := okw * (288.0 / 736.0)
+	_ci_ok_btn = _ci_texbtn(CI_DIR + "ok_button.png", Vector2((CI_PW - okw) * 0.5, CI_PH - 72.0), Vector2(okw, okh), _on_ci_ok)
+	_ci_ok_btn.pivot_offset = Vector2(okw * 0.5, okh * 0.5)
+
+
+# Selezione skin: sposta la spunta, riproduce l'animazione di distruzione della skin,
+# aggiorna la preview in alto e il cubo nel deck.
+func _ci_select_skin(idx: int) -> void:
+	if idx < 0 or idx >= _ci_skin_slots.size():
+		return
+	settings.button_feedback()
+	var ck: String = _ci_cur_info.get("color_key", "")
+	if ck != "":
+		settings.set_skin(ck, idx)
+	_ci_place_check(idx)
+	var slot: Dictionary = _ci_skin_slots[idx]
+	# l'animazione di distruzione usa i "frames" della skin (classica = Red..Red_7)
+	_ci_play_destroy(slot["cube"], slot["data"].get("frames", []), slot["data"]["static"])
+	if _ci_preview:
+		_ci_preview.texture = load(slot["data"]["static"])
+	_layout_deck()   # aggiorna il cubo nel deck dietro
+
+
+# Riproduce l'animazione di distruzione (frame) nel TextureRect, poi torna allo static.
+# Se non ci sono frame, fa solo un rimbalzo.
+func _ci_play_destroy(rect: TextureRect, frames: Array, static_path: String) -> void:
+	if frames.is_empty():
+		rect.pivot_offset = rect.size * 0.5
+		var b := create_tween()
+		b.tween_property(rect, "scale", Vector2(1.18, 1.18), 0.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		b.tween_property(rect, "scale", Vector2(1, 1), 0.18).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+		return
+	var tw := create_tween()
+	for f in frames:
+		var path: String = f
+		tw.tween_callback(func() -> void: rect.texture = load(path))
+		tw.tween_interval(0.07)
+	tw.tween_callback(func() -> void: rect.texture = load(static_path))
+
+
+func _ci_place_check(idx: int) -> void:
+	if _ci_check == null or idx < 0 or idx >= _ci_skin_slots.size():
+		return
+	var p := _ci_check.get_parent()
+	if p:
+		p.remove_child(_ci_check)
+	var slot: TextureButton = _ci_skin_slots[idx]["btn"]
+	slot.add_child(_ci_check)
+	_ci_check.position = Vector2(slot.size.x - 44.0, -16.0)
+
+
+# Skin selezionata -> percorso immagine statica (per deck/preview). Fallback = default.
+func _skin_static_for(name: String, default_tex: String) -> String:
+	if CUBE_INFO.has(name):
+		var ck: String = CUBE_INFO[name].get("color_key", "")
+		if ck != "":
+			var sk: Dictionary = settings.get_skin(ck)
+			if not sk.is_empty():
+				return sk["static"]
+	return default_tex
+
+
+func _open_cubeinfo(info: Dictionary) -> void:
+	if _ci_menu == null:
+		return
+	for ch in _ci_panel.get_children():
+		_ci_panel.remove_child(ch)
+		ch.queue_free()
+	_build_cubeinfo_content(info)
+	_ci_menu.visible = true
+	_layout_cubeinfo()
+	# video loop
+	_ci_video_idx = 0
+	if _ci_video and not _ci_video_frames.is_empty():
+		_ci_video_timer.start()
+	# pop-in dal centro
+	if _ci_anim and _ci_anim.is_valid():
+		_ci_anim.kill()
+	var target := _ci_panel.scale
+	_ci_panel.scale = target * 0.85
+	_ci_dim.color.a = 0.0
+	_ci_anim = create_tween()
+	_ci_anim.tween_property(_ci_panel, "scale", target, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_ci_anim.parallel().tween_property(_ci_dim, "color:a", 0.78, 0.20)
+
+
+func _close_cubeinfo() -> void:
+	if _ci_menu == null or not _ci_menu.visible:
+		return
+	settings.button_feedback()
+	_ci_video_timer.stop()
+	if _ci_anim and _ci_anim.is_valid():
+		_ci_anim.kill()
+	var target := _ci_panel.scale
+	_ci_anim = create_tween()
+	_ci_anim.tween_property(_ci_panel, "scale", target * 0.85, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	_ci_anim.parallel().tween_property(_ci_dim, "color:a", 0.0, 0.16)
+	_ci_anim.chain().tween_callback(func() -> void: _ci_menu.visible = false)
+
+
+func _on_ci_ok() -> void:
+	# animazione del tasto OK, poi conferma (per ora chiude)
+	if _ci_ok_btn:
+		var t := create_tween()
+		t.tween_property(_ci_ok_btn, "scale", Vector2(1.12, 1.12), 0.07).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		t.tween_property(_ci_ok_btn, "scale", Vector2(1, 1), 0.10).set_trans(Tween.TRANS_SINE)
+		t.tween_callback(_close_cubeinfo)
+	else:
+		_close_cubeinfo()
+
+
+func _on_ci_dim_input(event: InputEvent) -> void:
+	var tap: bool = (event is InputEventMouseButton and not event.pressed) \
+		or (event is InputEventScreenTouch and not event.pressed)
+	if tap:
+		_close_cubeinfo()
+
+
+func _layout_cubeinfo() -> void:
+	if _ci_panel == null:
+		return
+	var view := get_viewport_rect().size
+	var sc := minf(view.x * 0.92 / CI_PW, view.y * 0.96 / CI_DESIGN_H)
+	_ci_panel.pivot_offset = Vector2(CI_PW * 0.5, CI_DESIGN_H * 0.5)
+	# centrato ma un filo più in basso
+	_ci_panel.position = view * 0.5 - _ci_panel.pivot_offset + Vector2(0, view.y * 0.03)
+	if not (_ci_anim and _ci_anim.is_valid()):
+		_ci_panel.scale = Vector2(sc, sc)
 
 
 func _on_deck_dim_input(event: InputEvent) -> void:
@@ -780,7 +1455,7 @@ func _on_deck_dim_input(event: InputEvent) -> void:
 		or (event is InputEventScreenTouch and not event.pressed)
 	if tap:
 		settings.button_feedback()
-		_deck_menu.visible = false
+		_close_deck()
 
 
 # --- Barra in alto a destra (coin count + classifica + impostazioni) -----------
@@ -1136,7 +1811,7 @@ func _build_profile_menu() -> void:
 	_profile_frame.add_child(_profile_bg)
 	# header
 	_profile_title = Label.new()
-	_profile_title.text = "EDIT PROFILE"
+	_profile_title.text = loc.t("EDIT PROFILE")
 	_profile_title.add_theme_font_override("font", MODE_FONT)
 	_profile_title.add_theme_color_override("font_color", Color(1, 1, 1))
 	_profile_title.add_theme_color_override("font_outline_color", Color(0.16, 0.07, 0.0))
@@ -1151,7 +1826,7 @@ func _build_profile_menu() -> void:
 	_profile_namebox = _ptex(PROFILE_DIR + "name_box.png")
 	_profile_frame.add_child(_profile_namebox)
 	_profile_name_title = Label.new()
-	_profile_name_title.text = "NOME GIOCATORE"
+	_profile_name_title.text = loc.t("NOME GIOCATORE")
 	_profile_name_title.add_theme_font_override("font", MODE_FONT)
 	_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
 	_profile_name_title.add_theme_color_override("font_outline_color", Color(0.16, 0.07, 0.0))
@@ -1539,7 +2214,7 @@ func _profile_edit_name() -> void:
 
 func _reset_name_title() -> void:
 	if _profile_name_title:
-		_profile_name_title.text = "NOME GIOCATORE"
+		_profile_name_title.text = loc.t("NOME GIOCATORE")
 		_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
 
 func _confirm_profile() -> void:
@@ -1554,7 +2229,7 @@ func _confirm_profile() -> void:
 		return
 	# nome CAMBIATO → controllo unicità sul server (async)
 	if _profile_name_title:
-		_profile_name_title.text = "CONTROLLO..."
+		_profile_name_title.text = loc.t("CONTROLLO...")
 		_profile_name_title.add_theme_color_override("font_color", Color(1, 1, 1))
 	if _profile_confirm:
 		_profile_confirm.disabled = true
@@ -1564,7 +2239,7 @@ func _confirm_profile() -> void:
 		if ok:
 			_apply_profile(n)
 		elif _profile_name_title:
-			_profile_name_title.text = "NOME GIA IN USO!"
+			_profile_name_title.text = loc.t("NOME GIA IN USO!")
 			_profile_name_title.add_theme_color_override("font_color", Color(1.0, 0.4, 0.4))
 			settings.vibrate(30))
 
@@ -1665,7 +2340,7 @@ func _build_leader_menu() -> void:
 	_leader_menu.add_child(_leader_close)
 	# titolo TOP CRASHER (stesso livello della X, centrato)
 	_leader_title = Label.new()
-	_leader_title.text = "TOP CRASHER"
+	_leader_title.text = loc.t("TOP CRASHER")
 	_leader_title.add_theme_font_override("font", MODE_FONT)
 	_leader_title.add_theme_font_size_override("font_size", 42)
 	_leader_title.add_theme_color_override("font_color", Color(1, 0.93, 0.5))
@@ -1921,7 +2596,7 @@ func _build_mode_menu() -> void:
 	_mode_menu.add_child(dim)
 
 	var title := Label.new()
-	title.text = "SCEGLI MODALITÀ"
+	title.text = loc.t("SCEGLI MODALITÀ")
 	title.add_theme_font_override("font", MODE_FONT)
 	title.add_theme_font_size_override("font_size", 40)
 	title.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1956,7 +2631,7 @@ func _build_mode_menu() -> void:
 		btn.add_theme_stylebox_override("focus", sb)
 
 		var t := Label.new()
-		t.text = m["label"]
+		t.text = loc.t(m["label"])
 		t.add_theme_font_override("font", MODE_FONT)
 		t.add_theme_font_size_override("font_size", 42)
 		t.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -1966,7 +2641,7 @@ func _build_mode_menu() -> void:
 		btn.add_child(t)
 
 		var s := Label.new()
-		s.text = m["sub"]
+		s.text = loc.t(m["sub"])
 		s.add_theme_font_override("font", MODE_FONT)
 		s.add_theme_font_size_override("font_size", 20)
 		s.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
@@ -2030,7 +2705,7 @@ func _on_terms_button_pressed() -> void:
 # --- MISSIONI (tastino TEMPORANEO + pannello) ----------------------------------
 func _build_missions_button() -> void:
 	_missions_button = Button.new()
-	_missions_button.text = "MISSIONI"
+	_missions_button.text = loc.t("MISSIONI")
 	_missions_button.focus_mode = Control.FOCUS_NONE
 	_missions_button.position = Vector2(12, 408)
 	_missions_button.size = Vector2(150, 60)
@@ -2401,7 +3076,7 @@ func _play_icon_reward_anim(icon_id: String) -> void:
 	icon.scale = Vector2(0.1, 0.1)
 	lay.add_child(icon)
 	var lbl := Label.new()
-	lbl.text = "È TUA!"
+	lbl.text = loc.t("È TUA!")
 	lbl.add_theme_font_override("font", MODE_FONT)
 	lbl.add_theme_font_size_override("font_size", 56)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.15))
@@ -2616,6 +3291,7 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 		_missions_menu.visible = true
 	elif tab == "shop":
 		_shop_menu.visible = true
+		_refresh_shop()
 
 
 func _set_home_visible(v: bool) -> void:
@@ -2746,25 +3422,155 @@ func _build_shop_menu() -> void:
 	_shop_coins_label = scc[1] as Label
 	_make_record_counter(_shop_menu, RECORD_X)
 	var t := Label.new()
-	t.text = "SHOP"
+	t.text = loc.t("SHOP")
 	t.add_theme_font_override("font", MODE_FONT)
-	t.add_theme_font_size_override("font_size", 70)
+	t.add_theme_font_size_override("font_size", 62)
 	t.add_theme_color_override("font_color", Color(1, 1, 1))
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t.offset_left = 38.0
 	t.offset_right = 538.0
-	t.offset_top = 380.0
-	t.offset_bottom = 470.0
+	t.offset_top = 120.0
+	t.offset_bottom = 190.0
 	_shop_menu.add_child(t)
-	var s := Label.new()
-	s.text = "PROSSIMAMENTE"
-	s.add_theme_font_override("font", MODE_FONT)
-	s.add_theme_font_size_override("font_size", 34)
-	s.add_theme_color_override("font_color", Color(1, 1, 1, 0.7))
-	s.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	s.offset_left = 38.0
-	s.offset_right = 538.0
-	s.offset_top = 476.0
-	s.offset_bottom = 520.0
-	_shop_menu.add_child(s)
+
+	# messaggio "monete insufficienti" (nascosto)
+	_shop_msg = Label.new()
+	_shop_msg.add_theme_font_override("font", MODE_FONT)
+	_shop_msg.add_theme_font_size_override("font_size", 30)
+	_shop_msg.add_theme_color_override("font_color", Color(1, 0.35, 0.35))
+	_shop_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shop_msg.offset_left = 38.0
+	_shop_msg.offset_right = 538.0
+	_shop_msg.offset_top = 190.0
+	_shop_msg.offset_bottom = 224.0
+	_shop_msg.modulate.a = 0.0
+	_shop_menu.add_child(_shop_msg)
+
+	# area scorrevole con le due sezioni
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.offset_left = 24.0
+	scroll.offset_top = 228.0
+	scroll.offset_right = 552.0
+	scroll.offset_bottom = 832.0
+	_shop_menu.add_child(scroll)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 10)
+	vb.custom_minimum_size = Vector2(528, 0)
+	scroll.add_child(vb)
+
+	_shop_items.clear()
+	vb.add_child(_shop_section_label("AVATAR"))
+	vb.add_child(_shop_grid(shop.AVATARS, "avatar"))
+	vb.add_child(_shop_section_label("SKIN CUBI"))
+	vb.add_child(_shop_grid(shop.SKINS, "skin"))
+	_refresh_shop()
+
+func _shop_section_label(txt: String) -> Label:
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_override("font", MODE_FONT)
+	l.add_theme_font_size_override("font_size", 40)
+	l.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+	l.custom_minimum_size = Vector2(0, 56)
+	return l
+
+func _shop_grid(items: Array, kind: String) -> GridContainer:
+	var g := GridContainer.new()
+	g.columns = 3
+	g.add_theme_constant_override("h_separation", 12)
+	g.add_theme_constant_override("v_separation", 12)
+	for item in items:
+		g.add_child(_make_shop_cell(kind, item))
+	return g
+
+func _make_shop_cell(kind: String, item: Dictionary) -> Control:
+	var id := str(item["id"])
+	var cell := VBoxContainer.new()
+	cell.add_theme_constant_override("separation", 4)
+	cell.custom_minimum_size = Vector2(158, 0)
+	# riquadro colorato placeholder + bottone trasparente sopra
+	var box := Panel.new()
+	box.custom_minimum_size = Vector2(150, 130)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = item["color"]
+	sb.set_corner_radius_all(18)
+	sb.border_color = Color(0, 0, 0, 0.35)
+	sb.set_border_width_all(3)
+	box.add_theme_stylebox_override("panel", sb)
+	cell.add_child(box)
+	var btn := Button.new()
+	btn.flat = true
+	btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.pressed.connect(_on_shop_item.bind(kind, id))
+	box.add_child(btn)
+	# etichetta stato/prezzo
+	var lbl := Label.new()
+	lbl.add_theme_font_override("font", MODE_FONT)
+	lbl.add_theme_font_size_override("font_size", 28)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.custom_minimum_size = Vector2(150, 34)
+	cell.add_child(lbl)
+	_shop_items[id] = {"kind": kind, "sb": sb, "lbl": lbl, "price": int(item["price"])}
+	return cell
+
+# Aggiorna testo/bordo di ogni item in base a posseduto/equipaggiato.
+func _refresh_shop() -> void:
+	for id in _shop_items:
+		var it: Dictionary = _shop_items[id]
+		var is_av: bool = it["kind"] == "avatar"
+		var owned: bool = shop.owns_avatar(id) if is_av else shop.owns_skin(id)
+		var equipped: bool = (shop.equipped_avatar == id) if is_av else (shop.equipped_skin == id)
+		var lbl: Label = it["lbl"]
+		var sb: StyleBoxFlat = it["sb"]
+		if equipped:
+			lbl.text = loc.t("IN USO")
+			lbl.add_theme_color_override("font_color", Color(0.30, 1.0, 0.45))
+			sb.border_color = Color(1, 0.84, 0.10)
+			sb.set_border_width_all(6)
+		elif owned:
+			lbl.text = loc.t("USA")
+			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+			sb.border_color = Color(1, 1, 1, 0.55)
+			sb.set_border_width_all(3)
+		else:
+			lbl.text = "%d mon." % int(it["price"])
+			lbl.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+			sb.border_color = Color(0, 0, 0, 0.35)
+			sb.set_border_width_all(3)
+
+func _on_shop_item(kind: String, id: String) -> void:
+	settings.button_feedback()
+	var is_av := kind == "avatar"
+	var owned: bool = shop.owns_avatar(id) if is_av else shop.owns_skin(id)
+	if owned:
+		# posseduto → equipaggia
+		if is_av:
+			shop.equip_avatar(id)
+		else:
+			shop.equip_skin(id)
+		_refresh_shop()
+		return
+	# non posseduto → prova a comprare
+	var ok: bool = shop.buy_avatar(id) if is_av else shop.buy_skin(id)
+	if ok:
+		settings.vibrate(30)
+		_update_coin_count()
+		_refresh_shop()
+	else:
+		settings.vibrate(60)
+		_flash_shop_msg("MONETE INSUFFICIENTI!")
+
+func _flash_shop_msg(txt: String) -> void:
+	if _shop_msg == null:
+		return
+	_shop_msg.text = txt
+	_shop_msg.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_interval(1.1)
+	tw.tween_property(_shop_msg, "modulate:a", 0.0, 0.5)
 

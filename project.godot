@@ -30,6 +30,7 @@ boot_splash/stretch_mode=0
 
 [autoload]
 
+loc="*res://loc.gd"
 settings="*res://settings.gd"
 transition="*res://transition.gd"
 missions="*res://missions.gd"

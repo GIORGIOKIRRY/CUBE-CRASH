@@ -87,7 +87,7 @@ func _build() -> void:
 func start(reason: String, allow_revive: bool = true) -> void:
 	visible = true
 	_revived = false
-	_reason_label.text = "NO MOVES" if reason == "no_moves" else "NO SPACE"
+	_reason_label.text = loc.t("NO MOVES") if reason == "no_moves" else loc.t("NO SPACE")
 	_band.visible = true
 	_reason_label.visible = true
 	settings.play_error()   # suono che spiega il motivo (no space / no moves)

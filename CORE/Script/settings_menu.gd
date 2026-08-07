@@ -269,7 +269,7 @@ func _show_more(on: bool) -> void:
 	_more_root.visible = on
 	_options.visible = not on
 	if _title:
-		_title.text = "MORE" if on else "SETTINGS"
+		_title.text = loc.t("MORE") if on else loc.t("SETTINGS")
 	if _more_back:
 		_more_back.visible = on
 

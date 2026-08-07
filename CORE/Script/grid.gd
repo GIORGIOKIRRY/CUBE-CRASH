@@ -81,6 +81,8 @@ var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 #  +1 = colonna intera (+ gravità/refill)   +2 = riga intera (+ gravità)
 #  +3 = bomba 5x5 che lascia un CRATERE vuoto (buchi da riempire, niente refill)
 var _is_mode_c: bool = false
+var _is_test: bool = false                   # modalità TEST: sperimentale (bombe swap, combo facili, 4 colori)
+var _is_test_6: bool = false                  # modalità TEST 6: identica alla CLASSIC ma con 4 colori
 var _fall_speed_mult: float = 1.0   # caduta leggermente più lenta nella CLASSIC (non speedrun)
 var _is_speedrun: bool = false               # gameplay mode_c + timer 5 min + input libero durante le cascate
 var _speedrun_time_left: float = 300.0       # 5 minuti
@@ -217,6 +219,24 @@ var possible_plus_pieces = [
 	preload("res://CORE/Scene/PieceScene/green_plus_3.tscn")
 ]
 
+# Modalità TEST: BOMBE senza colore che compaiono sulla board e si attivano con QUALSIASI
+# swap (bomba 3x3, bomba X, bomba angoli). Le FRECCE invece restano colorate (match).
+const TEST_ABILITY_SCENES := [
+	preload("res://CORE/Scene/PieceScene/red_plus_3.tscn"),   # bomba 3x3
+	preload("res://CORE/Scene/PieceScene/red_xbomb.tscn"),    # bomba X
+	preload("res://CORE/Scene/PieceScene/red_angles.tscn"),   # bomba angoli
+]
+const TEST_ABILITY_PROB := 0.03   # BOMBE rarissime sulla board
+
+# Scelta pesata della bomba in TEST (3x3 la più comune, X e angoli rarissime).
+func _pick_test_ability() -> PackedScene:
+	var r := randf()
+	if r < 0.70:
+		return TEST_ABILITY_SCENES[0]   # bomba 3x3
+	elif r < 0.87:
+		return TEST_ABILITY_SCENES[1]   # bomba X
+	return TEST_ABILITY_SCENES[2]       # bomba angoli
+
 # BOMBA X (mooves = 4): esplode formando una X (due diagonali). Un colore per bomba,
 # ordine = MODE_C_PLUS_COLOR_ORDER (blue, red, pink, purple, yellow, orange, green).
 var possible_xbomb_pieces = [
@@ -329,8 +349,17 @@ func _ready() -> void:
 	# Modalità test scelta dal menu
 	_mode = settings.game_mode
 	_is_speedrun = _mode == "speedrun"
-	_is_mode_c = _mode == "mode_c" or _is_speedrun   # speedrun = gameplay CLASSIC/mode_c
-	_fall_speed_mult = 1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.5 if _is_speedrun else 1.0)
+	_is_test = _mode == "test"                        # test = sperimentale (bombe swap, ecc.)
+	_is_test_6 = _mode == "test6"                     # test6 = CLASSIC identica ma 4 colori
+	if _is_test_6:
+		_mode = "mode_c"   # trattata come CLASSIC ovunque; cambia solo il n. colori (4)
+	_is_mode_c = _mode == "mode_c" or _is_speedrun or _is_test
+	_fall_speed_mult = 1.4 if _is_test else (1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.5 if _is_speedrun else 1.0))
+	# TEST: cascate un filo più veloci (meno attesa tra le combo)
+	if _is_test:
+		var _dtimer := get_parent().get_node_or_null("DestroyTimer") as Timer
+		if _dtimer:
+			_dtimer.wait_time = 0.45
 	_moves_enabled = _mode != "mode_b" and not _is_mode_c
 	_swap_costs_move = _mode == "mode_a"
 	# Sfondo gameplay a TUTTO SCHERMO (adattivo su iPad/schermi grandi): CanvasLayer dietro tutto.
@@ -700,14 +729,26 @@ func _restore_normal_look(piece: Node) -> void:
 # =========================================================
 # 3) Match detection
 # =========================================================
+# Colore ai fini del MATCH. In modalità TEST le abilità (mooves>0) sono INERTI:
+# non hanno colore, quindi non formano mai match (si attivano solo con lo swap).
+func _match_color(p) -> String:
+	if p == null:
+		return "@none@"
+	# TEST: solo le BOMBE (mooves>=3) sono senza colore (inerti al match). Le frecce (1/2)
+	# restano colorate e si attivano col match come prima.
+	if _is_test and _get_piece_mooves(p) >= 3:
+		return "@ability@"
+	var c = p.get("color")
+	return str(c) if c != null else "@none@"
+
 func match_at(i: int, j: int, color) -> bool:
 	if i > 1:
 		if all_pieces[i - 1][j] != null and all_pieces[i - 2][j] != null:
-			if all_pieces[i - 1][j].color == color and all_pieces[i - 2][j].color == color:
+			if _match_color(all_pieces[i - 1][j]) == color and _match_color(all_pieces[i - 2][j]) == color:
 				return true
 	if j > 1:
 		if all_pieces[i][j - 1] != null and all_pieces[i][j - 2] != null:
-			if all_pieces[i][j - 1].color == color and all_pieces[i][j - 2].color == color:
+			if _match_color(all_pieces[i][j - 1]) == color and _match_color(all_pieces[i][j - 2]) == color:
 				return true
 	return false
 
@@ -716,11 +757,13 @@ func find_matches() -> bool:
 	for i in width:
 		for j in height:
 			if all_pieces[i][j] != null:
-				var current_color = all_pieces[i][j].color
+				var current_color = _match_color(all_pieces[i][j])
+				if current_color == "@ability@" or current_color == "@none@":
+					continue
 				# orizzontale
 				if i > 0 and i < width - 1:
 					if all_pieces[i - 1][j] != null and all_pieces[i + 1][j] != null:
-						if all_pieces[i - 1][j].color == current_color and all_pieces[i + 1][j].color == current_color:
+						if _match_color(all_pieces[i - 1][j]) == current_color and _match_color(all_pieces[i + 1][j]) == current_color:
 							all_pieces[i - 1][j].matched = true
 							all_pieces[i - 1][j].dim()
 							all_pieces[i][j].matched = true
@@ -731,7 +774,7 @@ func find_matches() -> bool:
 				# verticale
 				if j > 0 and j < height - 1:
 					if all_pieces[i][j - 1] != null and all_pieces[i][j + 1] != null:
-						if all_pieces[i][j - 1].color == current_color and all_pieces[i][j + 1].color == current_color:
+						if _match_color(all_pieces[i][j - 1]) == current_color and _match_color(all_pieces[i][j + 1]) == current_color:
 							all_pieces[i][j - 1].matched = true
 							all_pieces[i][j - 1].dim()
 							all_pieces[i][j].matched = true
@@ -1216,6 +1259,26 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 	all_pieces[nx][ny] = first_piece
 	first_piece.move(grid_to_pixel(nx, ny))
 	other_piece.move(grid_to_pixel(column, row))
+
+	# MODALITÀ TEST: se lo swap coinvolge un'ABILITÀ, si attiva SUBITO (senza match di colore)
+	# nella sua nuova posizione — stile Candy Crush. first_piece è ora a (nx,ny), other a (column,row).
+	if _is_test:
+		# solo le BOMBE (mooves>=3) esplodono con lo swap; le frecce seguono il match normale
+		var mv1 := _get_piece_mooves(first_piece)
+		var mv2 := _get_piece_mooves(other_piece)
+		if mv1 >= 3 or mv2 >= 3:
+			_combo_count = 0
+			_find_wave = 0
+			_combo_matches = 0
+			_last_combo_shown = 0
+			if mv1 >= 3:
+				first_piece.matched = true
+			if mv2 >= 3:
+				other_piece.matched = true
+			is_resolving = true
+			# esplode SUBITO (snappy), non aspetta il tempo pieno del DestroyTimer
+			get_tree().create_timer(0.08).timeout.connect(_on_destroy_timer_timeout)
+			return
 
 	# Verifica match
 	_combo_count = 0
@@ -2360,6 +2423,13 @@ func _combo_refill_bias() -> float:
 	var t := float(difficulty_level) / float(max_difficulty_level)
 	# Mode C: combo ancora più frequenti (obiettivo: una combo ogni 1-2 azioni).
 	if _is_mode_c:
+		if _is_test:
+			# TEST: combo FACILISSIME e continue (super dinamica, tanta dopamina).
+			# Bias molto alto e falloff quasi assente -> catene lunghe, escalation combo.
+			var bt := lerpf(0.90, 0.82, t)
+			if _last_combo_shown >= 12:
+				bt *= 0.7
+			return bt
 		if _is_speedrun:
 			# SPEEDRUN: le combo NON sono automatiche. Cadenza: si "alimentano" solo ~1
 			# piazzamento su 3 (non ogni mossa); nelle altre mosse quasi zero bias.
@@ -2427,6 +2497,8 @@ func _build_mode_c_pools() -> void:
 # SPEEDRUN: pochi colori all'inizio (tantissimi match) — basato sul TEMPO trascorso:
 # solo 3 colori per i primi 3 minuti, poi cresce lentamente (+1 ogni ~40s) fino a 6.
 func _mode_c_active_count() -> int:
+	if _is_test or _is_test_6:
+		return 4        # TEST / TEST 6: solo 4 colori
 	if _is_speedrun:
 		var elapsed := 300.0 - _speedrun_time_left   # secondi giocati
 		if elapsed < 60.0:
@@ -2441,6 +2513,13 @@ func _mode_c_active_count() -> int:
 
 # Sceglie un cubo NORMALE. In Mode C solo tra i colori attivi (progressione).
 func _pick_normal_piece() -> PackedScene:
+	if _is_test:
+		# bombe (senza colore) RARISSIME di base, ma più probabili se la board si riempie:
+		# aiutano a liberare spazio senza svuotarla da sola (si può comunque perdere).
+		var fullness := float(_count_occupied()) / float(width * height)
+		var bombp := lerpf(0.003, 0.035, clampf((fullness - 0.70) / 0.30, 0.0, 1.0))
+		if randf() < bombp:
+			return _pick_test_ability()
 	if _is_mode_c and not _mc_normal_scenes.is_empty():
 		var n: int = mini(_mc_active_count, _mc_normal_scenes.size())
 		return _mc_normal_scenes[randi() % n]
@@ -2452,6 +2531,16 @@ func _pick_normal_piece() -> PackedScene:
 func _pick_plus_scene() -> PackedScene:
 	if _plus_pool[1].is_empty():
 		_build_plus_pools()
+	if _is_test:
+		# TEST: i cubi-bonus COLORATI sono SOLO frecce (V/O) e si attivano col match di colore
+		# (come prima). Le bombe sono separate: senza colore, attivate dallo swap.
+		var vt := 1 if randf() < 0.5 else 2
+		if not _mc_plus_by_color.is_empty():
+			var nn: int = mini(_mc_active_count, MODE_C_COLOR_ORDER.size())
+			var col: String = MODE_C_COLOR_ORDER[randi() % nn]
+			if _mc_plus_by_color.has(col) and _mc_plus_by_color[col].has(vt):
+				return _mc_plus_by_color[col][vt]
+		return _plus_pool[vt].pick_random()
 	var w1: float
 	var w2: float
 	if _is_mode_c:
@@ -2781,6 +2870,14 @@ func _preload_common_combos() -> void:
 # Effetto COMBO a schermo intero: cornice sui 4 lati, adattata a OGNI dispositivo.
 # Sta su una CanvasLayer (spazio-schermo, indipendente da camera/risoluzione) e viene
 # scalato in modo NON uniforme così tocca esattamente tutti e 4 i bordi.
+# TEST: le combo ACCELERANO col livello (combo 1 normale, 2 più veloce, ... 10 velocissima)
+# per creare un'escalation di dopamina. Nelle altre modalità nessun cambiamento (1.0).
+func _combo_speed_factor(level: int) -> float:
+	if not _is_test:
+		return 1.0
+	return clampf(1.0 + float(level - 1) * 0.13, 1.0, 2.2)
+
+
 func _show_combo_fullscreen(level: int) -> void:
 	var fx: SpriteFrames = _get_combo_fx(level)
 	if fx == null or fx.get_frame_count("c") == 0:
@@ -2802,7 +2899,7 @@ func _show_combo_fullscreen(level: int) -> void:
 	asp.centered = true
 	asp.position = view * 0.5
 	asp.scale = Vector2(view.x / fw, view.y / fh)   # riempie tutti e 4 i lati
-	asp.speed_scale = 0.85
+	asp.speed_scale = 0.85 * _combo_speed_factor(level)
 	layer.add_child(asp)
 	asp.animation_finished.connect(layer.queue_free)
 	asp.play("c")
@@ -2821,7 +2918,7 @@ func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	asp.animation = "c"
 	asp.position = world_pos
 	asp.scale = Vector2(COMBO_EFFECT_SCALE, COMBO_EFFECT_SCALE)
-	asp.speed_scale = COMBO_SPEED
+	asp.speed_scale = COMBO_SPEED * _combo_speed_factor(anim_level)
 	asp.z_index = 200
 	add_child(asp)
 	_active_combo_num = asp
@@ -2870,7 +2967,7 @@ func _count_new_match_groups() -> int:
 # bilanciamento. Il flag "visto" (ver) si salva solo alla FINE.
 func _tutorial_should_run() -> bool:
 	# solo CLASSIC (mode_c non-speedrun); gating per VERSIONE (salvato a fine tutorial)
-	if not _is_mode_c or _is_speedrun:
+	if not _is_mode_c or _is_speedrun or _is_test or _is_test_6:
 		return false
 	if TUT_ALWAYS_TEST and OS.is_debug_build():
 		return true   # TEST (build debug): parte sempre

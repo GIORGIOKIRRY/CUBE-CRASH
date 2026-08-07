@@ -66,7 +66,83 @@ var _sfx_combo_old: Array[AudioStreamPlayer] = []   # combo VECCHI 1..5 (layer p
 
 const SFX_DIR := "res://CORE/Assets/Music&Sound/SFX/"
 
+# ---- Skin dei cubi (scelte dal Cube Deck, applicate anche in gameplay) ----
+# Per ogni colore: lista di skin {static, frames(anim distruzione/match)}.
+const CUBE_SKINS := {
+	"red": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Red/Red.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Red/Red.svg", "res://CORE/Assets/Art/Game/Cubes/Red/Red_2.svg", "res://CORE/Assets/Art/Game/Cubes/Red/Red_3.svg", "res://CORE/Assets/Art/Game/Cubes/Red/Red_4.svg", "res://CORE/Assets/Art/Game/Cubes/Red/Red_5.svg", "res://CORE/Assets/Art/Game/Cubes/Red/Red_6.svg", "res://CORE/Assets/Art/Game/Cubes/Red/Red_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/RedSkin2/red2_6.png"]},
+	],
+	"blue": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg", "res://CORE/Assets/Art/Game/Cubes/Blue/Blue_2.svg", "res://CORE/Assets/Art/Game/Cubes/Blue/Blue_3.svg", "res://CORE/Assets/Art/Game/Cubes/Blue/Blue_4.svg", "res://CORE/Assets/Art/Game/Cubes/Blue/Blue_5.svg", "res://CORE/Assets/Art/Game/Cubes/Blue/Blue_6.svg", "res://CORE/Assets/Art/Game/Cubes/Blue/Blue_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/BlueSkin2/blue2_6.png"]},
+	],
+	"green": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Green/Green.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Green/Green.svg", "res://CORE/Assets/Art/Game/Cubes/Green/Green_2.svg", "res://CORE/Assets/Art/Game/Cubes/Green/Green_3.svg", "res://CORE/Assets/Art/Game/Cubes/Green/Green_4.svg", "res://CORE/Assets/Art/Game/Cubes/Green/Green_5.svg", "res://CORE/Assets/Art/Game/Cubes/Green/Green_6.svg", "res://CORE/Assets/Art/Game/Cubes/Green/Green_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/GreenSkin2/green2_6.png"]},
+	],
+	"yellow": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow.svg", "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_2.svg", "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_3.svg", "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_4.svg", "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_5.svg", "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_6.svg", "res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/YellowSkin2/yellow2_6.png"]},
+	],
+	"orange": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Orange/Orange.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Orange/Orange.svg", "res://CORE/Assets/Art/Game/Cubes/Orange/Orange_2.svg", "res://CORE/Assets/Art/Game/Cubes/Orange/Orange_3.svg", "res://CORE/Assets/Art/Game/Cubes/Orange/Orange_4.svg", "res://CORE/Assets/Art/Game/Cubes/Orange/Orange_5.svg", "res://CORE/Assets/Art/Game/Cubes/Orange/Orange_6.svg", "res://CORE/Assets/Art/Game/Cubes/Orange/Orange_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/OrangeSkin2/orange2_6.png"]},
+	],
+	"purple": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg", "res://CORE/Assets/Art/Game/Cubes/Purple/Purple_2.svg", "res://CORE/Assets/Art/Game/Cubes/Purple/Purple_3.svg", "res://CORE/Assets/Art/Game/Cubes/Purple/Purple_4.svg", "res://CORE/Assets/Art/Game/Cubes/Purple/Purple_5.svg", "res://CORE/Assets/Art/Game/Cubes/Purple/Purple_6.svg", "res://CORE/Assets/Art/Game/Cubes/Purple/Purple_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/PurpleSkin2/purple2_6.png"]},
+	],
+	"pink": [
+		{"static": "res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg",
+		 "frames": ["res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg", "res://CORE/Assets/Art/Game/Cubes/Pink/Pink_2.svg", "res://CORE/Assets/Art/Game/Cubes/Pink/Pink_3.svg", "res://CORE/Assets/Art/Game/Cubes/Pink/Pink_4.svg", "res://CORE/Assets/Art/Game/Cubes/Pink/Pink_5.svg", "res://CORE/Assets/Art/Game/Cubes/Pink/Pink_6.svg", "res://CORE/Assets/Art/Game/Cubes/Pink/Pink_7.svg"]},
+		{"static": "res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_1.png",
+		 "frames": ["res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_1.png", "res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_2.png", "res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_3.png", "res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_4.png", "res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_5.png", "res://CORE/Assets/Art/Home/CubeInfo/PinkSkin2/pink2_6.png"]},
+	],
+}
+const SKIN_CFG := "user://cube_skins.cfg"
+var selected_skin: Dictionary = {}   # color -> indice skin
+
+func _load_skins() -> void:
+	var cf := ConfigFile.new()
+	if cf.load(SKIN_CFG) == OK and cf.has_section("skins"):
+		for k in cf.get_section_keys("skins"):
+			selected_skin[k] = int(cf.get_value("skins", k, 0))
+
+func _save_skins() -> void:
+	var cf := ConfigFile.new()
+	for k in selected_skin:
+		cf.set_value("skins", k, selected_skin[k])
+	cf.save(SKIN_CFG)
+
+func get_skin_index(color: String) -> int:
+	return int(selected_skin.get(color, 0))
+
+func get_skin(color: String) -> Dictionary:
+	var arr: Array = CUBE_SKINS.get(color, [])
+	if arr.is_empty():
+		return {}
+	return arr[clampi(get_skin_index(color), 0, arr.size() - 1)]
+
+func set_skin(color: String, idx: int) -> void:
+	selected_skin[color] = idx
+	_save_skins()
+
+
 func _ready() -> void:
+	_load_skins()
 	_setup_music_players()
 	_setup_sfx_players()
 	load_settings()

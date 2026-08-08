@@ -83,6 +83,11 @@ var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 var _is_mode_c: bool = false
 var _is_test: bool = false                   # modalità TEST: sperimentale (bombe swap, combo facili, 4 colori)
 var _is_test_6: bool = false                  # modalità TEST 6: identica alla CLASSIC ma con 4 colori
+var _is_test_7: bool = false                  # modalità TEST 7: identica alla CLASSIC ma bombe swap (in bianco/nero)
+var _bomb_swap: bool = false                  # true in CLASSIC/SPEEDRUN: le BOMBE (mooves>=3) si attivano con QUALSIASI swap (senza colore)
+var _bomb_anim: Dictionary = {}               # valore bomba (mooves) -> Array di frame dell'animazione di ESPLOSIONE (nero/b-n)
+const BOMB_ANIM_STEP := 0.05                  # durata di ogni frame dell'animazione bomba (come i blocchi normali)
+const BOMB_EXPLODE_TIME := 0.32               # attesa prima di distruggere/attivare il power-up (lascia scorrere l'animazione)
 var _fall_speed_mult: float = 1.0   # caduta leggermente più lenta nella CLASSIC (non speedrun)
 var _is_speedrun: bool = false               # gameplay mode_c + timer 5 min + input libero durante le cascate
 var _speedrun_time_left: float = 300.0       # 5 minuti
@@ -351,9 +356,14 @@ func _ready() -> void:
 	_is_speedrun = _mode == "speedrun"
 	_is_test = _mode == "test"                        # test = sperimentale (bombe swap, ecc.)
 	_is_test_6 = _mode == "test6"                     # test6 = CLASSIC identica ma 4 colori
-	if _is_test_6:
-		_mode = "mode_c"   # trattata come CLASSIC ovunque; cambia solo il n. colori (4)
+	_is_test_7 = _mode == "test7"                     # test7 = alias storico (ora è il comportamento della CLASSIC)
+	if _is_test_6 or _is_test_7:
+		_mode = "mode_c"   # trattata come CLASSIC ovunque (bilanciamento classic)
 	_is_mode_c = _mode == "mode_c" or _is_speedrun or _is_test
+	# BOMBE (mooves>=3): si attivano con QUALSIASI swap (senza colore) e sono mostrate in
+	# BIANCO/NERO. È il comportamento DI DEFAULT di CLASSIC e SPEEDRUN (ex TEST 7). Le FRECCE
+	# (V/O) restano colorate e si attivano col match.
+	_bomb_swap = _is_mode_c
 	_fall_speed_mult = 1.4 if _is_test else (1.25 if (_mode == "mode_c" and not _is_speedrun) else (1.5 if _is_speedrun else 1.0))
 	# TEST: cascate un filo più veloci (meno attesa tra le combo)
 	if _is_test:
@@ -415,6 +425,8 @@ func _ready() -> void:
 		if set_btn:
 			set_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/settings_red.png")
 	_build_plus_pools()
+	if _bomb_swap:
+		_load_bomb_frames()
 	# colori attivi iniziali (speedrun parte da 3 = tanti match; classic da 5)
 	if _is_mode_c:
 		_mc_active_count = _mode_c_active_count()
@@ -586,6 +598,7 @@ func _spawn_checkerboard() -> void:
 				cell_active[i][j] = true
 				var piece := _random_piece_instance_avoiding_match(i, j)
 				add_child(piece)
+				_apply_bomb_bw(piece)
 				piece.position = grid_to_pixel(i, j)
 				all_pieces[i][j] = piece
 			else:
@@ -603,6 +616,7 @@ func _spawn_mode_c_start() -> void:
 				cell_active[i][j] = true
 				var piece := _random_piece_instance_avoiding_match(i, j)
 				add_child(piece)
+				_apply_bomb_bw(piece)
 				piece.position = grid_to_pixel(i, j)
 				all_pieces[i][j] = piece
 			else:
@@ -662,12 +676,15 @@ func _bottom_slot_pixel(slot_idx: int) -> Vector2:
 	var start_x = grid_center_x - bottom_spacing_px
 	return Vector2(start_x + slot_idx * bottom_spacing_px, y_start + bottom_y_offset_pixels)
 
-# Sceglie il blocco per uno slot del tray in basso. Mode C: raramente uno speciale
-# (V/O/BOMBA) così piazzarlo e matcharlo dà un vantaggio (colonna/riga/3x3).
+# Sceglie il blocco per uno slot del tray in basso.
 func _pick_bottom_piece() -> PackedScene:
-	# i 3 blocchi del tray in basso sono SEMPRE normali: nessuno speciale (in tutte le mode).
-	# Gli speciali compaiono solo sulla board (refill), scalati con pienezza/angoli.
-	return _pick_normal_piece()
+	# Il tray in basso è SEMPRE un cubo NORMALE colorato: MAI bombe o abilità (frecce/X/angoli),
+	# in NESSUNA modalità. Sceglie direttamente tra i cubi normali (evita del tutto i rami
+	# speciali di _pick_normal_piece). Gli speciali compaiono solo sulla board (refill).
+	if _is_mode_c and not _mc_normal_scenes.is_empty():
+		var n: int = mini(_mc_active_count, _mc_normal_scenes.size())
+		return _mc_normal_scenes[randi() % n]
+	return possible_pieces.pick_random()
 
 func _spawn_bottom_pieces() -> void:
 	for s in range(3):
@@ -726,6 +743,63 @@ func _restore_normal_look(piece: Node) -> void:
 	if spr and piece.has_meta("normal_tex"):
 		spr.texture = piece.get_meta("normal_tex")
 
+# Carica (una volta) i frame delle animazioni delle BOMBE (idle nero/b-n):
+# val 3 = normale (3x3), val 4 = X, val 5 = ANGOLI.
+func _load_bomb_frames() -> void:
+	if not _bomb_anim.is_empty():
+		return
+	_bomb_anim[3] = _load_frame_seq("res://CORE/Assets/Art/Game/Cubes/_PLUS/Bomb/bomb_%d.png")
+	_bomb_anim[4] = _load_frame_seq("res://CORE/Assets/Art/Game/Cubes/_XBOMB/Anim/xbomb_%d.png")
+	_bomb_anim[5] = _load_frame_seq("res://CORE/Assets/Art/Game/Cubes/_ANGLES/Anim/angles_%d.png")
+
+func _load_frame_seq(fmt: String) -> Array:
+	var frames: Array = []
+	for i in range(1, 7):
+		var p: String = fmt % i
+		if ResourceLoader.exists(p):
+			frames.append(load(p))
+	return frames
+
+# CLASSIC / SPEEDRUN: le BOMBE (mooves>=3) si attivano indipendentemente dal colore (swap).
+# Tutte e 3 (val 3 normale, val 4 X, val 5 ANGOLI) hanno una grafica ANIMATA dedicata
+# (nera/b-n) in loop. Fallback shader grigio solo se mancassero i frame.
+# Le frecce V/O restano colorate (seguono il match) e non passano di qui.
+func _apply_bomb_bw(piece: Node) -> void:
+	if piece == null or not _bomb_swap:
+		return
+	var mv := _get_piece_mooves(piece)
+	if mv < 3:
+		return
+	var spr := piece.get_node_or_null("Sprite2D") as Sprite2D
+	if spr == null:
+		return
+	var frames: Array = _bomb_anim.get(mv, [])
+	if frames.is_empty():
+		spr.material = _tut_gray_material()   # senza frame: desatura a bianco/nero (fallback)
+		return
+	# A RIPOSO: solo il PRIMO frame (statico); niente shader (la grafica è già nera).
+	# Pixel-art -> filtro NEAREST.
+	spr.material = null
+	spr.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	spr.texture = frames[0]
+	# ESPLOSIONE: costruisce l'animazione "match" con TUTTI i frame, esattamente come i cubi
+	# normali (piece.gd _apply_skin). Verrà riprodotta da dim() quando la bomba si attiva.
+	var player := piece.get_node_or_null("AnimationPlayer") as AnimationPlayer
+	if player == null:
+		return
+	var anim := Animation.new()
+	var tr := anim.add_track(Animation.TYPE_VALUE)
+	anim.track_set_path(tr, "Sprite2D:texture")
+	anim.value_track_set_update_mode(tr, Animation.UPDATE_DISCRETE)
+	for i in frames.size():
+		anim.track_insert_key(tr, float(i) * BOMB_ANIM_STEP, frames[i])
+	anim.length = float(frames.size()) * BOMB_ANIM_STEP
+	var lib := player.get_animation_library("")
+	if lib:
+		if lib.has_animation("match"):
+			lib.remove_animation("match")
+		lib.add_animation("match", anim)
+
 # =========================================================
 # 3) Match detection
 # =========================================================
@@ -734,9 +808,9 @@ func _restore_normal_look(piece: Node) -> void:
 func _match_color(p) -> String:
 	if p == null:
 		return "@none@"
-	# TEST: solo le BOMBE (mooves>=3) sono senza colore (inerti al match). Le frecce (1/2)
+	# TEST / TEST 7: solo le BOMBE (mooves>=3) sono senza colore (inerti al match). Le frecce (1/2)
 	# restano colorate e si attivano col match come prima.
-	if _is_test and _get_piece_mooves(p) >= 3:
+	if _bomb_swap and _get_piece_mooves(p) >= 3:
 		return "@ability@"
 	var c = p.get("color")
 	return str(c) if c != null else "@none@"
@@ -1105,6 +1179,7 @@ func _refill_column_active(x: int) -> void:
 			else:
 				piece = _spawn_plus_or_normal(_effective_plus_prob()).instantiate()
 			add_child(piece)
+			_apply_bomb_bw(piece)
 			var spawn_row := height + spawn_rows_above + count
 			piece.position = grid_to_pixel(x, spawn_row)
 			all_pieces[x][y] = piece
@@ -1222,6 +1297,7 @@ func _refill_destroyed_cells_random(destroyed_cells: Array) -> void:
 				if randf() > empty_refill_probability:
 					var piece = _spawn_plus_or_normal(_effective_plus_prob()).instantiate()
 					add_child(piece)
+					_apply_bomb_bw(piece)
 
 					var spawn_px := grid_to_pixel(x, spawn_row)
 					var target_px := grid_to_pixel(x, y)
@@ -1260,9 +1336,9 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 	first_piece.move(grid_to_pixel(nx, ny))
 	other_piece.move(grid_to_pixel(column, row))
 
-	# MODALITÀ TEST: se lo swap coinvolge un'ABILITÀ, si attiva SUBITO (senza match di colore)
+	# MODALITÀ TEST / TEST 7: se lo swap coinvolge un'ABILITÀ, si attiva SUBITO (senza match di colore)
 	# nella sua nuova posizione — stile Candy Crush. first_piece è ora a (nx,ny), other a (column,row).
-	if _is_test:
+	if _bomb_swap:
 		# solo le BOMBE (mooves>=3) esplodono con lo swap; le frecce seguono il match normale
 		var mv1 := _get_piece_mooves(first_piece)
 		var mv2 := _get_piece_mooves(other_piece)
@@ -1273,11 +1349,13 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 			_last_combo_shown = 0
 			if mv1 >= 3:
 				first_piece.matched = true
+				first_piece.dim()        # esplode con la SUA animazione (come i blocchi)
 			if mv2 >= 3:
 				other_piece.matched = true
+				other_piece.dim()
 			is_resolving = true
-			# esplode SUBITO (snappy), non aspetta il tempo pieno del DestroyTimer
-			get_tree().create_timer(0.08).timeout.connect(_on_destroy_timer_timeout)
+			# lascia scorrere l'animazione di esplosione, poi distrugge + attiva il power-up
+			get_tree().create_timer(BOMB_EXPLODE_TIME).timeout.connect(_on_destroy_timer_timeout)
 			return
 
 	# Verifica match
@@ -2967,7 +3045,7 @@ func _count_new_match_groups() -> int:
 # bilanciamento. Il flag "visto" (ver) si salva solo alla FINE.
 func _tutorial_should_run() -> bool:
 	# solo CLASSIC (mode_c non-speedrun); gating per VERSIONE (salvato a fine tutorial)
-	if not _is_mode_c or _is_speedrun or _is_test or _is_test_6:
+	if not _is_mode_c or _is_speedrun or _is_test or _is_test_6 or _is_test_7:
 		return false
 	if TUT_ALWAYS_TEST and OS.is_debug_build():
 		return true   # TEST (build debug): parte sempre
@@ -3038,6 +3116,7 @@ func _tut_demo_step(idx: int) -> void:
 			if scene:
 				var p = scene.instantiate()
 				add_child(p)
+				_apply_bomb_bw(p)      # bombe: nuova grafica nera (primo frame statico)
 				p.position = grid_to_pixel(cells[k].x, cells[k].y)
 				p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 				_tut_decor.append(p)   # decorativo: non in all_pieces → non toccabile
@@ -3054,6 +3133,7 @@ func _tut_demo_step(idx: int) -> void:
 				all_pieces[center.x][center.y].queue_free()
 			var sp = scene.instantiate()
 			add_child(sp)
+			_apply_bomb_bw(sp)     # bombe: nuova grafica nera (primo frame statico)
 			sp.position = grid_to_pixel(center.x, center.y)
 			sp.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
 			all_pieces[center.x][center.y] = sp
@@ -3070,6 +3150,12 @@ func _tut_do_explode(center: Vector2i, val: int) -> void:
 		_spawn_special_beam(center, false, "blue")    # colonna
 	elif val == 2:
 		_spawn_special_beam(center, true, "red")       # riga
+	# la BOMBA stessa esplode con la SUA animazione (come i blocchi): la stacco dalla board
+	# così _trigger_powerup non la copre con l'esplosione bianca.
+	var bomb = all_pieces[center.x][center.y]
+	if bomb != null and is_instance_valid(bomb) and _get_piece_mooves(bomb) >= 3:
+		all_pieces[center.x][center.y] = null
+		_destroy_piece_single(bomb)
 	_trigger_powerup(center, val, [])
 
 # Riempie tutta la griglia con cubi colorati finti (solo per la demo abilità).

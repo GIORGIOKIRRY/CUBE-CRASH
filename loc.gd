@@ -120,6 +120,7 @@ const MAP := {
 	"TIPO:": "TYPE:",
 	"CLASSICO": "CLASSIC",
 	"ABILITA": "ABILITY",
+	"ESPLOSIVO": "EXPLOSIVE",
 	"SKIN": "SKINS",
 	"Rosso, quadrato e senza fronzoli. Nessun potere speciale: solo una gran voglia di essere abbinato.": "Red, square and no frills. No special powers: just a burning desire to be matched.",
 	"Arancione come un tramonto, utile come... un altro cubo. Fa numero, e lo fa benissimo.": "Orange like a sunset, useful like... another cube. It makes up the numbers, and does it perfectly.",

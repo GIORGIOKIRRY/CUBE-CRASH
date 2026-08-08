@@ -36,6 +36,7 @@ transition="*res://transition.gd"
 missions="*res://missions.gd"
 ads="*res://ads.gd"
 leaderboard="*res://leaderboard.gd"
+shop="*res://shop.gd"
 
 [display]
 

@@ -47,11 +47,11 @@ const DECK_CARDS := [
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg",     "name": "CUBO BLU",     "special": false},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg", "name": "CUBO VIOLA",   "special": false},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg",     "name": "CUBO ROSA",    "special": false},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus1.svg", "name": "FRECCIA VERT.", "special": true},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus2.svg", "name": "FRECCIA ORIZ.", "special": true},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus3.svg", "name": "BOMBA",         "special": true},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Red_xbomb.svg",    "name": "BOMBA X",       "special": true},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Red_angles.svg",  "name": "BOMBA ANGOLI",  "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus1.svg", "name": "FRECCIA VERT.", "special": true, "frame": "res://CORE/Assets/Art/Home/Deck/card_frecce.png"},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus2.svg", "name": "FRECCIA ORIZ.", "special": true, "frame": "res://CORE/Assets/Art/Home/Deck/card_frecce.png"},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Bomb/bomb_1.png",   "name": "BOMBA",         "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Anim/xbomb_1.png", "name": "BOMBA X",       "special": true},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Anim/angles_1.png", "name": "BOMBA ANGOLI",  "special": true},
 ]
 
 # Info dettagliata dei cubi (popup stile Clash Royale). Per ora SOLO il cubo rosso.
@@ -104,18 +104,18 @@ const CUBE_INFO := {
 		"desc": "Spazza via l'intera RIGA. Orizzontale e implacabile.",
 	},
 	"BOMBA": {
-		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus3.svg", "name": "BOMBA", "color_key": "",
-		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Bomb/bomb_1.png", "name": "BOMBA", "color_key": "",
+		"type": "ESPLOSIVO", "color": Color(0.98, 0.35, 0.55),
 		"desc": "Esplode e distrugge i cubi tutt'intorno (3x3). Boom!",
 	},
 	"BOMBA X": {
-		"cube": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Red_xbomb.svg", "name": "BOMBA X", "color_key": "",
-		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Anim/xbomb_1.png", "name": "BOMBA X", "color_key": "",
+		"type": "ESPLOSIVO", "color": Color(0.98, 0.35, 0.55),
 		"desc": "Esplode lungo le due diagonali, a forma di X.",
 	},
 	"BOMBA ANGOLI": {
-		"cube": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Red_angles.svg", "name": "BOMBA ANGOLI", "color_key": "",
-		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Anim/angles_1.png", "name": "BOMBA ANGOLI", "color_key": "",
+		"type": "ESPLOSIVO", "color": Color(0.98, 0.35, 0.55),
 		"desc": "Colpisce i quattro angoli dell'area. Sorpresa!",
 	},
 }
@@ -138,8 +138,6 @@ const SCREEN_ANIM_FPS := 10.0
 const MODES := [
 	{"mode": "mode_c",   "label": "CLASSIC",  "sub": "combo + bombe",         "color": Color(0.70, 0.30, 0.80)},
 	{"mode": "speedrun", "label": "SPEEDRUN", "sub": "piu punti in 5 minuti", "color": Color(0.95, 0.35, 0.15)},
-	{"mode": "test",     "label": "TEST",     "sub": "sperimentale, bombe swap", "color": Color(0.20, 0.75, 0.45)},
-	{"mode": "test6",    "label": "TEST 6",   "sub": "classica, 4 colori",       "color": Color(0.90, 0.55, 0.15)},
 ]
 
 var _background: Sprite2D
@@ -1092,8 +1090,10 @@ func _make_deck_card(c: Dictionary, cw: float, ch: float) -> Control:
 		card.modulate = Color(1, 1, 1))
 	var special: bool = c.get("special", false)
 	var frame := TextureRect.new()
-	frame.texture = load("res://CORE/Assets/Art/Home/Deck/card_special.png" if special \
+	# frame per-card opzionale (es. le FRECCE hanno una cornice dedicata); altrimenti special/classic
+	var frame_path: String = c.get("frame", "res://CORE/Assets/Art/Home/Deck/card_special.png" if special \
 		else "res://CORE/Assets/Art/Home/Deck/card_classic.png")
+	frame.texture = load(frame_path)
 	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	frame.stretch_mode = TextureRect.STRETCH_SCALE

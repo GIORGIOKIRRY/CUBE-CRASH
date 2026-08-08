@@ -338,6 +338,16 @@ func describe(m: Dictionary) -> String:
 	return "?"
 
 
+# Spende monete (per lo shop). Ritorna true se ce n'erano abbastanza.
+func spend_coins(n: int) -> bool:
+	if n <= 0:
+		return true
+	if coins < n:
+		return false
+	coins -= n
+	_save()
+	return true
+
 # --- Persistenza ---------------------------------------------------------------
 func _save() -> void:
 	var cfg := ConfigFile.new()

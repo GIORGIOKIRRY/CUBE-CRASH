@@ -8,8 +8,11 @@ const SAVE_PATH := "user://missions.dat"
 const REFRESH_SECONDS := 86400      # 24h (giornaliere)
 const WEEKLY_REFRESH_SECONDS := 604800   # 7 giorni (settimanali)
 const DATA_VERSION := 12          # bump per FORZARE un reset delle missioni una volta
-const DAILY_REWARD := 200         # ogni missione giornaliera vale 200 monete
-const WEEKLY_REWARD := 1000       # ogni missione settimanale vale 1000 monete
+# Economia (2026-08-08): free-earn ridotto così i cosmetici sono un traguardo, non regalati.
+#  Giornaliere: 150 x6 = 900/g -> ~6.300/sett.  Settimanali: 600 x6 = 3.600/sett.
+#  Totale completamento pieno ~9.900/sett (prima ~14.400). Skin 5.000 = ~mezza settimana.
+const DAILY_REWARD := 150         # ogni missione giornaliera vale 150 monete
+const WEEKLY_REWARD := 600        # ogni missione settimanale vale 600 monete
 const MONTHLY_REFRESH_SECONDS := 2592000   # 30 giorni (mensili)
 var _data_version: int = 0
 const NUM_MISSIONS := 6

@@ -65,6 +65,12 @@ const MAP := {
 	# Nav / shop
 	"SHOP": "SHOP",
 	"NEGOZIO": "SHOP",
+	"AVATAR": "AVATARS",
+	"SKIN CUBI": "CUBE SKINS",
+	"MONETE INSUFFICIENTI!": "NOT ENOUGH COINS!",
+	"NUOVO SHOP TRA": "NEW SHOP IN",
+	"ACQUISTO COMPLETATO!": "PURCHASE COMPLETE!",
+	"ACQUISTO NON RIUSCITO": "PURCHASE FAILED",
 	"monete insufficienti": "not enough coins",
 	"MONETE": "COINS",
 

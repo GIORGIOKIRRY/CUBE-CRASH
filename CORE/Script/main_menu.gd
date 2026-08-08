@@ -180,8 +180,9 @@ var _ci_video_timer: Timer
 var _ci_ok_btn: TextureButton
 var _ci_preview: TextureRect          # cubo grande in alto (preview della skin selezionata)
 var _ci_check: TextureRect            # spunta verde (spostata sulla skin selezionata)
-var _ci_skin_slots: Array = []        # [{btn, cube, data}]
+var _ci_skin_slots: Array = []        # [{btn, cube, data, owned}]
 var _ci_cur_info: Dictionary = {}     # info del cubo aperto
+var _gray_mat: ShaderMaterial = null  # shader b/n per skin non possedute
 var _play_base_pos := Vector2.ZERO           # posizione base (non premuta) per il sink idempotente
 var _play_base_scale := Vector2.ONE          # scala base del tasto play (per il rimbalzo)
 var _play_bounce_tween: Tween                 # rimbalzo periodico "invito a giocare"
@@ -217,12 +218,18 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Profile/profile_creator.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_beta.png",
 	"res://CORE/Assets/Art/Home/Profile/profile_og.png",
+	# icone acquistabili nello SHOP (sbloccabili comprandole): bomba, fungo, pinguino
+	"res://CORE/Assets/Art/Home/Shop/av_bomb.png",
+	"res://CORE/Assets/Art/Home/Shop/av_mushroom.png",
+	"res://CORE/Assets/Art/Home/Shop/av_penguin.png",
 ]
 # icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
 # Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
 # "creator"/"og" NON vengono dalle missioni: si sbloccano da remoto (approvazione
 # Creator / lista OG supporters).
 const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator", 8: "beta", 9: "og"}
+# icone sbloccabili acquistandole nello SHOP: indice in PROFILE_ICONS -> id avatar shop.
+const PROFILE_ICON_SHOP := {10: "av_bomb", 11: "av_mushroom", 12: "av_penguin"}
 const CREATOR_BIN_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
 var _profile_icon_index: int = 0     # icona attualmente scelta (salvata)
 var _profile_sel_index: int = 0      # icona selezionata nella schermata (prima di CONFERMA)
@@ -318,6 +325,14 @@ var _shop_menu: Control
 var _shop_coins_label: Label
 var _shop_items: Dictionary = {}   # id -> {kind, box, sb, lbl, price}
 var _shop_msg: Label               # messaggio "monete insufficienti"
+var _shop_bg: ColorRect
+var _shop_curtain: TextureRect     # tenda rossa in alto (adattiva)
+var _shop_title: Label             # scritta "SHOP" grande con contorno nero
+var _shop_scroll: ScrollContainer  # area scorrevole (barra nascosta)
+var _shop_timer_label: Label       # countdown "nuovo shop tra..." sotto la scritta SHOP
+var _shop_coin_bar: TextureRect
+var _shop_record_bar: TextureRect
+const SHOP := "res://CORE/Assets/Art/Home/Shop/"
 
 var _art_pos := CAMERA_CENTER
 
@@ -434,6 +449,7 @@ func _layout() -> void:
 	_position_play_button()
 	_layout_deck()
 	_layout_cubeinfo()
+	_layout_shop()
 	_position_arrows()
 	if _mode_screen:
 		_mode_screen.position = _art_to_world(SCREEN_CENTER_ART)
@@ -1287,6 +1303,7 @@ func _build_cubeinfo_content(info: Dictionary) -> void:
 	for i in skins.size():
 		var sd: Dictionary = skins[i]
 		var sx := 56.0 + float(i) * (slot + 20.0)
+		var owned := _is_skin_owned(ck, i)
 		var sb := TextureButton.new()
 		sb.texture_normal = load(CI_DIR + "skin_frame.png")
 		sb.ignore_texture_size = true
@@ -1306,7 +1323,12 @@ func _build_cubeinfo_content(info: Dictionary) -> void:
 		cu.position = Vector2(slot * 0.2, slot_h * 0.18)
 		cu.size = Vector2(slot * 0.6, slot_h * 0.55)
 		sb.add_child(cu)
-		_ci_skin_slots.append({"btn": sb, "cube": cu, "data": sd})
+		# skin NON posseduta (comprabile nello shop): b/n + lucchetto, non selezionabile
+		if not owned:
+			cu.material = _gray_material()
+			var lock := _make_lock_overlay()
+			sb.add_child(lock)
+		_ci_skin_slots.append({"btn": sb, "cube": cu, "data": sd, "owned": owned})
 	# spunta verde UNICA, sulla skin selezionata (spostabile)
 	_ci_check = TextureRect.new()
 	_ci_check.texture = load(CI_DIR + "skin_check.png")
@@ -1316,6 +1338,10 @@ func _build_cubeinfo_content(info: Dictionary) -> void:
 	_ci_check.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_ci_check.size = Vector2(58.0, 58.0)
 	var sel: int = settings.get_skin_index(ck)
+	if not _is_skin_owned(ck, sel):   # skin non più/non posseduta -> torna al default
+		sel = 0
+		if ck != "":
+			settings.set_skin(ck, 0)
 	_ci_place_check(clampi(sel, 0, maxi(skins.size() - 1, 0)))
 
 	# --- tasto OK (sporge sotto la cornice, alzato un po') ---
@@ -1327,8 +1353,29 @@ func _build_cubeinfo_content(info: Dictionary) -> void:
 
 # Selezione skin: sposta la spunta, riproduce l'animazione di distruzione della skin,
 # aggiorna la preview in alto e il cubo nel deck.
+# Skin posseduta? La skin di DEFAULT (idx 0) è sempre disponibile; le altre vanno
+# comprate nello shop (shop.owns_skin("sk_"+colore)).
+func _is_skin_owned(ck: String, idx: int) -> bool:
+	if idx <= 0:
+		return true
+	return shop.owns_skin("sk_" + ck)
+
+# ShaderMaterial grayscale (una volta) per le skin non possedute.
+func _gray_material() -> ShaderMaterial:
+	if _gray_mat != null:
+		return _gray_mat
+	var sh := Shader.new()
+	sh.code = "shader_type canvas_item;\nvoid fragment() {\n\tvec4 c = texture(TEXTURE, UV);\n\tfloat g = dot(c.rgb, vec3(0.299, 0.587, 0.114));\n\tCOLOR = vec4(vec3(g), c.a);\n}\n"
+	_gray_mat = ShaderMaterial.new()
+	_gray_mat.shader = sh
+	return _gray_mat
+
 func _ci_select_skin(idx: int) -> void:
 	if idx < 0 or idx >= _ci_skin_slots.size():
+		return
+	# skin non posseduta: non selezionabile (va comprata nello shop)
+	if not bool(_ci_skin_slots[idx].get("owned", true)):
+		settings.vibrate(20)
 		return
 	settings.button_feedback()
 	var ck: String = _ci_cur_info.get("color_key", "")
@@ -1858,6 +1905,7 @@ func _build_profile_menu() -> void:
 	_profile_frame.add_child(_profile_scroll)
 	_profile_grid = GridContainer.new()
 	_profile_grid.columns = 4
+	_profile_grid.mouse_filter = Control.MOUSE_FILTER_PASS   # non blocca il drag-scroll
 	_profile_scroll.add_child(_profile_grid)
 	for i in PROFILE_ICONS.size():
 		# icone bloccate: mostra la versione B/N finché non sono sbloccate
@@ -1866,6 +1914,7 @@ func _build_profile_menu() -> void:
 		var b := _ptbtn(tex_path, _select_profile_icon.bind(i))
 		b.disabled = locked   # bloccata: non cliccabile
 		b.clip_contents = false
+		b.mouse_filter = Control.MOUSE_FILTER_PASS   # il drag scorre, il tap seleziona
 		_profile_grid.add_child(b)
 		_profile_icon_btns.append(b)
 		# lucchetto pixel-art sopra all'icona (visibile solo se bloccata)
@@ -1921,7 +1970,7 @@ func _layout_profile() -> void:
 	_profile_name_edit.size = Vector2(nb_w * 0.9, nb_h * 0.68)
 	_profile_edit_btn.position = Vector2(nb_x + nb_w - eb_s * 0.30, row_cy - eb_s * 0.5)   # un po' più a destra
 	_profile_edit_btn.size = Vector2(eb_s, eb_s)
-	# frame selezione icone: ABBASSATO
+	# frame selezione icone (come prima)
 	var sf_w := fw * 0.88
 	var sf_h := sf_w * 1504.0 / 1856.0
 	var sf_x := (fw - sf_w) * 0.5
@@ -2112,6 +2161,9 @@ func _run_shimmer(item: Control, keys: Array) -> void:
 	tw.tween_method(setc, pale, green, 0.75).set_trans(Tween.TRANS_SINE)
 
 func _is_profile_icon_locked(i: int) -> bool:
+	# icone SHOP: bloccate finché non le compri nello shop
+	if PROFILE_ICON_SHOP.has(i):
+		return not shop.owns_avatar(str(PROFILE_ICON_SHOP[i]))
 	if not PROFILE_ICON_LOCK.has(i):
 		return false
 	return not missions.is_icon_unlocked(str(PROFILE_ICON_LOCK[i]))
@@ -3050,7 +3102,10 @@ func _make_mission_row(index: int, m: Dictionary, kind: String = "daily") -> Con
 # Animazione ricompensa ICONA: l'icona sbloccata compare grande, rimbalza e si
 # ingrandisce (con "È TUA!"), per far capire che ora è del giocatore.
 func _play_icon_reward_anim(icon_id: String) -> void:
-	var path := "res://CORE/Assets/Art/Home/Profile/profile_%s.png" % icon_id
+	_play_reward_anim("res://CORE/Assets/Art/Home/Profile/profile_%s.png" % icon_id)
+
+# Animazione "premio ottenuto" (icona che rimbalza + "È TUA!"), riusabile per missioni e shop.
+func _play_reward_anim(path: String) -> void:
 	if not ResourceLoader.exists(path):
 		return
 	var lay := CanvasLayer.new()
@@ -3291,7 +3346,8 @@ func _select_tab(tab: String, feedback: bool = true) -> void:
 		_missions_menu.visible = true
 	elif tab == "shop":
 		_shop_menu.visible = true
-		_refresh_shop()
+		_populate_shop()
+		_layout_shop()
 
 
 func _set_home_visible(v: bool) -> void:
@@ -3405,162 +3461,412 @@ func _load_fx_frames(prefix: String, count: int, fps: float) -> SpriteFrames:
 
 
 func _build_shop_menu() -> void:
+	# CanvasLayer (screen-space, come le missioni): si adatta a tutto lo schermo
+	var layer := CanvasLayer.new()
+	layer.layer = 5
+	add_child(layer)
 	_shop_menu = Control.new()
 	_shop_menu.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_shop_menu.z_index = 940
 	_shop_menu.visible = false
-	add_child(_shop_menu)
-	var bg := ColorRect.new()
-	bg.color = Color(0.09, 0.17, 0.27, 1.0)
-	bg.offset_left = -600.0
-	bg.offset_top = -600.0
-	bg.offset_right = 1400.0
-	bg.offset_bottom = 2000.0
-	_shop_menu.add_child(bg)
+	layer.add_child(_shop_menu)
+
+	# sfondo BLU pieno dello shop (#004F87, da "shop sfondo.svg" = riempimento pieno)
+	_shop_bg = ColorRect.new()
+	_shop_bg.color = Color(0.0, 79.0 / 255.0, 135.0 / 255.0, 1.0)
+	_shop_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_shop_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_shop_menu.add_child(_shop_bg)
+
+	# area SCORREVOLE (barra nascosta ma scrollabile) — sotto la tenda, fino al fondo
+	_shop_scroll = ScrollContainer.new()
+	_shop_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_shop_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_shop_scroll.clip_contents = true
+	_shop_menu.add_child(_shop_scroll)
+	var vb := VBoxContainer.new()
+	vb.name = "VB"
+	vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vb.mouse_filter = Control.MOUSE_FILTER_PASS   # lascia scorrere il drag allo ScrollContainer
+	vb.add_theme_constant_override("separation", 14)
+	_shop_scroll.add_child(vb)
+
+	# TENDA rossa in alto, attaccata al bordo alto, adattiva a tutta la larghezza
+	_shop_curtain = TextureRect.new()
+	_shop_curtain.texture = load(SHOP + "tenda_shop.png")
+	_shop_curtain.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_shop_curtain.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_shop_curtain.stretch_mode = TextureRect.STRETCH_SCALE
+	_shop_curtain.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_menu.add_child(_shop_curtain)
+
 	# contatori in alto: MONETE a destra + RECORD a sinistra (come home/missioni)
 	var scc := _make_counter(_shop_menu, COIN_TEX, COIN_X, COUNTER_Y, COIN_W, COIN_ICON_FRAC)
+	_shop_coin_bar = scc[0] as TextureRect
 	_shop_coins_label = scc[1] as Label
-	_make_record_counter(_shop_menu, RECORD_X)
-	var t := Label.new()
-	t.text = loc.t("SHOP")
-	t.add_theme_font_override("font", MODE_FONT)
-	t.add_theme_font_size_override("font_size", 62)
-	t.add_theme_color_override("font_color", Color(1, 1, 1))
-	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.offset_left = 38.0
-	t.offset_right = 538.0
-	t.offset_top = 120.0
-	t.offset_bottom = 190.0
-	_shop_menu.add_child(t)
+	var src := _make_record_counter(_shop_menu, RECORD_X)
+	_shop_record_bar = src[0] as TextureRect
+
+	# (la scritta "SHOP" è ora il PRIMO elemento scorrevole, aggiunta in _populate_shop)
 
 	# messaggio "monete insufficienti" (nascosto)
 	_shop_msg = Label.new()
 	_shop_msg.add_theme_font_override("font", MODE_FONT)
 	_shop_msg.add_theme_font_size_override("font_size", 30)
 	_shop_msg.add_theme_color_override("font_color", Color(1, 0.35, 0.35))
+	_shop_msg.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_shop_msg.add_theme_constant_override("outline_size", 6)
 	_shop_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_shop_msg.offset_left = 38.0
-	_shop_msg.offset_right = 538.0
-	_shop_msg.offset_top = 190.0
-	_shop_msg.offset_bottom = 224.0
+	_shop_msg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_shop_msg.modulate.a = 0.0
 	_shop_menu.add_child(_shop_msg)
 
-	# area scorrevole con le due sezioni
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.offset_left = 24.0
-	scroll.offset_top = 228.0
-	scroll.offset_right = 552.0
-	scroll.offset_bottom = 832.0
-	_shop_menu.add_child(scroll)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 10)
-	vb.custom_minimum_size = Vector2(528, 0)
-	scroll.add_child(vb)
+	# esiti acquisti in-app (pacchetti monete)
+	if not iap.purchase_success.is_connected(_on_iap_success):
+		iap.purchase_success.connect(_on_iap_success)
+	if not iap.purchase_failed.is_connected(_on_iap_failed):
+		iap.purchase_failed.connect(_on_iap_failed)
 
-	_shop_items.clear()
-	vb.add_child(_shop_section_label("AVATAR"))
-	vb.add_child(_shop_grid(shop.AVATARS, "avatar"))
-	vb.add_child(_shop_section_label("SKIN CUBI"))
-	vb.add_child(_shop_grid(shop.SKINS, "skin"))
-	_refresh_shop()
+	_populate_shop()
+	_layout_shop()
+
+func _on_iap_success(_index: int) -> void:
+	settings.vibrate(30)
+	_update_coin_count()
+	_flash_shop_msg("ACQUISTO COMPLETATO!")
+
+func _on_iap_failed(_index: int, reason: String) -> void:
+	settings.vibrate(60)
+	_flash_shop_msg("PROSSIMAMENTE" if reason == "unavailable" else "ACQUISTO NON RIUSCITO")
+
+# Layout responsivo dello shop (chiamato da _layout su ogni resize).
+func _layout_shop() -> void:
+	if _shop_menu == null:
+		return
+	var view := get_viewport_rect().size
+	# TENDA rossa: bordo ALTO attaccato al bordo superiore (y=0), altezza piena (aspetto 3200x1120)
+	var curtain_h := view.x * 1120.0 / 3200.0
+	if _shop_curtain:
+		_shop_curtain.position = Vector2(0, 0)
+		_shop_curtain.size = Vector2(view.x, curtain_h)
+	# contatori alla STESSA ALTEZZA della home (allineati via traslazione camera)
+	var cam_dx := view.x * 0.5 - CAMERA_CENTER.x
+	var cam_dy := view.y * 0.5 - CAMERA_CENTER.y
+	if _shop_record_bar:
+		_shop_record_bar.position = Vector2(RECORD_X + cam_dx, COUNTER_Y + cam_dy)
+	if _shop_coin_bar:
+		_shop_coin_bar.position = Vector2(COIN_X + cam_dx, COUNTER_Y + cam_dy)
+	if _shop_coins_label:
+		_shop_coins_label.position = Vector2(COIN_X + COIN_W * COIN_ICON_FRAC + cam_dx, COUNTER_Y + cam_dy)
+	var nav_h := minf(view.x, NAV_MAX_W) * (NAV_TEX.y / NAV_TEX.x)
+	# messaggio "monete insufficienti" flottante in basso (sopra la nav bar)
+	if _shop_msg:
+		_shop_msg.position = Vector2(0, view.y - nav_h - 44.0)
+		_shop_msg.size = Vector2(view.x, 30.0)
+	# area scorrevole: CLIP subito sotto la tenda (la scritta SHOP scorre come primo elemento)
+	if _shop_scroll:
+		var top := curtain_h
+		var side := view.x * 0.06
+		var bottom := view.y - nav_h * 0.72
+		_shop_scroll.position = Vector2(side, top)
+		_shop_scroll.size = Vector2(view.x - side * 2.0, maxf(120.0, bottom - top))
+		var vb := _shop_scroll.get_node_or_null("VB") as VBoxContainer
+		if vb:
+			vb.custom_minimum_size = Vector2(_shop_scroll.size.x, 0)
+
+# Linea divisoria tra le sezioni dello shop.
+func _shop_divider() -> Control:
+	var wrap := Control.new()
+	wrap.custom_minimum_size = Vector2(0, 14.0)
+	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var line := ColorRect.new()
+	line.color = Color(1, 1, 1, 0.22)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.anchor_left = 0.06
+	line.anchor_right = 0.94
+	line.anchor_top = 0.5
+	line.anchor_bottom = 0.5
+	line.offset_top = -2.0
+	line.offset_bottom = 2.0
+	wrap.add_child(line)
+	return wrap
 
 func _shop_section_label(txt: String) -> Label:
 	var l := Label.new()
-	l.text = txt
+	l.text = loc.t(txt)
 	l.add_theme_font_override("font", MODE_FONT)
-	l.add_theme_font_size_override("font_size", 40)
+	l.add_theme_font_size_override("font_size", 44)
 	l.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
-	l.custom_minimum_size = Vector2(0, 56)
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	l.add_theme_constant_override("outline_size", 8)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.custom_minimum_size = Vector2(0, 60)
 	return l
 
 func _shop_grid(items: Array, kind: String) -> GridContainer:
 	var g := GridContainer.new()
 	g.columns = 3
+	g.mouse_filter = Control.MOUSE_FILTER_PASS   # non blocca lo scorrimento
 	g.add_theme_constant_override("h_separation", 12)
-	g.add_theme_constant_override("v_separation", 12)
+	g.add_theme_constant_override("v_separation", 16)
+	# larghezza card = un terzo dell'area scorrevole (view*0.88, come _layout_shop)
+	var view := get_viewport_rect().size
+	var scroll_w := view.x * 0.88
+	var card_w := (scroll_w - 2.0 * 12.0) / 3.0
 	for item in items:
-		g.add_child(_make_shop_cell(kind, item))
+		g.add_child(_make_shop_cell(kind, item, card_w))
 	return g
 
-func _make_shop_cell(kind: String, item: Dictionary) -> Control:
+# Card acquistabile: cornice shop_frame.png + icona (avatar/skin) + prezzo con icona coin.
+func _make_shop_cell(kind: String, item: Dictionary, card_w: float) -> Control:
 	var id := str(item["id"])
-	var cell := VBoxContainer.new()
-	cell.add_theme_constant_override("separation", 4)
-	cell.custom_minimum_size = Vector2(158, 0)
-	# riquadro colorato placeholder + bottone trasparente sopra
-	var box := Panel.new()
-	box.custom_minimum_size = Vector2(150, 130)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = item["color"]
-	sb.set_corner_radius_all(18)
-	sb.border_color = Color(0, 0, 0, 0.35)
-	sb.set_border_width_all(3)
-	box.add_theme_stylebox_override("panel", sb)
-	cell.add_child(box)
+	var card_h := card_w / (832.0 / 1280.0)
+	var cell := Control.new()
+	cell.mouse_filter = Control.MOUSE_FILTER_PASS   # non blocca lo scorrimento
+	cell.custom_minimum_size = Vector2(card_w, card_h)
+	# cornice BLU per avatar/skin
+	var frame := TextureRect.new()
+	frame.texture = load(SHOP + "item_frame.png")
+	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	frame.stretch_mode = TextureRect.STRETCH_SCALE
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.position = Vector2.ZERO
+	frame.size = Vector2(card_w, card_h)
+	cell.add_child(frame)
+	# icona (avatar o skin), centrata nella parte alta
+	var icon := TextureRect.new()
+	icon.texture = load(str(item.get("icon", "")))
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ic := card_w * 0.60
+	icon.position = Vector2((card_w - ic) * 0.5, card_h * 0.12)
+	icon.size = Vector2(ic, ic)
+	cell.add_child(icon)
+	# riga prezzo: numero + icona coin, più VICINA all'icona (non a fondo card)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 4)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.position = Vector2(0, card_h * 0.58)
+	row.size = Vector2(card_w, card_h * 0.22)
+	cell.add_child(row)
+	var lbl := Label.new()
+	lbl.text = str(int(item["price"]))
+	lbl.add_theme_font_override("font", MODE_FONT)
+	lbl.add_theme_font_size_override("font_size", 30)
+	lbl.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	lbl.add_theme_constant_override("outline_size", 5)
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(lbl)
+	var coin := TextureRect.new()
+	coin.texture = load("res://CORE/Assets/Art/UI/Missions/coin_icon.png")
+	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var cs := card_w * 0.20
+	coin.custom_minimum_size = Vector2(cs, cs)
+	row.add_child(coin)
+	# bottone trasparente su tutta la card. PASS: il tap compra, ma il drag passa allo
+	# ScrollContainer (così lo scorrimento funziona anche partendo su una card).
 	var btn := Button.new()
 	btn.flat = true
-	btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn.mouse_filter = Control.MOUSE_FILTER_PASS
+	btn.position = Vector2.ZERO
+	btn.size = Vector2(card_w, card_h)
 	btn.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	btn.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	btn.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.pressed.connect(_on_shop_item.bind(kind, id))
-	box.add_child(btn)
-	# etichetta stato/prezzo
-	var lbl := Label.new()
-	lbl.add_theme_font_override("font", MODE_FONT)
-	lbl.add_theme_font_size_override("font_size", 28)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.custom_minimum_size = Vector2(150, 34)
-	cell.add_child(lbl)
-	_shop_items[id] = {"kind": kind, "sb": sb, "lbl": lbl, "price": int(item["price"])}
+	cell.add_child(btn)
 	return cell
 
-# Aggiorna testo/bordo di ogni item in base a posseduto/equipaggiato.
-func _refresh_shop() -> void:
-	for id in _shop_items:
-		var it: Dictionary = _shop_items[id]
-		var is_av: bool = it["kind"] == "avatar"
-		var owned: bool = shop.owns_avatar(id) if is_av else shop.owns_skin(id)
-		var equipped: bool = (shop.equipped_avatar == id) if is_av else (shop.equipped_skin == id)
-		var lbl: Label = it["lbl"]
-		var sb: StyleBoxFlat = it["sb"]
-		if equipped:
-			lbl.text = loc.t("IN USO")
-			lbl.add_theme_color_override("font_color", Color(0.30, 1.0, 0.45))
-			sb.border_color = Color(1, 0.84, 0.10)
-			sb.set_border_width_all(6)
-		elif owned:
-			lbl.text = loc.t("USA")
-			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-			sb.border_color = Color(1, 1, 1, 0.55)
-			sb.set_border_width_all(3)
-		else:
-			lbl.text = "%d mon." % int(it["price"])
-			lbl.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
-			sb.border_color = Color(0, 0, 0, 0.35)
-			sb.set_border_width_all(3)
+# Testo del countdown di rotazione shop ("NUOVO SHOP TRA Xh Ym").
+func _shop_timer_text() -> String:
+	var s: int = shop.seconds_until_shop_refresh()
+	return "%s %dh %02dm" % [loc.t("NUOVO SHOP TRA"), s / 3600, (s % 3600) / 60]
+
+func _process(_delta: float) -> void:
+	if _shop_menu and _shop_menu.visible and _shop_timer_label and is_instance_valid(_shop_timer_label):
+		_shop_timer_label.text = _shop_timer_text()
+
+# Ricostruisce le sezioni dello shop mostrando SOLO gli oggetti NON posseduti (quelli
+# comprati spariscono). Sezioni vuote nascoste.
+func _populate_shop() -> void:
+	if _shop_scroll == null:
+		return
+	var vb := _shop_scroll.get_node_or_null("VB") as VBoxContainer
+	if vb == null:
+		return
+	for ch in vb.get_children():
+		vb.remove_child(ch)
+		ch.queue_free()
+	# padding iniziale (piccolo): stacca appena la scritta SHOP dalla tenda
+	var top_pad := Control.new()
+	top_pad.custom_minimum_size = Vector2(0, 6.0)
+	top_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(top_pad)
+	# scritta SHOP = PRIMO elemento scorrevole (sotto la tenda, prima di AVATAR)
+	var title := Label.new()
+	title.text = loc.t("SHOP")
+	title.add_theme_font_override("font", MODE_FONT)
+	title.add_theme_font_size_override("font_size", 66)
+	title.add_theme_color_override("font_color", Color(1, 1, 1))
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	title.add_theme_constant_override("outline_size", 12)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.custom_minimum_size = Vector2(0, 74.0)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(title)
+	# timer di rotazione: sotto la scritta SHOP (aggiornato in _process)
+	_shop_timer_label = Label.new()
+	_shop_timer_label.add_theme_font_override("font", MODE_FONT)
+	_shop_timer_label.add_theme_font_size_override("font_size", 24)
+	_shop_timer_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
+	_shop_timer_label.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_shop_timer_label.add_theme_constant_override("outline_size", 5)
+	_shop_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_shop_timer_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_shop_timer_label.custom_minimum_size = Vector2(0, 30.0)
+	_shop_timer_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_timer_label.text = _shop_timer_text()
+	vb.add_child(_shop_timer_label)
+	var first_section := true
+	# AVATAR: sono solo 3, quindi sempre tutti (tolti quelli già posseduti)
+	var avatars: Array = shop.AVATARS.filter(func(it): return not shop.owns_avatar(str(it["id"])))
+	if not avatars.is_empty():
+		vb.add_child(_shop_section_label("AVATAR"))
+		vb.add_child(_shop_grid(avatars, "avatar"))
+		first_section = false
+	# SKIN CUBI: 3 skin del GIORNO (stesse per tutti, ruotano ogni 24h), tolte le possedute
+	var skins: Array = shop.daily_skins().filter(func(it): return not shop.owns_skin(str(it["id"])))
+	if not skins.is_empty():
+		if not first_section:
+			vb.add_child(_shop_divider())
+		vb.add_child(_shop_section_label("SKIN CUBI"))
+		vb.add_child(_shop_grid(skins, "skin"))
+		first_section = false
+	# sezione MONETE: pacchetti acquistabili con soldi veri (€)
+	if not first_section:
+		vb.add_child(_shop_divider())
+	vb.add_child(_shop_section_label("MONETE"))
+	vb.add_child(_coin_pack_grid())
+	# padding in fondo: l'ultima riga può scorrere BEN sopra la nav bar
+	var spacer := Control.new()
+	var nav_h := minf(get_viewport_rect().size.x, NAV_MAX_W) * (NAV_TEX.y / NAV_TEX.x)
+	spacer.custom_minimum_size = Vector2(0, nav_h + 60.0)
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(spacer)
+
+# Griglia dei pacchetti monete (3 per riga).
+func _coin_pack_grid() -> GridContainer:
+	var g := GridContainer.new()
+	g.columns = 3
+	g.mouse_filter = Control.MOUSE_FILTER_PASS
+	g.add_theme_constant_override("h_separation", 12)
+	g.add_theme_constant_override("v_separation", 16)
+	var view := get_viewport_rect().size
+	var card_w := (view.x * 0.88 - 2.0 * 12.0) / 3.0
+	for i in shop.COIN_PACKS.size():
+		g.add_child(_make_coin_pack_cell(shop.COIN_PACKS[i], card_w, i))
+	return g
+
+# Card pacchetto monete: cornice + icona coin + quantità + prezzo in €.
+func _make_coin_pack_cell(pack: Dictionary, card_w: float, index: int) -> Control:
+	var card_h := card_w / (832.0 / 1280.0)
+	var cell := Control.new()
+	cell.mouse_filter = Control.MOUSE_FILTER_PASS
+	cell.custom_minimum_size = Vector2(card_w, card_h)
+	# cornice ORO per i pacchetti monete
+	var frame := TextureRect.new()
+	frame.texture = load(SHOP + "coin_frame.png")
+	frame.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	frame.stretch_mode = TextureRect.STRETCH_SCALE
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.size = Vector2(card_w, card_h)
+	cell.add_child(frame)
+	# icona coin grande
+	var coin := TextureRect.new()
+	coin.texture = load("res://CORE/Assets/Art/UI/Missions/coin_icon.png")
+	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ic := card_w * 0.50
+	coin.position = Vector2((card_w - ic) * 0.5, card_h * 0.10)
+	coin.size = Vector2(ic, ic)
+	cell.add_child(coin)
+	# quantità monete
+	var amt := Label.new()
+	amt.text = str(int(pack["coins"]))
+	amt.add_theme_font_override("font", MODE_FONT)
+	amt.add_theme_font_size_override("font_size", 28)
+	amt.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
+	amt.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	amt.add_theme_constant_override("outline_size", 5)
+	amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	amt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	amt.position = Vector2(0, card_h * 0.52)
+	amt.size = Vector2(card_w, card_h * 0.16)
+	cell.add_child(amt)
+	# prezzo in €
+	var price := Label.new()
+	price.text = str(pack["price"])
+	price.add_theme_font_override("font", MODE_FONT)
+	price.add_theme_font_size_override("font_size", 26)
+	price.add_theme_color_override("font_color", Color(1, 1, 1))
+	price.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	price.add_theme_constant_override("outline_size", 5)
+	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	price.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	price.position = Vector2(0, card_h * 0.72)
+	price.size = Vector2(card_w, card_h * 0.16)
+	cell.add_child(price)
+	var btn := Button.new()
+	btn.flat = true
+	btn.mouse_filter = Control.MOUSE_FILTER_PASS
+	btn.size = Vector2(card_w, card_h)
+	btn.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.pressed.connect(_on_coin_pack.bind(index))
+	cell.add_child(btn)
+	return cell
+
+# Acquisto pacchetto monete via IAP (iap.gd). Il risultato arriva sui segnali dell'autoload
+# iap (collegati in _build_shop_menu): success -> monete accreditate, unavailable -> PROSSIMAMENTE.
+func _on_coin_pack(index: int) -> void:
+	settings.button_feedback()
+	iap.purchase(index)
+
+# Path dell'icona di un oggetto (per l'animazione premio all'acquisto).
+func _shop_icon(kind: String, id: String) -> String:
+	var list: Array = shop.AVATARS if kind == "avatar" else shop.SKINS
+	for it in list:
+		if str(it["id"]) == id:
+			return str(it.get("icon", ""))
+	return ""
 
 func _on_shop_item(kind: String, id: String) -> void:
 	settings.button_feedback()
 	var is_av := kind == "avatar"
-	var owned: bool = shop.owns_avatar(id) if is_av else shop.owns_skin(id)
-	if owned:
-		# posseduto → equipaggia
-		if is_av:
-			shop.equip_avatar(id)
-		else:
-			shop.equip_skin(id)
-		_refresh_shop()
-		return
-	# non posseduto → prova a comprare
 	var ok: bool = shop.buy_avatar(id) if is_av else shop.buy_skin(id)
 	if ok:
 		settings.vibrate(30)
+		if is_av:
+			shop.equip_avatar(id)   # comprato = subito equipaggiato
+		else:
+			shop.equip_skin(id)
 		_update_coin_count()
-		_refresh_shop()
+		_play_reward_anim(_shop_icon(kind, id))   # animazione "premio ottenuto" (come missioni)
+		_populate_shop()                            # l'oggetto comprato sparisce dallo shop
 	else:
 		settings.vibrate(60)
 		_flash_shop_msg("MONETE INSUFFICIENTI!")
@@ -3568,7 +3874,7 @@ func _on_shop_item(kind: String, id: String) -> void:
 func _flash_shop_msg(txt: String) -> void:
 	if _shop_msg == null:
 		return
-	_shop_msg.text = txt
+	_shop_msg.text = loc.t(txt)
 	_shop_msg.modulate.a = 1.0
 	var tw := create_tween()
 	tw.tween_interval(1.1)

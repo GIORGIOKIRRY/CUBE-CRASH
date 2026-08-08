@@ -37,6 +37,7 @@ missions="*res://missions.gd"
 ads="*res://ads.gd"
 leaderboard="*res://leaderboard.gd"
 shop="*res://shop.gd"
+iap="*res://iap.gd"
 
 [display]
 

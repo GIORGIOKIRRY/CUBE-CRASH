@@ -160,25 +160,14 @@ func _on_exit_cancel() -> void:
 func _on_exit_confirm() -> void:
 	get_tree().paused = false
 	settings.button_feedback()
-	# ADV a OGNI abbandono partita: interstitial (senza premio -> conforme alle
-	# policy AdMob). Si torna al menu solo dopo la chiusura dell'adv; se non è
-	# pronta (o su web) si va diretti al menu.
-	if ads.is_interstitial_ready():
-		ads.interstitial_closed.connect(_go_home_after_ad, CONNECT_ONE_SHOT)
-		if not ads.show_interstitial():
-			if ads.interstitial_closed.is_connected(_go_home_after_ad):
-				ads.interstitial_closed.disconnect(_go_home_after_ad)
-			_go_home_after_ad()
-		else:
-			# SICUREZZA: se per qualsiasi motivo l'adv non emette la chiusura,
-			# esci comunque dopo qualche secondo (mai restare bloccati sul gioco).
-			get_tree().create_timer(15.0).timeout.connect(_go_home_after_ad)
-	else:
-		_go_home_after_ad()
+	# NIENTE pubblicità all'abbandono partita: un interstitial innescato da un'azione
+	# di USCITA è a rischio policy AdMob (click accidentali / annuncio inatteso). Si
+	# torna direttamente al menu.
+	_go_home()
 
 var _leaving_game := false
-func _go_home_after_ad() -> void:
+func _go_home() -> void:
 	if _leaving_game:
-		return   # può arrivare sia dalla chiusura adv sia dal timer di sicurezza
+		return
 	_leaving_game = true
 	transition.change_scene("res://CORE/Scene/MainMenu.tscn")

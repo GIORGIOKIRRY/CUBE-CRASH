@@ -2187,7 +2187,7 @@ func _pop_point_label(lbl: Control) -> void:
 func _update_high_score_labels_everywhere() -> void:
 	var hs := get_node_or_null("../UI/HighScore")
 	if hs and hs is Label:
-		hs.text = "HighScore: " + str(high_score)
+		hs.text = loc.t("HighScore:") + " " + str(high_score)
 
 	# BEST SCORE del game over: DIPENDE dalla modalità (speedrun -> _speedrun_best,
 	# classic -> high_score). Altrimenti in speedrun mostrava il record classico.

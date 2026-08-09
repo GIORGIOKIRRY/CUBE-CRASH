@@ -145,4 +145,30 @@ const MAP := {
 	"TEST 6": "TEST 6",
 	"classica, 4 colori": "classic, 4 colors",
 	"OK": "OK",
+
+	# --- Ringraziamenti / OG / Creator (sottopagine More) ---
+	"Un grazie speciale a tutti gli iscritti al canale che hanno supportato questo progetto fin dal primo giorno. Avete reso possibile Cube Crash. ❤️": "A special thank you to everyone subscribed to the channel who has supported this project since day one. You made Cube Crash possible. ❤️",
+	"Vuoi il tuo nome qui? Premi il tasto e seguimi!": "Want your name here? Tap the button and follow me!",
+	"Una volta aggiunto alla lista OG sblocchi il tag [OG] accanto al nome e l'icona profilo OG esclusiva! 👑": "Once you're added to the OG list you unlock the [OG] tag next to your name and the exclusive OG profile icon! 👑",
+	"Per essere aggiunto devi seguirci: verificheremo l'iscrizione.\nInvia il tuo nome utente:": "To be added you must follow us: we'll verify it.\nSend your username:",
+	"Il tuo nome (o @instagram)": "Your name (or @instagram)",
+	"Nome inviato! ❤️": "Name sent! ❤️",
+	"Scrivi il tuo nome.": "Type your name.",
+	"Invio...": "Sending...",
+	"Riprova più tardi.": "Try again later.",
+
+	"Vuoi diventare un Content Creator ufficiale di Cube Crash?\nManda il modulo di verifica 🎬": "Want to become an official Cube Crash Content Creator?\nSend the verification form 🎬",
+	"Nome + link del tuo canale": "Name + your channel link",
+	"Per diventare Cube Crash Creator devi aver fatto almeno 3 video sul gioco. Ti accetteremo come CubeCrash Creator e otterrai un'ICONA PROFILO ESCLUSIVA! 🏆": "To become a Cube Crash Creator you must have made at least 3 videos about the game. We'll accept you as a CubeCrash Creator and you'll get an EXCLUSIVE PROFILE ICON! 🏆",
+	"Scrivi nome e canale.": "Enter name and channel.",
+	"Richiesta inviata! Ti ricontatteremo ❤️": "Request sent! We'll get back to you ❤️",
+
+	"HighScore:": "High Score:",
+
+	# --- More / sottopagine (titoli) ---
+	"NOVITÀ": "WHAT'S NEW",
+	"CREATOR": "CREATOR",
+	"THANKS": "THANKS",
+	"TERMS OF SERVICE": "TERMS OF SERVICE",
+	"PRIVACY POLICY": "PRIVACY POLICY",
 }

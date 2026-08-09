@@ -61,7 +61,9 @@ func seconds_until_shop_refresh() -> int:
 	var next := (_day_index() + 1) * 86400 + 3 * 3600
 	return maxi(0, next - int(Time.get_unix_time_from_system()))
 
-# Le 3 skin del giorno (stesse per tutti). Shuffle deterministico seed = giorno.
+# Skin del giorno: SEMPRE 3 skin COMPRABILI (non possedute), se ce ne sono almeno 3
+# nel pool restante. Shuffle deterministico per giorno; le possedute vengono escluse
+# PRIMA del taglio, così la vetrina mostra sempre 3 skin (non meno) finché disponibili.
 func daily_skins() -> Array:
 	var arr: Array = SKINS.duplicate()
 	var rng := RandomNumberGenerator.new()
@@ -69,7 +71,8 @@ func daily_skins() -> Array:
 	for i in range(arr.size() - 1, 0, -1):
 		var j := rng.randi() % (i + 1)
 		var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp
-	return arr.slice(0, mini(SKIN_DAILY_COUNT, arr.size()))
+	var avail: Array = arr.filter(func(it): return not owns_skin(str(it["id"])))
+	return avail.slice(0, mini(SKIN_DAILY_COUNT, avail.size()))
 
 func _ready() -> void:
 	_load()

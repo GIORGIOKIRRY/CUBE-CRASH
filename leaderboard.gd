@@ -3,10 +3,10 @@ extends Node
 # ============================================================
 # Autoload "leaderboard" — classifica online su Firebase
 # (Realtime Database, API REST: niente SDK, solo HTTPRequest).
-# STRUTTURA DATI: leaderboards/{mode}/{settimana}/{player_id}
+# STRUTTURA DATI: leaderboards/{mode}/{periodo_mensile}/{player_id}
 #                 -> {"name": ..., "score": ..., "icon": ...}
-# La settimana unix nel percorso rende automatico il reset
-# settimanale (stessa logica del timer nella UI).
+# Il periodo = mese di calendario (UTC) nel percorso rende automatico il
+# reset MENSILE (stessa logica del timer nella UI).
 # Se DB_URL è vuoto o non c'è rete: fetch_top() torna [] e la UI
 # ripiega sulla classifica finta di sempre.
 # ============================================================
@@ -34,8 +34,23 @@ func _load_or_create_player_id() -> void:
 		cfg.set_value("profile", "lb_id", _player_id)
 		cfg.save(PROFILE_CFG)
 
-func _week() -> int:
-	return int(Time.get_unix_time_from_system()) / 604800
+# Periodo classifica = MESE di calendario (UTC). Reset automatico all'inizio di ogni mese
+# (es. il periodo di agosto finisce/azzera a fine 31 agosto). Dura un mese.
+func _period() -> int:
+	var d := Time.get_datetime_dict_from_system(true)   # UTC
+	return int(d["year"]) * 12 + int(d["month"])
+
+# Secondi al prossimo reset (inizio del mese successivo, UTC). Per il countdown in UI.
+func seconds_until_reset() -> int:
+	var d := Time.get_datetime_dict_from_system(true)
+	var y := int(d["year"])
+	var m := int(d["month"]) + 1
+	if m > 12:
+		m = 1
+		y += 1
+	var next := Time.get_unix_time_from_datetime_dict({
+		"year": y, "month": m, "day": 1, "hour": 0, "minute": 0, "second": 0})
+	return maxi(0, int(next) - int(Time.get_unix_time_from_system()))
 
 func player_id() -> String:
 	return _player_id
@@ -64,12 +79,45 @@ func _profile() -> Dictionary:
 func remove_best(mode: String) -> void:
 	if DB_URL.is_empty() or _player_id.is_empty():
 		return
-	var url := "%s/leaderboards/%s/%d/%s.json" % [DB_URL, mode, _week(), _player_id]
+	var url := "%s/leaderboards/%s/%d/%s.json" % [DB_URL, mode, _period(), _player_id]
 	var req := HTTPRequest.new()
 	add_child(req)
 	req.request_completed.connect(func(_r, _code, _h, _b) -> void: req.queue_free())
 	if req.request(url, [], HTTPClient.METHOD_DELETE) != OK:
 		req.queue_free()
+
+# Aggiorna SUBITO nome+icona nelle classifiche (Classic + Speedrun) senza aspettare
+# la fine partita. Usato quando cambi avatar/nome nel profilo: aggiorna la voce SOLO
+# se esiste già (con uno score), così non crea entry "senza punteggio".
+func push_profile() -> void:
+	if DB_URL.is_empty() or _player_id.is_empty():
+		return
+	var p := _profile()
+	for mode in ["classic", "speedrun"]:
+		_push_profile_mode(mode, p)
+
+func _push_profile_mode(mode: String, p: Dictionary) -> void:
+	var base := "%s/leaderboards/%s/%d/%s" % [DB_URL, mode, _period(), _player_id]
+	var getreq := HTTPRequest.new()
+	add_child(getreq)
+	getreq.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+		getreq.queue_free()
+		var exists := false
+		if code == 200:
+			var v: Variant = JSON.parse_string(body.get_string_from_utf8())
+			if typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT:
+				exists = true
+		if not exists:
+			return   # nessuna voce in classifica -> niente da aggiornare (comparirà giocando)
+		var patchreq := HTTPRequest.new()
+		add_child(patchreq)
+		patchreq.request_completed.connect(func(_a, _b, _c, _d) -> void: patchreq.queue_free())
+		var payload := JSON.stringify({"name": p["name"], "icon": p["icon"]})
+		if patchreq.request(base + ".json", ["Content-Type: application/json"], HTTPClient.METHOD_PATCH, payload) != OK:
+			patchreq.queue_free())
+	if getreq.request(base + "/score.json") != OK:
+		getreq.queue_free()
+
 
 # Invia il punteggio SOLO se è più alto di quello già in classifica per questo
 # giocatore (MONOTÒNO): così una partita con punteggio inferiore NON può mai
@@ -78,7 +126,7 @@ func remove_best(mode: String) -> void:
 func submit_best(mode: String, score: int) -> void:
 	if DB_URL.is_empty() or score <= 0 or _player_id.is_empty():
 		return
-	var base := "%s/leaderboards/%s/%d/%s" % [DB_URL, mode, _week(), _player_id]
+	var base := "%s/leaderboards/%s/%d/%s" % [DB_URL, mode, _period(), _player_id]
 	var getreq := HTTPRequest.new()
 	add_child(getreq)
 	getreq.request_completed.connect(func(_r: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
@@ -161,7 +209,7 @@ func check_and_claim_name(name: String, cb: Callable) -> void:
 func fetch_top(mode: String) -> Array:
 	if DB_URL.is_empty():
 		return []
-	var url := '%s/leaderboards/%s/%d.json?orderBy="score"&limitToLast=100' % [DB_URL, mode, _week()]
+	var url := '%s/leaderboards/%s/%d.json?orderBy="score"&limitToLast=100' % [DB_URL, mode, _period()]
 	var req := HTTPRequest.new()
 	req.timeout = 6.0
 	add_child(req)

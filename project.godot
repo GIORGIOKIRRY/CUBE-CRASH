@@ -22,7 +22,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 config/name="CubeCrash"
 config/version="0.0.9"
 run/main_scene="uid://c0cubecrashload1"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/features=PackedStringArray("4.5", "Forward Plus")
 boot_splash/bg_color=Color(0.03, 0.09, 0.24, 1)
 boot_splash/image="res://CORE/Assets/Art/Loading/loading_bg.png"
 config/icon="uid://o7mxndnfjij4"
@@ -49,7 +49,7 @@ window/handheld/orientation=1
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/admob/plugin.cfg")
+enabled=PackedStringArray("res://addons/admob/plugin.cfg", "res://addons/GodotGooglePlayBilling/plugin.cfg")
 
 [file_customization]
 

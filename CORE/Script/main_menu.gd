@@ -152,6 +152,14 @@ var _play_pressed: Sprite2D
 var _play_world_center := Vector2.ZERO
 var _play_world_size := Vector2.ZERO
 var _play_pressing := false
+# indice del DITO che sta premendo ciascun tasto (-99 = nessuno; -1 = mouse). Serve a NON
+# far azzerare la pressione dal rilascio di un ALTRO dito (multi-touch / tap rapidi):
+# era il motivo per cui la Speedrun a volte "non partiva" toccando altri tasti.
+var _play_touch := -99
+var _deck_touch := -99
+var _arrow_l_touch := -99
+var _arrow_r_touch := -99
+var _starting := false   # guardia anti doppio-avvio partita
 var _deck_sprite: Sprite2D
 var _deck_world_center := Vector2.ZERO
 var _deck_world_size := Vector2.ZERO
@@ -182,6 +190,15 @@ var _ci_preview: TextureRect          # cubo grande in alto (preview della skin 
 var _ci_check: TextureRect            # spunta verde (spostata sulla skin selezionata)
 var _ci_skin_slots: Array = []        # [{btn, cube, data, owned}]
 var _ci_cur_info: Dictionary = {}     # info del cubo aperto
+# Demo "video" live (gameplay reale) nel riquadro video del Cube Info.
+# Dispatcher per tipo di cubo: match (classici) / frecce (beam V-O) / bombe (3x3, X, angoli).
+var _ci_demo: Control = null                 # container (riempie tutto il riquadro video)
+var _ci_demo_rect := Rect2()                 # area interna per disporre i cubi (con margine)
+var _ci_demo_info: Dictionary = {}           # info del cubo in demo
+var _ci_demo_kind := ""                       # match|beam_v|beam_h|bomb3x3|bombx|bombangoli
+var _ci_demo_tween: Tween = null
+var _ci_demo_running := false
+var _ci_demo_color_idx := 0                   # ciclo colori (frecce / griglie randomiche)
 var _gray_mat: ShaderMaterial = null  # shader b/n per skin non possedute
 var _play_base_pos := Vector2.ZERO           # posizione base (non premuta) per il sink idempotente
 var _play_base_scale := Vector2.ONE          # scala base del tasto play (per il rimbalzo)
@@ -329,6 +346,7 @@ var _shop_bg: ColorRect
 var _shop_curtain: TextureRect     # tenda rossa in alto (adattiva)
 var _shop_title: Label             # scritta "SHOP" grande con contorno nero
 var _shop_scroll: ScrollContainer  # area scorrevole (barra nascosta)
+var _shop_top_pad: Control         # spazio in cima allo scroll (nascosto sotto la tenda)
 var _shop_timer_label: Label       # countdown "nuovo shop tra..." sotto la scritta SHOP
 var _shop_coin_bar: TextureRect
 var _shop_record_bar: TextureRect
@@ -845,37 +863,49 @@ func _input(event: InputEvent) -> void:
 	var deck_rect := Rect2(_deck_world_center - _deck_world_size * 0.5, _deck_world_size)
 	var l_rect := Rect2(_arrow_l_center - _arrow_hit_size * 0.5, _arrow_hit_size)
 	var r_rect := Rect2(_arrow_r_center - _arrow_hit_size * 0.5, _arrow_hit_size)
+	# indice del dito (touch) o -1 per il mouse
+	var idx: int = event.index if event is InputEventScreenTouch else -1
 	if event.pressed:
-		if play_rect.has_point(world):
+		# un solo tasto per dito; se il tasto è già premuto da un altro dito, ignora
+		if play_rect.has_point(world) and _play_touch == -99:
+			_play_touch = idx
 			_play_pressing = true
 			_on_play_down()
-		elif deck_rect.has_point(world):
+		elif deck_rect.has_point(world) and _deck_touch == -99:
+			_deck_touch = idx
 			_deck_pressing = true
 			_on_deck_down()
-		elif l_rect.has_point(world):
+		elif l_rect.has_point(world) and _arrow_l_touch == -99:
+			_arrow_l_touch = idx
 			_arrow_l_pressing = true
 			_arrow_down(_arrow_l_base, _arrow_l_pressed, _arrow_l_sparkles)
-		elif r_rect.has_point(world):
+		elif r_rect.has_point(world) and _arrow_r_touch == -99:
+			_arrow_r_touch = idx
 			_arrow_r_pressing = true
 			_arrow_down(_arrow_r_base, _arrow_r_pressed, _arrow_r_sparkles)
 	else:
-		if _play_pressing:
+		# reagisci SOLO al rilascio dello STESSO dito che aveva premuto il tasto
+		if _play_pressing and idx == _play_touch:
 			_play_pressing = false
+			_play_touch = -99
 			_on_play_up()
 			if play_rect.has_point(world):
 				_on_play_pressed()
-		if _deck_pressing:
+		elif _deck_pressing and idx == _deck_touch:
 			_deck_pressing = false
+			_deck_touch = -99
 			_on_deck_up()
 			if deck_rect.has_point(world):
 				_on_deck_pressed()
-		if _arrow_l_pressing:
+		elif _arrow_l_pressing and idx == _arrow_l_touch:
 			_arrow_l_pressing = false
+			_arrow_l_touch = -99
 			_arrow_up(_arrow_l_base, _arrow_l_pressed, _arrow_l_sparkles)
 			if l_rect.has_point(world):
 				_cycle_mode(-1)
-		if _arrow_r_pressing:
+		elif _arrow_r_pressing and idx == _arrow_r_touch:
 			_arrow_r_pressing = false
+			_arrow_r_touch = -99
 			_arrow_up(_arrow_r_base, _arrow_r_pressed, _arrow_r_sparkles)
 			if r_rect.has_point(world):
 				_cycle_mode(1)
@@ -1129,6 +1159,22 @@ func _make_deck_card(c: Dictionary, cw: float, ch: float) -> Control:
 	cube.position = Vector2(cw * 0.24, ch * 0.16)   # un po' più grande e più basso
 	cube.size = Vector2(cw * 0.52, ch * 0.36)
 	card.add_child(cube)
+	# FRECCE: nella card il cubo alterna tutti i colori (come una gif di preview)
+	var cname: String = c.get("name", "")
+	if cname == "FRECCIA VERT." or cname == "FRECCIA ORIZ.":
+		var plus_n := 2 if cname == "FRECCIA ORIZ." else 1
+		var idx := {"v": 0}
+		var tmr := Timer.new()
+		tmr.wait_time = 0.5
+		tmr.one_shot = false
+		tmr.autostart = true   # parte da solo quando entra nell'albero (la card non è ancora in tree qui)
+		card.add_child(tmr)
+		tmr.timeout.connect(func() -> void:
+			if not is_instance_valid(cube):
+				return
+			idx["v"] = (idx["v"] + 1) % DEMO_COLORS.size()
+			var col: String = DEMO_COLORS[idx["v"]]
+			cube.texture = load("%s_PLUS/%s/%s_plus%d.svg" % [CUBES_DIR, col, col, plus_n]))
 	# Nome sotto: PIÙ GRANDE (bianco, contorno nero)
 	var nm := Label.new()
 	nm.text = loc.t(c["name"])
@@ -1250,6 +1296,351 @@ func _ci_texrect(tex: String, pos: Vector2, sz: Vector2, mode: int) -> TextureRe
 	return t
 
 
+# --- Demo "video" live: usa la grafica REALE del gioco (texture cubo + frame di pop) ---
+# Un cubo scende/viene trascinato in mezzo a due cubi uguali -> match -> esplosione, in loop.
+const DEMO_COLORS := ["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Pink"]
+const CUBES_DIR := "res://CORE/Assets/Art/Game/Cubes/"
+const DELETE_FRAMES := [
+	preload("res://CORE/Assets/Art/Game/Delete/delete_01.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_02.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_03.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_04.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_05.svg"),
+	preload("res://CORE/Assets/Art/Game/Delete/delete_06.svg"),
+]
+
+# Crea il container della demo (riempie TUTTO il riquadro video, come il vecchio rettangolo verde).
+func _build_ci_demo(info: Dictionary, slot_pos: Vector2, slot_size: Vector2) -> void:
+	_ci_demo = Control.new()
+	_ci_demo.position = slot_pos
+	_ci_demo.size = slot_size
+	_ci_demo.clip_contents = true
+	_ci_demo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ci_panel.add_child(_ci_demo)
+	# sfondo scuro tipo area di gioco (grande quanto il riquadro)
+	var bg := ColorRect.new()
+	bg.color = Color(0.05, 0.14, 0.20)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ci_demo.add_child(bg)
+	# area interna (margine) dove disporre i cubi, così non toccano la cornice
+	var m := Vector2(slot_size.x * 0.08, slot_size.y * 0.12)
+	_ci_demo_rect = Rect2(m, slot_size - m * 2.0)
+	_ci_demo_info = info
+	_ci_demo_kind = _ci_demo_kind_for(info)
+
+
+func _ci_demo_kind_for(info: Dictionary) -> String:
+	match info.get("name", ""):
+		"FRECCIA VERT.": return "beam_v"
+		"FRECCIA ORIZ.": return "beam_h"
+		"BOMBA": return "bomb3x3"
+		"BOMBA X": return "bombx"
+		"BOMBA ANGOLI": return "bombangoli"
+	return "match"   # tutti i classici
+
+
+# ---- helper geometria / texture ----
+func _ci_grid(cols: int, rows: int) -> Dictionary:
+	var r := _ci_demo_rect
+	var cell := minf(r.size.x / (cols + 0.3), r.size.y / (rows + 0.3))
+	var gw := cell * cols
+	var gh := cell * rows
+	var ox := r.position.x + (r.size.x - gw) * 0.5 + cell * 0.5
+	var oy := r.position.y + (r.size.y - gh) * 0.5 + cell * 0.5
+	return {"cell": cell, "cube": cell * 0.94, "ox": ox, "oy": oy}
+
+
+func _ci_cell_center(g: Dictionary, col: float, row: float) -> Vector2:
+	return Vector2(g["ox"] + col * g["cell"], g["oy"] + row * g["cell"])
+
+
+func _ci_cube_at(center: Vector2, size: float, tex: Texture2D) -> TextureRect:
+	var t := TextureRect.new()
+	t.texture = tex
+	t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	t.size = Vector2(size, size)
+	t.pivot_offset = t.size * 0.5
+	t.position = center - t.size * 0.5
+	_ci_demo.add_child(t)
+	return t
+
+
+func _ci_base_tex(color: String) -> Texture2D:
+	return load("%s%s/%s.svg" % [CUBES_DIR, color, color]) as Texture2D
+
+
+func _ci_pop_frames(color: String) -> Array:
+	var frames: Array = []
+	for i in range(2, 8):
+		var p := "%s%s/%s_%d.svg" % [CUBES_DIR, color, color, i]
+		if ResourceLoader.exists(p):
+			frames.append(load(p))
+	return frames
+
+
+# --- SKIN-AWARE: la demo usa la SKIN SELEZIONATA del colore (texture + rottura) ---
+# color = nome capitalizzato ("Red"); la skin è indicizzata per color_key minuscolo ("red").
+func _ci_skin_static(color: String) -> Texture2D:
+	var sk: Dictionary = settings.get_skin(color.to_lower())
+	var path: String = sk.get("static", "%s%s/%s.svg" % [CUBES_DIR, color, color])
+	return load(path) as Texture2D
+
+
+# Frame di rottura della skin selezionata (in gameplay è l'animazione "match" della skin).
+# Fallback ai frame base del colore se la skin non li definisce.
+func _ci_skin_frames(color: String) -> Array:
+	var sk: Dictionary = settings.get_skin(color.to_lower())
+	var paths: Array = sk.get("frames", [])
+	var out: Array = []
+	for p in paths:
+		if ResourceLoader.exists(p):
+			out.append(load(p))
+	if out.is_empty():
+		out = _ci_pop_frames(color)
+	return out
+
+
+func _ci_anim_frames(pattern: String, n: int) -> Array:
+	var frames: Array = []
+	for i in range(1, n + 1):
+		var p := pattern % i
+		if ResourceLoader.exists(p):
+			frames.append(load(p))
+	return frames
+
+
+func _ci_beam_frames(color: String) -> Array:
+	# beam per colore: SOLO i frame con contenuto (2..7, il resto è trasparente)
+	var frames: Array = []
+	for i in range(1, 9):
+		var p := "res://CORE/Assets/Art/Game/SpecialBeam/%s_%03d.png" % [color.to_lower(), i]
+		if ResourceLoader.exists(p):
+			frames.append(load(p))
+	return frames
+
+
+# Aggiunge al tween `t` la distruzione sincronizzata dei cubi: guizzo + ciclo frame (pop/delete) + dissolvenza.
+func _ci_destroy(t: Tween, cubes: Array, frames: Array) -> void:
+	# piccolo guizzo di scala (l'esplosione "sboccia")
+	t.tween_callback(func() -> void:
+		for c in cubes:
+			if is_instance_valid(c):
+				c.scale = Vector2(1.2, 1.2))
+	if not frames.is_empty():
+		for i in frames.size():
+			var idx := i
+			t.tween_callback(func() -> void:
+				for c in cubes:
+					if is_instance_valid(c):
+						c.texture = frames[idx])
+			t.tween_interval(0.05)
+	var first := true
+	for c in cubes:
+		var cc: TextureRect = c
+		var fade := t.tween_property(cc, "modulate:a", 0.0, 0.16) if first \
+			else t.parallel().tween_property(cc, "modulate:a", 0.0, 0.16)
+		fade.set_ease(Tween.EASE_IN)
+		t.parallel().tween_property(cc, "scale", Vector2(0.3, 0.3), 0.16).set_ease(Tween.EASE_IN)
+		first = false
+
+
+# ---- ciclo demo (un ciclo per volta, si riavvia da solo variando il colore) ----
+func _ci_demo_start() -> void:
+	if _ci_demo == null:
+		return
+	_ci_demo_stop()
+	_ci_demo_running = true
+	_ci_demo_color_idx = 0
+	_ci_demo_cycle()
+
+
+func _ci_demo_stop() -> void:
+	_ci_demo_running = false
+	if _ci_demo_tween and _ci_demo_tween.is_valid():
+		_ci_demo_tween.kill()
+	_ci_demo_tween = null
+
+
+func _ci_demo_next() -> void:
+	if not _ci_demo_running:
+		return
+	_ci_demo_color_idx += 1
+	_ci_demo_cycle()
+
+
+func _ci_demo_clear() -> void:
+	# rimuove i cubi ma tiene lo sfondo (primo figlio)
+	for i in range(_ci_demo.get_child_count() - 1, 0, -1):
+		var ch := _ci_demo.get_child(i)
+		_ci_demo.remove_child(ch)
+		ch.free()
+
+
+func _ci_demo_cycle() -> void:
+	if not _ci_demo_running or _ci_demo == null or not is_instance_valid(_ci_demo):
+		return
+	_ci_demo_clear()
+	var t := create_tween()
+	match _ci_demo_kind:
+		"beam_v": _ci_cycle_beam(t, false)
+		"beam_h": _ci_cycle_beam(t, true)
+		"bomb3x3": _ci_cycle_bomb(t, "3x3")
+		"bombx": _ci_cycle_bomb(t, "x")
+		"bombangoli": _ci_cycle_bomb(t, "angoli")
+		_: _ci_cycle_match(t)
+	t.tween_interval(0.55)
+	t.tween_callback(_ci_demo_next)
+	_ci_demo_tween = t
+
+
+# CLASSICI: cubo trascinato in mezzo a due dello stesso colore -> match -> pop.
+func _ci_cycle_match(t: Tween) -> void:
+	var color := _ci_color_from_path(_ci_demo_info.get("cube", ""))
+	var base := _ci_skin_static(color)
+	var pop := _ci_skin_frames(color)
+	var g := _ci_grid(3, 1)
+	var size: float = g["cube"]
+	var left := _ci_cube_at(_ci_cell_center(g, 0, 0), size, base)
+	var right := _ci_cube_at(_ci_cell_center(g, 2, 0), size, base)
+	var mid_c := _ci_cell_center(g, 1, 0)
+	var start_c := Vector2(mid_c.x, _ci_demo.size.y + size)   # sotto, clippato
+	var drop := _ci_cube_at(start_c, size, base)
+	t.tween_interval(0.4)
+	t.tween_property(drop, "position", mid_c - drop.size * 0.5, 0.5) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t.tween_property(drop, "scale", Vector2(1.12, 1.12), 0.1).set_ease(Tween.EASE_OUT)
+	t.tween_property(drop, "scale", Vector2.ONE, 0.12)
+	t.tween_interval(0.12)
+	_ci_destroy(t, [left, right, drop], pop)
+
+
+# FRECCE: griglia 5x5, freccia al centro (colore ciclato). Il beam LUNGO percorre tutta
+# la COLONNA (verticale) o RIGA (orizzontale); i cubi vicini restano.
+func _ci_cycle_beam(t: Tween, horizontal: bool) -> void:
+	var color: String = DEMO_COLORS[_ci_demo_color_idx % DEMO_COLORS.size()]
+	var plus_n := 2 if horizontal else 1
+	var arrow := load("%s_PLUS/%s/%s_plus%d.svg" % [CUBES_DIR, color, color, plus_n]) as Texture2D
+	var N := 5
+	var mid := 2
+	var g := _ci_grid(N, N)
+	var size: float = g["cube"]
+	var line: Array = []      # cubi della colonna/riga colpita
+	for row in N:
+		for col in N:
+			var on_line := (row == mid) if horizontal else (col == mid)
+			var is_center := col == mid and row == mid
+			var tex: Texture2D
+			if is_center:
+				tex = arrow
+			elif on_line:
+				tex = _ci_skin_static(color)   # la linea colpita è del colore della freccia (skin selezionata)
+			else:
+				tex = _ci_skin_static(DEMO_COLORS[(_ci_demo_color_idx + col + row * 2 + 3) % DEMO_COLORS.size()])
+			var cube := _ci_cube_at(_ci_cell_center(g, col, row), size, tex)
+			if on_line:
+				line.append(cube)
+	# beam colorato lungo TUTTA la linea (N celle), animato a frame
+	var beam := TextureRect.new()
+	beam.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	beam.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	beam.stretch_mode = TextureRect.STRETCH_SCALE
+	beam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	beam.modulate = Color(1, 1, 1, 0)
+	var line_center := _ci_cell_center(g, mid, mid)
+	beam.size = Vector2(size * 1.35, g["cell"] * N)
+	beam.pivot_offset = beam.size * 0.5
+	beam.position = line_center - beam.size * 0.5
+	if horizontal:
+		beam.rotation = PI / 2.0
+	var beam_frames := _ci_beam_frames(color)
+	if not beam_frames.is_empty():
+		beam.texture = beam_frames[0]
+	_ci_demo.add_child(beam)
+	t.tween_interval(0.45)
+	# accendi il beam e scorri i frame (2..7 = quelli con contenuto)
+	t.tween_callback(func() -> void:
+		if is_instance_valid(beam): beam.modulate.a = 1.0)
+	for i in beam_frames.size():
+		var idx := i
+		t.tween_callback(func() -> void:
+			if is_instance_valid(beam): beam.texture = beam_frames[idx])
+		t.tween_interval(0.05)
+	# i cubi della linea si ROMPONO con l'animazione match della SKIN (non il Delete delle bombe)
+	t.parallel().tween_property(beam, "modulate:a", 0.0, 0.22)
+	_ci_destroy(t, line, _ci_skin_frames(color))
+
+
+# BOMBE: griglia 5x5 di cubi + bomba al centro che esplode con la sua animazione.
+# 3x3 = area 3x3 attorno; X = diagonali complete; angoli = i 4 angoli estremi dell'area.
+func _ci_cycle_bomb(t: Tween, mode: String) -> void:
+	var N := 5
+	var mid := 2
+	var g := _ci_grid(N, N)
+	var size: float = g["cube"]
+	# cubi di contorno con colori variati (tutti tranne il centro)
+	var cells: Dictionary = {}   # "col,row" -> TextureRect
+	for row in N:
+		for col in N:
+			if col == mid and row == mid:
+				continue
+			var color: String = DEMO_COLORS[(_ci_demo_color_idx + col + row * 3) % DEMO_COLORS.size()]
+			cells["%d,%d" % [col, row]] = _ci_cube_at(_ci_cell_center(g, col, row), size, _ci_skin_static(color))
+	# bomba al centro (leggermente più grande) + frame di animazione
+	var anim: Array = []
+	match mode:
+		"3x3": anim = _ci_anim_frames("res://CORE/Assets/Art/Game/Cubes/_PLUS/Bomb/bomb_%d.png", 6)
+		"x": anim = _ci_anim_frames("res://CORE/Assets/Art/Game/Cubes/_XBOMB/Anim/xbomb_%d.png", 6)
+		"angoli": anim = _ci_anim_frames("res://CORE/Assets/Art/Game/Cubes/_ANGLES/Anim/angles_%d.png", 6)
+	var bomb := _ci_cube_at(_ci_cell_center(g, mid, mid), size * 1.08, anim[0] if not anim.is_empty() else null)
+	# quali celle vengono distrutte
+	var hit_keys: Array = []
+	match mode:
+		"3x3":
+			for r in [1, 2, 3]:
+				for c in [1, 2, 3]:
+					hit_keys.append("%d,%d" % [c, r])
+		"x":
+			for i in N:
+				hit_keys.append("%d,%d" % [i, i])          # diagonale \
+				hit_keys.append("%d,%d" % [i, N - 1 - i])  # diagonale /
+		"angoli":
+			# come nel gameplay: ogni angolo rompe 3 cubi a L
+			var w1 := N - 1
+			for corner in [
+				[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
+				[Vector2i(w1, 0), Vector2i(w1 - 1, 0), Vector2i(w1, 1)],
+				[Vector2i(0, w1), Vector2i(1, w1), Vector2i(0, w1 - 1)],
+				[Vector2i(w1, w1), Vector2i(w1 - 1, w1), Vector2i(w1, w1 - 1)],
+			]:
+				for cc in corner:
+					hit_keys.append("%d,%d" % [cc.x, cc.y])
+	var hit: Array = []
+	for k in hit_keys:
+		if cells.has(k):
+			hit.append(cells[k])
+	t.tween_interval(0.45)
+	# animazione della bomba
+	for i in anim.size():
+		var idx := i
+		t.tween_callback(func() -> void:
+			if is_instance_valid(bomb): bomb.texture = anim[idx])
+		t.tween_interval(0.07)
+	# esplosione: cubi colpiti + bomba svaniscono con il "delete"
+	_ci_destroy(t, hit + [bomb], DELETE_FRAMES)
+
+
+# Colore ("Red"/"Blue"/...) dal path della texture di un cubo classico.
+func _ci_color_from_path(path: String) -> String:
+	for col in DEMO_COLORS:
+		if String(path).find("/%s/%s" % [col, col]) != -1:
+			return col
+	return "Red"
+
+
 const CI_DIR := "res://CORE/Assets/Art/Home/CubeInfo/"
 
 func _build_cubeinfo_content(info: Dictionary) -> void:
@@ -1279,14 +1670,11 @@ func _build_cubeinfo_content(info: Dictionary) -> void:
 	var vx := (CI_PW - vw) * 0.5
 	var vy := 376.0
 	_ci_video = null
-	# verde che riempie tutto il rettangolo (il bordo sopra lo incornicia)
-	var green := ColorRect.new()
-	green.color = Color(0.16, 0.80, 0.28)
-	green.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	green.position = Vector2(vx, vy)
-	green.size = Vector2(vw, vh)
-	_ci_panel.add_child(green)
-	# bordo navy (interno trasparente) sopra il verde
+	_ci_demo = null
+	# demo live per OGNI cubo: classici = match; frecce = beam V/O (colori ciclati);
+	# bombe = 3x3 / X / angoli con le loro animazioni. Riempie tutto il riquadro video.
+	_build_ci_demo(info, Vector2(vx, vy), Vector2(vw, vh))
+	# bordo navy (interno trasparente) sopra la demo
 	_ci_texrect(CI_DIR + "video_border.png", Vector2(vx, vy), Vector2(vw, vh), TextureRect.STRETCH_SCALE)
 
 	# --- sezione skin (spunta verde sulla selezionata; tap = animazione) ---
@@ -1388,6 +1776,7 @@ func _ci_select_skin(idx: int) -> void:
 	if _ci_preview:
 		_ci_preview.texture = load(slot["data"]["static"])
 	_layout_deck()   # aggiorna il cubo nel deck dietro
+	_ci_demo_start()   # riavvia la demo con la nuova skin (texture + rottura)
 
 
 # Riproduce l'animazione di distruzione (frame) nel TextureRect, poi torna allo static.
@@ -1442,6 +1831,8 @@ func _open_cubeinfo(info: Dictionary) -> void:
 	_ci_video_idx = 0
 	if _ci_video and not _ci_video_frames.is_empty():
 		_ci_video_timer.start()
+	# demo live (cubi classici): avvia il loop gameplay
+	_ci_demo_start()
 	# pop-in dal centro
 	if _ci_anim and _ci_anim.is_valid():
 		_ci_anim.kill()
@@ -1458,6 +1849,7 @@ func _close_cubeinfo() -> void:
 		return
 	settings.button_feedback()
 	_ci_video_timer.stop()
+	_ci_demo_stop()
 	if _ci_anim and _ci_anim.is_valid():
 		_ci_anim.kill()
 	var target := _ci_panel.scale
@@ -1781,9 +2173,9 @@ func _write_profile_cfg() -> void:
 	cfg.set_value("profile", "name", _player_name)
 	cfg.set_value("profile", "icon", _profile_icon_index)
 	cfg.save(PROFILE_CFG)
-	# aggiorna nome/icona anche sulla classifica online
-	leaderboard.submit_best("classic", _player_score("classic"))
-	leaderboard.submit_best("speedrun", _player_score("speedrun"))
+	# aggiorna SUBITO nome/icona sulla classifica online (anche con 0 punti, purché
+	# il giocatore abbia già una voce): niente più attesa fino a fine partita
+	leaderboard.push_profile()
 
 
 # ======================= SCHERMATA EDIT PROFILE ================================
@@ -2443,10 +2835,8 @@ func _select_leader_tab(tab: String) -> void:
 	_populate_leader()
 
 func _leader_refresh_text() -> String:
-	# la classifica si rinnova ogni 7 giorni (settimana unix corrente)
-	var wk := 604800
-	var now := int(Time.get_unix_time_from_system())
-	var left := wk - (now % wk)
+	# la classifica è MENSILE: si azzera all'inizio del mese successivo (fine 31 agosto, ecc.)
+	var left := leaderboard.seconds_until_reset()
 	return "Nuova classifica tra: %dg %02dh" % [left / 86400, (left % 86400) / 3600]
 
 func _layout_leader() -> void:
@@ -2490,6 +2880,8 @@ func _populate_leader() -> void:
 	# invia SEMPRE il proprio miglior punteggio online prima di leggere la classifica,
 	# così la posizione è aggiornata (prima si inviava solo al salvataggio profilo).
 	leaderboard.submit_best(mode, _player_score(mode))
+	# spingi anche nome+icona (anche con 0 punti): così gli ALTRI vedono il tuo nuovo avatar
+	leaderboard.push_profile()
 	# Classifica reale da Firebase (solo giocatori veri, niente bot).
 	var entries: Array = await leaderboard.fetch_top(mode)
 	if req != _leader_req or not is_instance_valid(_leader_list):
@@ -2582,9 +2974,11 @@ func _make_leader_row(e: Dictionary) -> Control:
 	# posizione (numero, o "100+") a sinistra
 	var rank_sz: int = 24 if e.has("rank_text") else 30
 	row.add_child(_lb_label(rank_txt, rank_sz, txt_col, Vector2(LB_ROW_W * 0.01, 0), Vector2(LB_ROW_W * 0.15, LB_ROW_H), HORIZONTAL_ALIGNMENT_CENTER))
-	# icona profilo (un po' più piccola)
+	# icona profilo (un po' più piccola). Per la PROPRIA riga uso l'icona LOCALE:
+	# così il cambio avatar si vede SUBITO in classifica, senza aspettare il server.
 	var ic := LB_ROW_H * 0.62
-	row.add_child(_miss_tex(PROFILE_ICONS[clampi(int(e["icon"]), 0, PROFILE_ICONS.size() - 1)], Vector2(LB_ROW_W * 0.16, (LB_ROW_H - ic) * 0.5), Vector2(ic, ic), true))
+	var icon_idx: int = _profile_icon_index if is_player else int(e["icon"])
+	row.add_child(_miss_tex(PROFILE_ICONS[clampi(icon_idx, 0, PROFILE_ICONS.size() - 1)], Vector2(LB_ROW_W * 0.16, (LB_ROW_H - ic) * 0.5), Vector2(ic, ic), true))
 	# nome (i Creator approvati hanno il nome verde "sbrilluccicato")
 	var nm_x := LB_ROW_W * 0.30
 	var name_lbl := _lb_label(str(e["name"]), 24, txt_col, Vector2(nm_x, 0), Vector2(LB_ROW_W * 0.34, LB_ROW_H), HORIZONTAL_ALIGNMENT_LEFT)
@@ -2725,6 +3119,9 @@ func _on_dim_input(event: InputEvent) -> void:
 
 
 func _start_mode(mode: String) -> void:
+	if _starting:
+		return
+	_starting = true
 	settings.game_mode = mode
 	settings.play_playbutton()
 	settings.vibrate(15)
@@ -3562,13 +3959,18 @@ func _layout_shop() -> void:
 	if _shop_msg:
 		_shop_msg.position = Vector2(0, view.y - nav_h - 44.0)
 		_shop_msg.size = Vector2(view.x, 30.0)
-	# area scorrevole: CLIP subito sotto la tenda (la scritta SHOP scorre come primo elemento)
+	# area scorrevole: il CLIP parte DENTRO il corpo della tenda (alzato di `overlap`), così
+	# il contenuto che scorre sparisce DIETRO la tenda e non sbuca dal bordo smerlato.
 	if _shop_scroll:
-		var top := curtain_h
+		var overlap := curtain_h * 0.22
+		var top := curtain_h - overlap
 		var side := view.x * 0.06
 		var bottom := view.y - nav_h * 0.72
 		_shop_scroll.position = Vector2(side, top)
 		_shop_scroll.size = Vector2(view.x - side * 2.0, maxf(120.0, bottom - top))
+		# il padding in cima riporta la scritta SHOP appena SOTTO il bordo visibile della tenda
+		if _shop_top_pad:
+			_shop_top_pad.custom_minimum_size = Vector2(0, overlap + 10.0)
 		var vb := _shop_scroll.get_node_or_null("VB") as VBoxContainer
 		if vb:
 			vb.custom_minimum_size = Vector2(_shop_scroll.size.x, 0)
@@ -3576,7 +3978,7 @@ func _layout_shop() -> void:
 # Linea divisoria tra le sezioni dello shop.
 func _shop_divider() -> Control:
 	var wrap := Control.new()
-	wrap.custom_minimum_size = Vector2(0, 14.0)
+	wrap.custom_minimum_size = Vector2(0, 40.0)   # più spazio tra Avatar / Skin / Monete
 	wrap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var line := ColorRect.new()
 	line.color = Color(1, 1, 1, 0.22)
@@ -3656,10 +4058,10 @@ func _make_shop_cell(kind: String, item: Dictionary, card_w: float) -> Control:
 	var lbl := Label.new()
 	lbl.text = str(int(item["price"]))
 	lbl.add_theme_font_override("font", MODE_FONT)
-	lbl.add_theme_font_size_override("font_size", 30)
+	lbl.add_theme_font_size_override("font_size", 38)
 	lbl.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
 	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	lbl.add_theme_constant_override("outline_size", 5)
+	lbl.add_theme_constant_override("outline_size", 6)
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(lbl)
 	var coin := TextureRect.new()
@@ -3667,7 +4069,7 @@ func _make_shop_cell(kind: String, item: Dictionary, card_w: float) -> Control:
 	coin.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	coin.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	coin.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	var cs := card_w * 0.20
+	var cs := card_w * 0.26
 	coin.custom_minimum_size = Vector2(cs, cs)
 	row.add_child(coin)
 	# bottone trasparente su tutta la card. PASS: il tap compra, ma il drag passa allo
@@ -3705,11 +4107,12 @@ func _populate_shop() -> void:
 	for ch in vb.get_children():
 		vb.remove_child(ch)
 		ch.queue_free()
-	# padding iniziale (piccolo): stacca appena la scritta SHOP dalla tenda
-	var top_pad := Control.new()
-	top_pad.custom_minimum_size = Vector2(0, 6.0)
-	top_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vb.add_child(top_pad)
+	# padding iniziale: tiene la scritta SHOP SOTTO il bordo della tenda; l'altezza vera
+	# la imposta _layout_shop (dipende dalla tenda), così il clip cade dietro la tenda.
+	_shop_top_pad = Control.new()
+	_shop_top_pad.custom_minimum_size = Vector2(0, 40.0)
+	_shop_top_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(_shop_top_pad)
 	# scritta SHOP = PRIMO elemento scorrevole (sotto la tenda, prima di AVATAR)
 	var title := Label.new()
 	title.text = loc.t("SHOP")
@@ -3743,8 +4146,8 @@ func _populate_shop() -> void:
 		vb.add_child(_shop_section_label("AVATAR"))
 		vb.add_child(_shop_grid(avatars, "avatar"))
 		first_section = false
-	# SKIN CUBI: 3 skin del GIORNO (stesse per tutti, ruotano ogni 24h), tolte le possedute
-	var skins: Array = shop.daily_skins().filter(func(it): return not shop.owns_skin(str(it["id"])))
+	# SKIN CUBI: SEMPRE 3 skin comprabili del giorno (daily_skins esclude già le possedute)
+	var skins: Array = shop.daily_skins()
 	if not skins.is_empty():
 		if not first_section:
 			vb.add_child(_shop_divider())
@@ -3806,10 +4209,10 @@ func _make_coin_pack_cell(pack: Dictionary, card_w: float, index: int) -> Contro
 	var amt := Label.new()
 	amt.text = str(int(pack["coins"]))
 	amt.add_theme_font_override("font", MODE_FONT)
-	amt.add_theme_font_size_override("font_size", 28)
+	amt.add_theme_font_size_override("font_size", 32)
 	amt.add_theme_color_override("font_color", Color(1, 0.84, 0.10))
 	amt.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	amt.add_theme_constant_override("outline_size", 5)
+	amt.add_theme_constant_override("outline_size", 6)
 	amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	amt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	amt.position = Vector2(0, card_h * 0.52)
@@ -3819,14 +4222,14 @@ func _make_coin_pack_cell(pack: Dictionary, card_w: float, index: int) -> Contro
 	var price := Label.new()
 	price.text = str(pack["price"])
 	price.add_theme_font_override("font", MODE_FONT)
-	price.add_theme_font_size_override("font_size", 26)
+	price.add_theme_font_size_override("font_size", 34)
 	price.add_theme_color_override("font_color", Color(1, 1, 1))
 	price.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	price.add_theme_constant_override("outline_size", 5)
+	price.add_theme_constant_override("outline_size", 6)
 	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	price.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	price.position = Vector2(0, card_h * 0.72)
-	price.size = Vector2(card_w, card_h * 0.16)
+	price.position = Vector2(0, card_h * 0.70)
+	price.size = Vector2(card_w, card_h * 0.18)
 	cell.add_child(price)
 	var btn := Button.new()
 	btn.flat = true

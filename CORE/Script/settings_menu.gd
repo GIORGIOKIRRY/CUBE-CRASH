@@ -50,7 +50,8 @@ const IG_URL := "https://www.instagram.com/cubecrashofficial/"
 const YT_URL := "https://www.youtube.com/@CubeCrashOfficial"
 const TIKTOK_URL := "https://www.tiktok.com/@cubecrashofficial?_r=1&_t=ZN-98YGDrdo8hC"
 
-const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🧪 ICONA BETA TESTER — chi gioca durante la BETA la trova già sbloccata nelle missioni: riscattala!\n🎬 DIVENTA CREATOR — manda il modulo in Impostazioni › More: se approvato ottieni l'icona Creator esclusiva e il nome VERDE brillante in classifica\n🎊 Coriandoli del NUOVO RECORD sistemati: ora partono sempre da fuori schermo\n\n🎬 NUOVA SCHERMATA DI CARICAMENTO\n🔊 Voce “Cube Crash” all'avvio + barra di caricamento pixel\n\n🧩 MODALITÀ\n💥 CLASSIC — combo un filo più frequenti, gameplay ribilanciato\n⏱️ SPEEDRUN — pochi colori all'inizio, combo più difficili da incatenare (oltre 10 = impresa), animazioni ricalibrate\n\n💣 BOMBE (3x3 · X · ANGOLI)\n🎯 Ora RARISSIME da trovare: sono un vero jolly\n\n🎯 MISSIONI\n✅ GIORNALIERE (24h) · ⭐ SETTIMANALI (7 giorni)\n🗓️ NUOVE MISSIONI MENSILI con ricompensa ICONA PROFILO:\n🎮 entra 7 giorni di fila → icona 🔥\n🏆 500.000 punti in Classic → icona 🏆\n🪙 Suoni nuovi per monete e riscossione missioni\n\n👤 PROFILO\n🖼️ Nuove icone profilo; quelle speciali si SBLOCCANO con le missioni (in B/N finché non le ottieni)\n\n🎉 NUOVO RECORD\n🎊 Pioggia di coriandoli pixelati sulla schermata record\n\n🏆 CLASSIFICA — Top 1-100 Classic e Speedrun, rinnovo settimanale\n\n📖 RINGRAZIAMENTI\n❤️ Lista supporter aggiornabile + tasto FOLLOW ME\n🔗 Social ufficiali: Instagram · YouTube · TikTok\n\n🔔 NOTIFICHE — promemoria giornalieri per non perdere le missioni\n\n🎵 SUONI — nuovi effetti per bombe, blocchi V/O, frecce\n⚙️ Le impostazioni mettono in pausa il gioco\n\n⚡ PRESTAZIONI — grafica più leggera, meno memoria, meno surriscaldamento\n🐛 Vari fix e miglioramenti\n\n🛒 Shop in arrivo!\n\n📱 Grazie per aver provato Cube Crash!"
+const PATCHNOTES_TEXT := "🎮 CUBE CRASH\nNovità di questa versione:\n\n🛒 SHOP\n🪙 Skin dei cubi, avatar e pacchetti monete\n🔄 Rotazione giornaliera — sempre 3 skin comprabili\n\n🃏 CUBE DECK\n📖 Sfoglia tutti i cubi e le abilità\n🎬 Ogni cubo ha un'ANTEPRIMA ANIMATA di come funziona in partita (match, frecce col beam, bombe 3x3 · X · ANGOLI)\n🎨 Nuove SKIN per i cubi\n\n🎓 TUTORIAL GUIDATO — la prima partita ti prende per mano\n\n🏆 CLASSIFICA MENSILE — Top 1-100 Classic e Speedrun, si azzera ogni mese\n🆔 NOMI UTENTE UNICI — il tuo nome è solo tuo\n\n🧩 MODALITÀ\n💥 CLASSIC — combo un filo più frequenti, gameplay ribilanciato\n⏱️ SPEEDRUN — pochi colori all'inizio, combo più difficili da incatenare (oltre 10 = impresa)\n🔀 Le BOMBE si attivano con QUALSIASI swap (mostrate in bianco/nero) + grafiche animate\n💣 Bombe (3x3 · X · ANGOLI) RARISSIME da trovare: un vero jolly\n\n🎯 MISSIONI\n✅ GIORNALIERE (24h) · ⭐ SETTIMANALI (7 giorni) · 🗓️ MENSILI (ricompensa ICONA PROFILO)\n🎮 entra 7 giorni di fila → icona 🔥 · 🏆 500.000 punti in Classic → icona 🏆\n\n👤 PROFILO\n🏅 Tag [OG] e [CC] accanto al nome\n🌟 Icona OG esclusiva per i supporter (vedi l'anteprima nei Ringraziamenti)\n🖼️ Icone speciali sbloccabili con le missioni (in B/N finché non le ottieni)\n🎬 DIVENTA CREATOR — modulo in Impostazioni › More: se approvato, icona Creator e nome VERDE in classifica\n\n🏁 SCHERMATE FINE PARTITA rinnovate — CLASSIC · SPEEDRUN · NUOVO RECORD (con pioggia di coriandoli)\n\n🎬 Nuova schermata di caricamento + voce “Cube Crash” all'avvio\n🌍 Lingue: Italiano e Inglese\n🔔 NOTIFICHE — promemoria giornalieri per le missioni\n🎵 SUONI — nuovi effetti per bombe, frecce e monete\n⚡ PRESTAZIONI — più leggero, meno memoria, meno surriscaldamento\n🐛 Vari fix e miglioramenti\n\n📱 Grazie per aver provato Cube Crash!"
+const PATCHNOTES_TEXT_EN := "🎮 CUBE CRASH\nWhat's new in this version:\n\n🛒 SHOP\n🪙 Cube skins, avatars and coin packs\n🔄 Daily rotation — always 3 skins to buy\n\n🃏 CUBE DECK\n📖 Browse all cubes and abilities\n🎬 Each cube has an ANIMATED PREVIEW of how it works in game (match, arrows with beam, bombs 3x3 · X · CORNERS)\n🎨 New cube SKINS\n\n🎓 GUIDED TUTORIAL — your first game holds your hand\n\n🏆 MONTHLY LEADERBOARD — Top 1-100 Classic and Speedrun, resets every month\n🆔 UNIQUE USERNAMES — your name is only yours\n\n🧩 MODES\n💥 CLASSIC — slightly more frequent combos, rebalanced gameplay\n⏱️ SPEEDRUN — few colors at the start, combos harder to chain (over 10 = a feat)\n🔀 BOMBS trigger with ANY swap (shown in black/white) + animated graphics\n💣 Bombs (3x3 · X · CORNERS) VERY RARE to find: a real wildcard\n\n🎯 MISSIONS\n✅ DAILY (24h) · ⭐ WEEKLY (7 days) · 🗓️ MONTHLY (PROFILE ICON reward)\n🎮 log in 7 days in a row → 🔥 icon · 🏆 500,000 points in Classic → 🏆 icon\n\n👤 PROFILE\n🏅 [OG] and [CC] tags next to your name\n🌟 Exclusive OG icon for supporters (see the preview in Credits)\n🖼️ Special icons unlockable with missions (B/W until you earn them)\n🎬 BECOME A CREATOR — form in Settings › More: if approved, Creator icon and GREEN name on the leaderboard\n\n🏁 REVAMPED GAME OVER SCREENS — CLASSIC · SPEEDRUN · NEW RECORD (with confetti rain)\n\n🎬 New loading screen + \"Cube Crash\" voice at startup\n🌍 Languages: Italian and English\n🔔 NOTIFICATIONS — daily reminders for missions\n🎵 SOUNDS — new effects for bombs, arrows and coins\n⚡ PERFORMANCE — lighter, less memory, less overheating\n🐛 Various fixes and improvements\n\n📱 Thanks for trying Cube Crash!"
 
 const CONTACT_EMAIL := "cubecrash.game@gmail.com"
 # Link del canale (per il tasto "follow" nella pagina THANKS). Da aggiornare col vero canale.
@@ -66,6 +67,9 @@ const PENDING_URL := "https://api.npoint.io/d580adb16f1a8cd182d6"
 const CREATOR_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
 const PRIVACY_TEXT := "PRIVACY POLICY\nUltimo aggiornamento: 2026\n\nCube Crash (\"il Gioco\") rispetta la tua privacy. Questa policy spiega quali dati vengono trattati.\n\n1. DATI CHE NON RACCOGLIAMO\nNon richiediamo registrazione né account. Non raccogliamo nome reale, email, contatti o posizione. I progressi (punteggi, monete, profilo) sono salvati SOLO sul tuo dispositivo.\n\n2. CLASSIFICA ONLINE\nSe usi la classifica, vengono inviati solo il nome che scegli e il punteggio, per mostrarli nella classifica pubblica. Non sono dati identificativi.\n\n3. PUBBLICITÀ (AdMob)\nIl Gioco mostra annunci tramite Google AdMob. Google può raccogliere identificatori del dispositivo e dati d'uso per fornire annunci. Consulta la Privacy Policy di Google: https://policies.google.com/privacy\nPuoi limitare gli annunci personalizzati dalle impostazioni del dispositivo.\n\n4. MINORI\nIl Gioco è adatto a tutti. Non raccogliamo consapevolmente dati personali da minori.\n\n5. CONTATTI\nPer domande: cubecrash.game@gmail.com"
 const TERMS_TEXT := "TERMS OF SERVICE\nUltimo aggiornamento: 2026\n\nBenvenuto in Cube Crash. Usando il Gioco accetti questi termini.\n\n1. LICENZA\nTi concediamo una licenza personale, non esclusiva e non trasferibile per giocare a Cube Crash per uso personale e non commerciale.\n\n2. USO CORRETTO\nNon puoi copiare, modificare, decompilare o distribuire il Gioco, né usare cheat, bot o exploit che alterino punteggi e classifiche.\n\n3. CONTENUTI E PROGRESSI\nI progressi sono salvati sul dispositivo. Aggiornamenti o disinstallazioni possono azzerarli. Non garantiamo il recupero dei dati.\n\n4. PUBBLICITÀ E ACQUISTI\nIl Gioco può mostrare annunci di terze parti. Eventuali acquisti futuri sono soggetti alle regole dello store.\n\n5. NESSUNA GARANZIA\nIl Gioco è fornito \"così com'è\", senza garanzie. Non siamo responsabili per eventuali danni derivanti dall'uso.\n\n6. MODIFICHE\nPossiamo aggiornare questi termini; l'uso continuato implica l'accettazione.\n\n7. CONTATTI\ncubecrash.game@gmail.com"
+# Versioni EN (mostrate sui dispositivi non in italiano)
+const PRIVACY_TEXT_EN := "PRIVACY POLICY\nLast updated: 2026\n\nCube Crash (\"the Game\") respects your privacy. This policy explains what data is processed.\n\n1. DATA WE DO NOT COLLECT\nWe don't require registration or an account. We don't collect your real name, email, contacts or location. Your progress (scores, coins, profile) is stored ONLY on your device.\n\n2. ONLINE LEADERBOARD\nIf you use the leaderboard, only the name you choose and your score are sent, to display them on the public leaderboard. These are not identifying data.\n\n3. ADVERTISING (AdMob)\nThe Game shows ads via Google AdMob. Google may collect device identifiers and usage data to serve ads. See Google's Privacy Policy: https://policies.google.com/privacy\nYou can limit personalized ads in your device settings.\n\n4. CHILDREN\nThe Game is suitable for everyone. We do not knowingly collect personal data from children.\n\n5. CONTACT\nFor questions: cubecrash.game@gmail.com"
+const TERMS_TEXT_EN := "TERMS OF SERVICE\nLast updated: 2026\n\nWelcome to Cube Crash. By using the Game you accept these terms.\n\n1. LICENSE\nWe grant you a personal, non-exclusive and non-transferable license to play Cube Crash for personal, non-commercial use.\n\n2. FAIR USE\nYou may not copy, modify, decompile or distribute the Game, nor use cheats, bots or exploits that alter scores and leaderboards.\n\n3. CONTENT AND PROGRESS\nProgress is stored on your device. Updates or uninstalls may reset it. We don't guarantee data recovery.\n\n4. ADS AND PURCHASES\nThe Game may show third-party ads. Any future purchases are subject to store rules.\n\n5. NO WARRANTY\nThe Game is provided \"as is\", without warranty. We are not liable for any damages arising from its use.\n\n6. CHANGES\nWe may update these terms; continued use implies acceptance.\n\n7. CONTACT\ncubecrash.game@gmail.com"
 
 var _more_root: Control = null
 var _more_back: TextureButton = null   # freccia per tornare alla pagina 1 dei settings
@@ -414,11 +418,11 @@ func _open_creator() -> void:
 # Sotto-pagine a schermo intero
 # ==========================
 func _build_subpages() -> void:
-	_subpages["terms"] = _make_subpage("TERMS OF SERVICE", _terms_content())
-	_subpages["privacy"] = _make_subpage("PRIVACY POLICY", _privacy_content())
-	_subpages["thanks"] = _make_subpage("THANKS", _thanks_content(), THANKS_BG, BACK_THANKS)
-	_subpages["patchnotes"] = _make_subpage("NOVITÀ", _patchnotes_content())
-	_subpages["creator"] = _make_subpage("CREATOR", _creator_content())
+	_subpages["terms"] = _make_subpage(loc.t("TERMS OF SERVICE"), _terms_content())
+	_subpages["privacy"] = _make_subpage(loc.t("PRIVACY POLICY"), _privacy_content())
+	_subpages["thanks"] = _make_subpage(loc.t("THANKS"), _thanks_content(), THANKS_BG, BACK_THANKS)
+	_subpages["patchnotes"] = _make_subpage(loc.t("NOVITÀ"), _patchnotes_content())
+	_subpages["creator"] = _make_subpage(loc.t("CREATOR"), _creator_content())
 
 func _show_subpage(name: String) -> void:
 	for k in _subpages:
@@ -456,7 +460,7 @@ func _patchnotes_content() -> Control:
 	scroll.clip_contents = true
 	scroll.size = Vector2(496, 640)
 	var lbl := Label.new()
-	lbl.text = PATCHNOTES_TEXT
+	lbl.text = PATCHNOTES_TEXT if loc.is_italian() else PATCHNOTES_TEXT_EN
 	lbl.add_theme_font_override("font", _pixel_emoji_font())
 	lbl.add_theme_font_size_override("font_size", 28)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -471,7 +475,7 @@ func _creator_content() -> Control:
 	vb.add_theme_constant_override("separation", 14)
 	var cw := 528.0
 
-	var q := _make_text("Vuoi diventare un Content Creator ufficiale di Cube Crash?\nManda il modulo di verifica 🎬", Color(1, 1, 1), 28)
+	var q := _make_text(loc.t("Vuoi diventare un Content Creator ufficiale di Cube Crash?\nManda il modulo di verifica 🎬"), Color(1, 1, 1), 28)
 	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	q.add_theme_font_override("font", _pixel_emoji_font())
 	q.custom_minimum_size = Vector2(cw, 0)
@@ -503,7 +507,7 @@ func _creator_content() -> Control:
 	nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_wrap.add_child(nb)
 	var inp := LineEdit.new()
-	inp.placeholder_text = "Nome + link del tuo canale"
+	inp.placeholder_text = loc.t("Nome + link del tuo canale")
 	inp.max_length = 80
 	inp.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inp.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -545,7 +549,7 @@ func _creator_content() -> Control:
 	_creator_status = status
 
 	# requisiti
-	var req := _make_text("Per diventare Cube Crash Creator devi aver fatto almeno 3 video sul gioco. Ti accetteremo come CubeCrash Creator e otterrai un'ICONA PROFILO ESCLUSIVA! 🏆", Color(1.0, 0.92, 0.45), 22)
+	var req := _make_text(loc.t("Per diventare Cube Crash Creator devi aver fatto almeno 3 video sul gioco. Ti accetteremo come CubeCrash Creator e otterrai un'ICONA PROFILO ESCLUSIVA! 🏆"), Color(1.0, 0.92, 0.45), 22)
 	req.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	req.add_theme_font_override("font", _pixel_emoji_font())
 	req.custom_minimum_size = Vector2(cw, 0)
@@ -570,12 +574,12 @@ func _on_creator_submit() -> void:
 		nm = _creator_input.text.strip_edges()
 	if nm.length() < 3:
 		if _creator_status:
-			_creator_status.text = "Scrivi nome e canale."
+			_creator_status.text = loc.t("Scrivi nome e canale.")
 		return
 	settings.button_feedback()
 	_creator_entry = nm
 	if _creator_status:
-		_creator_status.text = "Invio..."
+		_creator_status.text = loc.t("Invio...")
 	if _creator_btn:
 		_creator_btn.disabled = true
 	if _creator_http == null:
@@ -612,11 +616,11 @@ func _on_creator_http(_result: int, code: int, _headers: PackedStringArray, body
 			if _creator_btn:
 				_creator_btn.visible = false
 			if _creator_status:
-				_creator_status.text = "Richiesta inviata! Ti ricontatteremo ❤️"
+				_creator_status.text = loc.t("Richiesta inviata! Ti ricontatteremo ❤️")
 				_creator_status.add_theme_font_override("font", _pixel_emoji_font())
 		else:
 			if _creator_status:
-				_creator_status.text = "Errore di rete, riprova."
+				_creator_status.text = loc.t("Riprova più tardi.")
 			if _creator_btn:
 				_creator_btn.disabled = false
 
@@ -719,10 +723,10 @@ func _scrollable_text(txt: String) -> Control:
 	return scroll
 
 func _terms_content() -> Control:
-	return _scrollable_text(TERMS_TEXT)
+	return _scrollable_text(TERMS_TEXT if loc.is_italian() else TERMS_TEXT_EN)
 
 func _privacy_content() -> Control:
-	return _scrollable_text(PRIVACY_TEXT)
+	return _scrollable_text(PRIVACY_TEXT if loc.is_italian() else PRIVACY_TEXT_EN)
 
 # Applica uno stroke (outline) scuro al testo così resta leggibile sullo sfondo colorato.
 func _add_stroke(l: Label, size: int = 8) -> void:
@@ -747,7 +751,7 @@ func _thanks_content() -> Control:
 
 	# ringraziamento speciale (inglese) a tutti gli iscritti al canale
 	var msg := _make_text(
-		"A special thank you to everyone subscribed to the channel who has supported this project since day one. You made Cube Crash possible. ❤️",
+		loc.t("Un grazie speciale a tutti gli iscritti al canale che hanno supportato questo progetto fin dal primo giorno. Avete reso possibile Cube Crash. ❤️"),
 		Color(1, 1, 1), 30)
 	msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	msg.add_theme_font_override("font", _pixel_emoji_font())
@@ -757,7 +761,7 @@ func _thanks_content() -> Control:
 
 	# invito: vuoi il tuo nome qui? segui il canale
 	var invite := _make_text(
-		"Want your name here? Tap the button and follow me!",
+		loc.t("Vuoi il tuo nome qui? Premi il tasto e seguimi!"),
 		Color(1, 1, 1), 26)
 	invite.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	invite.custom_minimum_size = Vector2(cw, 0)
@@ -766,7 +770,7 @@ func _thanks_content() -> Control:
 
 	# ricompensa OG: tag [OG] + icona profilo esclusiva
 	var og_reward := _make_text(
-		"Once you're added to the OG list you unlock the [OG] tag next to your name and the exclusive OG profile icon! 👑",
+		loc.t("Una volta aggiunto alla lista OG sblocchi il tag [OG] accanto al nome e l'icona profilo OG esclusiva! 👑"),
 		Color(1.0, 0.86, 0.2), 24)
 	og_reward.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	og_reward.add_theme_font_override("font", _pixel_emoji_font())
@@ -898,7 +902,7 @@ func _build_submit_form(cw: float) -> Control:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(spacer)
 
-	var q := _make_text("To be added we'll verify that you follow us.\nSend your name:", Color(1, 1, 1), 26)
+	var q := _make_text(loc.t("Per essere aggiunto devi seguirci: verificheremo l'iscrizione.\nInvia il tuo nome utente:"), Color(1, 1, 1), 26)
 	q.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	q.custom_minimum_size = Vector2(cw, 0)
 	_add_stroke(q)
@@ -917,7 +921,7 @@ func _build_submit_form(cw: float) -> Control:
 	nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	name_wrap.add_child(nb)
 	var inp := LineEdit.new()
-	inp.placeholder_text = "Your name (or @instagram)"
+	inp.placeholder_text = loc.t("Il tuo nome (o @instagram)")
 	inp.max_length = 30
 	inp.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	inp.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -938,6 +942,10 @@ func _build_submit_form(cw: float) -> Control:
 	name_wrap.add_child(inp)
 	box.add_child(name_wrap)
 	_name_input = inp
+	# pre-compila con lo username del gioco: basta premere INVIA
+	var _uname := _creator_player_name()
+	if _uname != "" and _uname != "?":
+		inp.text = _uname
 
 	# tasto SEND (immagine)
 	var send_h := cw * 299.0 / 2735.0   # aspect del tasto
@@ -993,12 +1001,12 @@ func _on_submit_name() -> void:
 		nm = _name_input.text.strip_edges()
 	if nm.length() < 2:
 		if _submit_status:
-			_submit_status.text = "Please enter your name."
+			_submit_status.text = loc.t("Scrivi il tuo nome.")
 		return
 	settings.button_feedback()
 	_submit_entry = nm
 	if _submit_status:
-		_submit_status.text = "Sending..."
+		_submit_status.text = loc.t("Invio...")
 	if _submit_btn:
 		_submit_btn.disabled = true
 	if _submit_http == null:
@@ -1034,7 +1042,7 @@ func _on_submit_http(_result: int, code: int, _headers: PackedStringArray, body:
 			if _submit_btn:
 				_submit_btn.visible = false
 			if _submit_status:
-				_submit_status.text = "Thanks! We've added you ❤️"
+				_submit_status.text = loc.t("Nome inviato! ❤️")
 				_submit_status.add_theme_font_override("font", _pixel_emoji_font())
 			# dopo 2.5s sparisce l'intera sezione
 			get_tree().create_timer(2.5).timeout.connect(func() -> void:
@@ -1043,7 +1051,7 @@ func _on_submit_http(_result: int, code: int, _headers: PackedStringArray, body:
 		else:
 			_submit_phase = 0
 			if _submit_status:
-				_submit_status.text = "Network error, try again."
+				_submit_status.text = loc.t("Riprova più tardi.")
 			if _submit_btn:
 				_submit_btn.disabled = false
 

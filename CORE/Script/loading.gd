@@ -83,7 +83,7 @@ func _build_ui() -> void:
 
 	# LOADING...
 	var lo := Label.new()
-	lo.text = "LOADING..."
+	lo.text = loc.t("CARICAMENTO...")
 	lo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lo.add_theme_font_override("font", FONT)
 	lo.add_theme_font_size_override("font_size", int(fh * 0.24))

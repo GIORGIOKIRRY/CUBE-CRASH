@@ -223,7 +223,7 @@ func _play_end_bonus_anim() -> void:
 	pop.offset_top = num.offset_top - 46.0
 	pop.offset_bottom = num.offset_top - 8.0
 	$Items.add_child(pop)
-	pop.text = "+%d  (%d mosse)" % [_end_moves * _end_per, _end_moves]
+	pop.text = loc.tf("+%d  (%d mosse)", [_end_moves * _end_per, _end_moves])
 	pop.modulate.a = 0.0
 	# breve attesa, poi conta su lo score e fai salire/sfumare il popup
 	await get_tree().create_timer(0.55).timeout

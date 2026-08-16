@@ -22,6 +22,49 @@ var vibration_enabled: bool = true
 #  "mode_b"  = niente mosse, stile Block Blast (si perde solo per spazio)
 var game_mode: String = "classic"
 
+# MODALITÀ STORIA: parametri del livello da giocare (impostati prima di aprire game.tscn).
+# story_grid = lato della griglia quadrata (es. 3 = 3×3); story_target = punteggio-obiettivo.
+var story_grid: int = 0
+var story_target: int = 0
+var story_level: int = 0
+# Regole del livello storia corrente (impostate da _on_story_play in main_menu.gd):
+var story_colors: int = 0            # n. colori normali ammessi (3/5/7); 0 = default modalità
+var story_ab_vert: bool = true       # abilità VERTICALE (distrugge colonna) abilitata
+var story_ab_horiz: bool = true      # abilità ORIZZONTALE (distrugge riga) abilitata
+var story_ab_bomb: bool = true       # abilità BOMBA (area 3×3) abilitata
+var story_time: float = 0.0          # tempo massimo in secondi (>0 = livello SPEEDRUN)
+var story_goal: String = "score"     # "score" | "cubes" | "colors" | "speedrun"
+var story_goal_cubes: int = 0        # per goal "cubes": n. cubi normali da distruggere
+var story_goal_colors: Dictionary = {}  # per goal "colors": {indice_colore:int -> quantità:int}
+# Progressione: livello massimo COMPLETATO (0 = nessuno; livello n giocabile se completed>=n-1).
+var story_completed: int = 0
+# Stelle guadagnate per livello (3 fasi per livello): {livello:int -> stelle:int 0..3}.
+var story_stars: Dictionary = {}
+
+func story_best_stars(level: int) -> int:
+	return int(story_stars.get(level, 0))
+
+# Salva le stelle di un livello (tiene il MASSIMO) + sblocca il livello successivo. Ritorna true se migliorato.
+func story_set_stars(level: int, stars: int) -> bool:
+	stars = clampi(stars, 0, 3)
+	var prev := int(story_stars.get(level, 0))
+	var improved := stars > prev
+	if improved:
+		story_stars[level] = stars
+	if stars >= 1 and level > story_completed:
+		story_completed = level
+	if improved or (stars >= 1 and level >= story_completed):
+		save_settings()
+	return improved
+
+func story_total_stars() -> int:
+	var tot := 0
+	for k in story_stars:
+		tot += int(story_stars[k])
+	return tot
+# se true, tornando in MainMenu si riapre subito la MAPPA storia (non la home).
+var open_story_on_load: bool = false
+
 # DEBUG: se != "", all'avvio della partita si forza subito una schermata di fine
 # partita per testarne la grafica dai tasti TEST nella home:
 #   "classic" = game over classic (non record) · "speedrun" = game over speedrun
@@ -41,6 +84,13 @@ var _current_stream: AudioStream = null
 const MUSIC_FADE := 1.2
 const MUSIC_VOL_DB := -8.0   # musica come sottofondo: gli effetti sonori restano in evidenza
 const SILENCE_DB := -60.0
+# Musica dello SHOP: il file dura ~70s ma il loop musicale va tagliato a 1:04 (64s).
+const SHOP_MUSIC_PATH := "res://CORE/Assets/Music&Sound/shop.mp3"
+const SHOP_LOOP_END := 64.0
+var shop_music: AudioStream = null
+# Ultima posizione di riproduzione per traccia (per RIPRENDERE da dove si era lasciato,
+# es. tornando in home dallo shop, invece di ripartire da capo).
+var _stream_positions: Dictionary = {}
 
 # --- SFX ---
 var _sfx_uiclick: AudioStreamPlayer     # click generici UI
@@ -157,6 +207,16 @@ func _setup_music_players() -> void:
 		p.finished.connect(_on_music_finished.bind(p))
 		add_child(p)
 		_music_players.append(p)
+	shop_music = load(SHOP_MUSIC_PATH)
+
+
+# Loop dello shop tagliato a 64s: il file ha ~6s di coda oltre 1:04 che non vanno in loop.
+func _process(_dt: float) -> void:
+	if shop_music == null or _current_stream != shop_music:
+		return
+	var p := _music_players[_active_music]
+	if p.playing and p.stream == shop_music and p.get_playback_position() >= SHOP_LOOP_END:
+		p.seek(0.0)
 
 # Fallback loop: se una traccia finisce, riparte (home e gameplay).
 func _on_music_finished(p: AudioStreamPlayer) -> void:
@@ -203,16 +263,21 @@ func _make_sfx(path: String) -> AudioStreamPlayer:
 # ============================================================
 # MUSICA (crossfade)
 # ============================================================
-func play_music(stream: AudioStream, fade: float = MUSIC_FADE) -> void:
+# resume=true: riprende la traccia da dove era stata lasciata (memorizzata in _stream_positions)
+# invece di ripartire da 0. Il cambio è SEMPRE in crossfade (fade in nuova / fade out vecchia).
+func play_music(stream: AudioStream, fade: float = MUSIC_FADE, resume: bool = false) -> void:
 	if stream == null:
 		return
-	# già in riproduzione? niente da fare
+	# già in riproduzione? niente da fare (nessun restart)
 	if _current_stream == stream and _music_players[_active_music].playing:
 		return
+	var old_player := _music_players[_active_music]
+	# salva la posizione della traccia che sta USCENDO, per poterla riprendere dopo
+	if _current_stream != null and old_player.playing:
+		_stream_positions[_current_stream] = old_player.get_playback_position()
 	_ensure_loop(stream)
 	_current_stream = stream
 
-	var old_player := _music_players[_active_music]
 	var new_idx := 1 - _active_music
 	var new_player := _music_players[new_idx]
 	_active_music = new_idx
@@ -221,6 +286,8 @@ func play_music(stream: AudioStream, fade: float = MUSIC_FADE) -> void:
 	new_player.volume_db = SILENCE_DB
 	if music_enabled:
 		new_player.play()
+		if resume:
+			new_player.seek(float(_stream_positions.get(stream, 0.0)))
 		_fade(new_player, MUSIC_VOL_DB, fade)
 	_fade_out_stop(old_player, MUSIC_FADE)
 
@@ -377,6 +444,8 @@ func save_settings() -> void:
 	cfg.set_value("audio", "music", music_enabled)
 	cfg.set_value("audio", "sound", sound_enabled)
 	cfg.set_value("feedback", "vibration", vibration_enabled)
+	cfg.set_value("story", "completed", story_completed)
+	cfg.set_value("story", "stars", story_stars)
 	cfg.save(SETTINGS_PATH)
 
 func load_settings() -> void:
@@ -385,3 +454,5 @@ func load_settings() -> void:
 		music_enabled = bool(cfg.get_value("audio", "music", true))
 		sound_enabled = bool(cfg.get_value("audio", "sound", true))
 		vibration_enabled = bool(cfg.get_value("feedback", "vibration", true))
+		story_completed = int(cfg.get_value("story", "completed", 0))
+		story_stars = cfg.get_value("story", "stars", {})

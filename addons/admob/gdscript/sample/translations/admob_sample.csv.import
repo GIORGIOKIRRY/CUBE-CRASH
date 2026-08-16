@@ -15,5 +15,3 @@ dest_files=["res://addons/admob/gdscript/sample/translations/admob_sample.en.tra
 
 compress=1
 delimiter=0
-unescape_keys=false
-unescape_translations=true

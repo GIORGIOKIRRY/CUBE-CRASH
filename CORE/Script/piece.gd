@@ -51,8 +51,12 @@ func dim():
 	Player.active = true
 	Player.play("match")
 	# pop di scala (ingrandimento) così TUTTI i cubi del match — anche quello appena
-	# piazzato — mostrano chiaramente l'animazione prima di distruggersi
-	scale = Vector2.ONE
+	# piazzato — mostrano chiaramente l'animazione prima di distruggersi.
+	# RELATIVO alla scala attuale del cubo: in storia (griglie 3×3/5×5) i cubi sono più
+	# grandi (scale > 1); NON resettare a 1, altrimenti l'animazione li rimpicciolisce.
+	var base_scale := scale
+	if base_scale.x <= 0.01:
+		base_scale = Vector2.ONE
 	var tw := create_tween()
-	tw.tween_property(self, "scale", Vector2(1.18, 1.18), 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(self, "scale", base_scale * 1.18, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(self, "scale", base_scale, 0.16).set_trans(Tween.TRANS_SINE)

@@ -92,10 +92,10 @@ func _build_exit_popup() -> Control:
 	root.add_child(frame)
 
 	# titolo (più grande + stroke maggiore) + sottotitolo (inglese)
-	var title_lbl := _popup_label("EXIT GAME?", 52, Color(1, 1, 1), Vector2(FL, FT + 18.0), Vector2(FW, 54.0), true)
+	var title_lbl := _popup_label(loc.t("USCIRE DALLA PARTITA?"), 52, Color(1, 1, 1), Vector2(FL, FT + 18.0), Vector2(FW, 54.0), true)
 	title_lbl.add_theme_constant_override("outline_size", 11)
 	root.add_child(title_lbl)
-	root.add_child(_popup_label("You still have moves available!", 22, Color(1, 1, 1, 0.92), Vector2(FL + 16.0, FT + 80.0), Vector2(FW - 32.0, 30.0), false))
+	root.add_child(_popup_label(loc.t("Ci sono ancora mosse possibili!"), 22, Color(1, 1, 1, 0.92), Vector2(FL + 16.0, FT + 80.0), Vector2(FW - 32.0, 30.0), false))
 
 	# punteggio grande nella box scura del frame
 	var sc_val := 0
@@ -107,7 +107,7 @@ func _build_exit_popup() -> Control:
 	var box_top := FT + 0.274 * FH
 	var box_h := (0.661 - 0.274) * FH
 	# etichetta SCORE più in basso, subito sopra il numero
-	root.add_child(_popup_label("SCORE", 24, Color(0.72, 0.87, 1.0), Vector2(FL, box_top + 6.0), Vector2(FW, 24.0), false))
+	root.add_child(_popup_label(loc.t("PUNTEGGIO"), 24, Color(0.72, 0.87, 1.0), Vector2(FL, box_top + 6.0), Vector2(FW, 24.0), false))
 	root.add_child(_popup_label(str(sc_val), 80, Color(1, 1, 1), Vector2(FL, box_top + 36.0), Vector2(FW, box_h - 44.0), true))
 
 	# tasti: END RUN (rosso, esci) a sx, RESUME (verde, riprendi) a dx

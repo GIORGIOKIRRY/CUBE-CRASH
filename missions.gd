@@ -323,21 +323,22 @@ func fmt(n: int) -> String:
 func describe(m: Dictionary) -> String:
 	match m["type"]:
 		"score":
-			return "Raggiungi %s punti in una partita" % fmt(int(m["target"]))
+			return loc.tf("Raggiungi %s punti in una partita", [fmt(int(m["target"]))])
 		"break_color":
-			return "Rompi %s cubi %s" % [fmt(int(m["target"])), COLOR_IT.get(m["param"], m["param"])]
+			var cname := loc.t(COLOR_IT.get(m["param"], m["param"]))
+			return loc.tf("Rompi %s cubi %s", [fmt(int(m["target"])), cname])
 		"break_total":
-			return "Rompi %s cubi in totale" % fmt(int(m["target"]))
+			return loc.tf("Rompi %s cubi in totale", [fmt(int(m["target"]))])
 		"combo":
-			return "Fai una COMBO %d" % m["target"]
+			return loc.tf("Fai una COMBO %d", [m["target"]])
 		"play":
-			return "Gioca %d partite" % m["target"]
+			return loc.tf("Gioca %d partite", [m["target"]])
 		"streak":
-			return "Entra ogni giorno per %d giorni" % m["target"]
+			return loc.tf("Entra ogni giorno per %d giorni", [m["target"]])
 		"score_classic":
-			return "Fai %s punti in CLASSIC" % fmt(int(m["target"]))
+			return loc.tf("Fai %s punti in CLASSIC", [fmt(int(m["target"]))])
 		"beta":
-			return "Hai giocato alla versione BETA di Cube Crash!"
+			return loc.t("Hai giocato alla versione BETA di Cube Crash!")
 	return "?"
 
 

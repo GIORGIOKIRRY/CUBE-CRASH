@@ -14,6 +14,7 @@ extends Node2D
 # Scala dei 3 cubi trascinabili: in basso sono più grandi, quando li
 # prendi per trascinarli si rimpiccioliscono alla dimensione della griglia.
 const BOTTOM_PIECE_SCALE := 1.35
+var _bottom_scale: float = BOTTOM_PIECE_SCALE   # scala dei cubi nel tray (più grande in storia 3×3)
 const GRID_PIECE_SCALE := 1.0
 const DRAG_LIFT := 100.0   # il cubo preso col dito si alza sopra il dito (vedi dove lo posizioni)
 const CELL_SPRITE_SCALE := 0.734694   # scala sprite dei cubi = dimensione cella
@@ -81,6 +82,44 @@ var is_resolving: bool = false  # nuovo: blocca mosse durante la risoluzione
 #  +1 = colonna intera (+ gravità/refill)   +2 = riga intera (+ gravità)
 #  +3 = bomba 5x5 che lascia un CRATERE vuoto (buchi da riempire, niente refill)
 var _is_mode_c: bool = false
+# MODALITÀ STORIA (campagna): livello con griglia custom (es. 3×3) e obiettivo punti.
+# Gioca con le meccaniche di CLASSIC (mode_c) ma con VITTORIA al raggiungimento del target.
+var _is_story: bool = false
+var _story_target: int = 0
+var _story_won: bool = false
+# Regole del livello storia corrente (lette da settings in _ready):
+var _story_colors: int = 3                     # n. colori normali ammessi (3/5/7)
+var _story_ab_vert: bool = true                # abilità verticale (colonna) attiva
+var _story_ab_horiz: bool = true               # abilità orizzontale (riga) attiva
+var _story_ab_bomb: bool = true                # abilità bomba 3×3 attiva
+var _story_abilities: Array = []               # valori abilità attivi, subset di [1,2,3]
+var _story_time: float = 0.0                   # >0 = livello a tempo (speedrun storia)
+var _story_goal: String = "score"              # "score" | "cubes" | "colors" | "speedrun"
+var _story_goal_cubes: int = 0                 # goal "cubes": cubi normali da distruggere
+var _story_goal_colors: Dictionary = {}        # goal "colors": {colore -> quantità}
+var _story_destroyed: int = 0                  # cubi distrutti finora (totale)
+var _story_color_tally: Dictionary = {}        # colore -> cubi distrutti finora
+var _story_level: int = 1                       # numero del livello storia corrente
+var _story_wpos: float = 0.0                    # posizione nel mondo (0=primo livello .. 1=ultimo)
+var _story_gd: float = 0.0                      # difficoltà globale 0..1 (livello 1 .. 30)
+var _story_hud: Label = null                   # etichetta obiettivo in partita
+# --- Sistema 3 STELLE (3 fasi/soglie per livello) ---
+const STORY_STAR_FULL := preload("res://CORE/Assets/Art/Story/star_full.png")
+const STORY_STAR_EMPTY := preload("res://CORE/Assets/Art/Story/star_empty.png")
+var _story_score_th: Array = []                # 3 soglie punteggio (score/speedrun)
+var _story_cube_th: Array = []                 # 3 soglie cubi
+var _story_color_tiers: Array = []             # 3 tier {colore->qta} (goal colors)
+var _story_stars_shown: int = 0                # stelle attualmente raggiunte (per il live-save)
+var _story_star_icons: Array = []              # 3 TextureRect stella nell'HUD
+var _story_bar_fill: ColorRect = null          # barra progresso: riempimento
+var _story_bar_hi: ColorRect = null            # barra progresso: highlight (stile pixel)
+var _story_bar_max_w: float = 0.0              # larghezza massima del riempimento
+var _story_last_score: int = -1                # per aggiornare la barra quando cambia il punteggio
+# In storia i 3 colori base sono ROSSO/VERDE/GIALLO (usati dagli obiettivi), poi gli altri.
+const STORY_COLOR_ORDER := ["red", "green", "yellow", "blue", "purple", "orange", "pink"]
+const BASE_CELL := 82.285714                  # cella del 7×7 di riferimento (per scalare i cubi)
+var _grid_piece_scale: float = 1.0            # scala dei cubi SULLA griglia (= GRID_PIECE_SCALE, cresce in story se celle più grandi)
+var _cell_sprite_scale: float = CELL_SPRITE_SCALE   # scala di preview/ghost (idem)
 var _is_test: bool = false                   # modalità TEST: sperimentale (bombe swap, combo facili, 4 colori)
 var _is_test_6: bool = false                  # modalità TEST 6: identica alla CLASSIC ma con 4 colori
 var _is_test_7: bool = false                  # modalità TEST 7: identica alla CLASSIC ma bombe swap (in bianco/nero)
@@ -359,7 +398,42 @@ func _ready() -> void:
 	_is_test_7 = _mode == "test7"                     # test7 = alias storico (ora è il comportamento della CLASSIC)
 	if _is_test_6 or _is_test_7:
 		_mode = "mode_c"   # trattata come CLASSIC ovunque (bilanciamento classic)
+	# STORIA/campagna: gioca con le meccaniche CLASSIC (mode_c) ma con obiettivo punti.
+	_is_story = _mode == "story"
+	if _is_story:
+		_mode = "mode_c"
+		_story_target = settings.story_target
+		_story_colors = maxi(3, settings.story_colors)
+		_story_ab_vert = settings.story_ab_vert
+		_story_ab_horiz = settings.story_ab_horiz
+		_story_ab_bomb = settings.story_ab_bomb
+		_story_abilities.clear()
+		if _story_ab_vert: _story_abilities.append(1)
+		if _story_ab_horiz: _story_abilities.append(2)
+		if _story_ab_bomb: _story_abilities.append(3)
+		_story_time = settings.story_time
+		_story_goal = settings.story_goal
+		_story_goal_cubes = settings.story_goal_cubes
+		_story_goal_colors = settings.story_goal_colors.duplicate()
+		_story_destroyed = 0
+		_story_color_tally = {}
+		# difficoltà graduale: posizione nel mondo (0..1) e difficoltà globale (0..1)
+		_story_level = maxi(1, settings.story_level)
+		_story_wpos = float((_story_level - 1) % 10) / 9.0
+		_story_gd = clampf(float(_story_level - 1) / 29.0, 0.0, 1.0)
+		# 3 SOGLIE stelle: ⭐ = obiettivo base, ⭐⭐ ≈ 1.8×, ⭐⭐⭐ ≈ 2.8× (colori: tier ×1/×1.7/×2.6)
+		_story_score_th = [_story_target, int(round(_story_target * 1.8)), int(round(_story_target * 2.8))]
+		_story_cube_th = [_story_goal_cubes, int(round(_story_goal_cubes * 1.8)), int(round(_story_goal_cubes * 2.8))]
+		_story_color_tiers = []
+		if not _story_goal_colors.is_empty():
+			for m in [1.0, 1.7, 2.6]:
+				var tier := {}
+				for k in _story_goal_colors:
+					tier[k] = int(ceil(float(int(_story_goal_colors[k])) * m))
+				_story_color_tiers.append(tier)
+		_story_stars_shown = 0
 	_is_mode_c = _mode == "mode_c" or _is_speedrun or _is_test
+	var _story_sr := _is_story and _story_time > 0.0   # livello STORIA a tempo → tema rosso speedrun
 	# BOMBE (mooves>=3): si attivano con QUALSIASI swap (senza colore) e sono mostrate in
 	# BIANCO/NERO. È il comportamento DI DEFAULT di CLASSIC e SPEEDRUN (ex TEST 7). Le FRECCE
 	# (V/O) restano colorate e si attivano col match.
@@ -374,7 +448,7 @@ func _ready() -> void:
 	_swap_costs_move = _mode == "mode_a"
 	# Sfondo gameplay a TUTTO SCHERMO (adattivo su iPad/schermi grandi): CanvasLayer dietro tutto.
 	# (il vecchio Sfondo aveva dimensione fissa e non copriva gli schermi larghi.)
-	var _bg_path := "res://CORE/Assets/Art/Game/sfondo_speedrun.svg" if _is_speedrun else "res://CORE/Assets/Art/Game/sfondo_gameplay.png"
+	var _bg_path := "res://CORE/Assets/Art/Game/sfondo_speedrun.svg" if (_is_speedrun or _story_sr) else "res://CORE/Assets/Art/Game/sfondo_gameplay.png"
 	var _bg_layer := CanvasLayer.new()
 	_bg_layer.layer = -10
 	add_child(_bg_layer)
@@ -413,17 +487,53 @@ func _ready() -> void:
 	# icona uscita: speedrun = freccia ROSSA, classic = X, altre = freccia
 	var back_btn := get_node_or_null("../UI/BackButton") as TextureButton
 	if back_btn:
-		if _is_speedrun:
+		if _is_speedrun or _story_sr:
 			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_arrow_red.png")
 		elif _mode == "mode_c":
 			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_x.png")
 		else:
 			back_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/exit_arrow.png")
-	# speedrun: anche impostazioni ROSSE
-	if _is_speedrun:
+	# speedrun (anche storia a tempo): impostazioni ROSSE
+	if _is_speedrun or _story_sr:
 		var set_btn := get_node_or_null("../UI/SettingsButton") as TextureButton
 		if set_btn:
 			set_btn.texture_normal = load("res://CORE/Assets/Art/UI/Game/settings_red.png")
+	# STORIA: griglia quadrata custom (es. 3×3) centrata nell'area 576×576 della board,
+	# cubi scalati alla dimensione della cella, sfondo griglia dedicato.
+	if _is_story:
+		var side: int = maxi(3, settings.story_grid)
+		width = side
+		height = side
+		offset = 576.0 / float(side)
+		x_start = offset * 0.5          # centro colonna 0 (es. 96 per 3×3)
+		y_start = 814.0 - offset * 0.5  # 814 = bordo inferiore della Grid TextureRect
+		_grid_piece_scale = offset / BASE_CELL
+		_cell_sprite_scale = CELL_SPRITE_SCALE * (offset / BASE_CELL)
+		var gnode := get_node_or_null("Grid") as TextureRect
+		if gnode:
+			if side == 3:
+				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_3x3.svg")
+			elif side == 5:
+				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_5x5.svg")
+			else:
+				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_new.svg")
+		# STORIA: dimensione/posizione del tray per griglia (più piccoli che in passato)
+		if side <= 3:
+			_bottom_scale = 1.45
+			bottom_spacing_px = 158
+			bottom_y_offset_pixels = 198
+		elif side == 5:
+			_bottom_scale = 1.1
+			bottom_spacing_px = 132
+			bottom_y_offset_pixels = 150
+		# STORIA a tempo (speedrun): bordo griglia + sfondo ROSSI (la griglia resta dimensionata)
+		if _story_sr:
+			var bnode := get_node_or_null("GridBorder") as TextureRect
+			if bnode:
+				bnode.texture = load("res://CORE/Assets/Art/Game/contorno_griglia_speedrun.svg")
+			var sfnode := get_node_or_null("../Sfondo") as TextureRect
+			if sfnode:
+				sfnode.texture = load("res://CORE/Assets/Art/Game/sfondo_speedrun.svg")
 	_build_plus_pools()
 	if _bomb_swap:
 		_load_bomb_frames()
@@ -443,6 +553,13 @@ func _ready() -> void:
 			hs0.visible = false
 	if _is_speedrun:
 		_setup_speedrun_ui()
+	# STORIA a tempo (livelli speedrun della campagna): riusa l'UI/timer dello speedrun
+	if _is_story and _story_time > 0.0:
+		_speedrun_time_left = _story_time
+		_setup_speedrun_ui()
+	# HUD obiettivo + barra (per TUTTI i livelli storia; layout diverso se a tempo)
+	if _is_story:
+		_setup_story_hud()
 	all_pieces = make_2d_array()
 	cell_active = make_2d_array()
 	# mappa colore -> scena pezzo (serve al refill combo E ai pool Mode C):
@@ -455,7 +572,7 @@ func _ready() -> void:
 		inst.free()
 	if _is_mode_c:
 		_build_mode_c_pools()
-		if _tutorial_should_run():
+		if _tutorial_should_run() and not _is_story:
 			_tut_begin()           # TUTORIAL guidato: board + tray scriptati (niente random)
 		else:
 			_spawn_mode_c_start()  # griglia iniziale casuale/varia (non scacchiera)
@@ -599,6 +716,7 @@ func _spawn_checkerboard() -> void:
 				var piece := _random_piece_instance_avoiding_match(i, j)
 				add_child(piece)
 				_apply_bomb_bw(piece)
+				piece.scale = Vector2(_grid_piece_scale, _grid_piece_scale)   # storia: celle grandi (3×3/5×5)
 				piece.position = grid_to_pixel(i, j)
 				all_pieces[i][j] = piece
 			else:
@@ -617,6 +735,7 @@ func _spawn_mode_c_start() -> void:
 				var piece := _random_piece_instance_avoiding_match(i, j)
 				add_child(piece)
 				_apply_bomb_bw(piece)
+				piece.scale = Vector2(_grid_piece_scale, _grid_piece_scale)   # storia: celle grandi (3×3/5×5)
 				piece.position = grid_to_pixel(i, j)
 				all_pieces[i][j] = piece
 			else:
@@ -632,6 +751,29 @@ func _mode_c_fill_pattern() -> Array:
 		filled.append([])
 		for j in height:
 			filled[i].append(false)
+
+	# STORIA 3×3 (mondo 1): parti con poche celle piene, che AUMENTANO gradualmente col livello
+	# (primo livello del mondo = 3, ultimo = 6 su 9): più pieno = più difficile, ma resta giocabile.
+	if _is_story and width <= 3:
+		var cells: Array = []
+		for i in width:
+			for j in height:
+				cells.append(Vector2i(i, j))
+		cells.shuffle()
+		var target_fill: int = int(round(lerpf(3.0, 6.0, _story_wpos)))
+		for k in range(mini(target_fill, cells.size())):
+			var c: Vector2i = cells[k]
+			filled[c.x][c.y] = true
+		return filled
+
+	# STORIA 5×5/7×7: densità iniziale GRADUALE (primi livelli del mondo più vuoti = più facili,
+	# ultimi più pieni = più difficili). Scatter uniforme.
+	if _is_story:
+		var dens := lerpf(0.42, 0.82, _story_wpos)
+		for i in width:
+			for j in height:
+				filled[i][j] = randf() < dens
+		return filled
 
 	var kind := randi() % 3
 	if kind == 0:
@@ -692,7 +834,7 @@ func _spawn_bottom_pieces() -> void:
 			var piece = _pick_bottom_piece().instantiate()
 			add_child(piece)
 			piece.position = _bottom_slot_pixel(s)
-			piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+			piece.scale = Vector2(_bottom_scale, _bottom_scale)
 			# Etichetta per distinguere logica (non serve modificare lo script del pezzo)
 			piece.set_meta("origin", "bottom")
 			piece.set_meta("slot_idx", s)
@@ -712,7 +854,7 @@ func _replenish_bottom_slot(slot_idx: int) -> void:
 		var piece = _scene.instantiate()
 		add_child(piece)
 		piece.position = _bottom_slot_pixel(slot_idx)
-		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		piece.scale = Vector2(_bottom_scale, _bottom_scale)
 		piece.set_meta("origin", "bottom")
 		piece.set_meta("slot_idx", slot_idx)
 		_apply_select_look(piece)
@@ -936,6 +1078,11 @@ func destroy_matched() -> Array:
 	# missioni: cubi rotti per colore (dai match)
 	for c in break_tally:
 		missions.report_break(str(c), int(break_tally[c]))
+	# STORIA: conteggio obiettivi (cubi distrutti totali e per colore)
+	if _is_story:
+		for c in break_tally:
+			_story_add_destroyed(str(c), int(break_tally[c]))
+		_update_story_hud()
 
 	# 🔹 Bonus mosse (solo classic / mode_a): i cubi +1/+2/+3 danno il loro valore.
 	# In mode_b i cubi +N NON danno mosse: sono power-up (gestiti sopra).
@@ -1040,6 +1187,11 @@ func _trigger_powerup(center: Vector2i, val: int, destroyed_positions: Array) ->
 			continue
 		var p = all_pieces[c.x][c.y]
 		if p != null:
+			# STORIA: conta i cubi distrutti dalle abilità (colonna/riga/bomba) per gli obiettivi
+			if _is_story:
+				var _pc = p.get("color")
+				if _pc != null:
+					_story_add_destroyed(str(_pc), 1)
 			all_pieces[c.x][c.y] = null
 			# V/O: pop del match (l'esplosione bianca resta SOLO per bomba val 3 / mode_b)
 			if is_beam or (_is_mode_c and val != 3 and val != 4 and val != 5):
@@ -1180,6 +1332,7 @@ func _refill_column_active(x: int) -> void:
 				piece = _spawn_plus_or_normal(_effective_plus_prob()).instantiate()
 			add_child(piece)
 			_apply_bomb_bw(piece)
+			piece.scale = Vector2(_grid_piece_scale, _grid_piece_scale)   # storia: celle grandi
 			var spawn_row := height + spawn_rows_above + count
 			piece.position = grid_to_pixel(x, spawn_row)
 			all_pieces[x][y] = piece
@@ -1298,6 +1451,7 @@ func _refill_destroyed_cells_random(destroyed_cells: Array) -> void:
 					var piece = _spawn_plus_or_normal(_effective_plus_prob()).instantiate()
 					add_child(piece)
 					_apply_bomb_bw(piece)
+					piece.scale = Vector2(_grid_piece_scale, _grid_piece_scale)   # storia: celle grandi
 
 					var spawn_px := grid_to_pixel(x, spawn_row)
 					var target_px := grid_to_pixel(x, y)
@@ -1381,7 +1535,7 @@ func _cancel_drag() -> void:
 		# torna allo slot
 		if dragging_from_slot >= 0:
 			dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
-			_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
+			_tween_piece_scale(dragging_piece, _bottom_scale)
 			_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
 		if dragging_piece is CanvasItem:
 			dragging_piece.z_index = 0
@@ -1414,6 +1568,30 @@ func _process(_delta: float) -> void:
 			_sr_music_pending = false
 	if is_game_over:
 		return
+	# STORIA: barra di progresso live quando cambia il punteggio (obiettivi a punti)
+	if _is_story and _story_hud != null and score != _story_last_score:
+		_story_last_score = score
+		_update_story_hud()
+	# STORIA: 3 STELLE (3 fasi). Appena superi una soglia la stella è SALVATA (best per livello);
+	# al raggiungimento della 3ª stella → celebrazione di vittoria.
+	if _is_story and not _story_won:
+		var st := _story_stars_now()
+		if st > _story_stars_shown:
+			_story_stars_shown = st
+			settings.story_set_stars(_story_level, st)
+			_update_story_hud()
+			if st >= 3:
+				_story_win()
+				return
+	# STORIA a tempo (livelli campagna speedrun): countdown; a 0 senza obiettivo = sconfitta
+	if _is_story and _story_time > 0.0 and not is_game_over:
+		_speedrun_time_left -= _delta
+		if _speedrun_time_left <= 0.0:
+			_speedrun_time_left = 0.0
+			_update_timer_label()
+			_trigger_game_over("time")
+			return
+		_update_timer_label()
 	if _tut_active:
 		_tut_scripted_tick()
 	# recupero della soppressione bombe (dopo una bomba la prossima è meno probabile)
@@ -1525,7 +1703,7 @@ func _input(event: InputEvent) -> void:
 				if dragging_piece is CanvasItem:
 					dragging_piece.z_index = 999
 				# animazione fluida: rimpicciolisce alla dimensione della griglia
-				_tween_piece_scale(dragging_piece, GRID_PIECE_SCALE)
+				_tween_piece_scale(dragging_piece, _grid_piece_scale)
 				settings.play_pickup()
 		
 		# Durante drag
@@ -1547,7 +1725,7 @@ func _input(event: InputEvent) -> void:
 				# ferma OGNI tween di scala di questo pezzo: altrimenti un tween orfano
 				# (es. verso 1.35) continua e lascia il cubo piazzato ingrandito/sballato
 				_kill_piece_scale_tween(dragging_piece)
-				dragging_piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+				dragging_piece.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 				dragging_piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 				all_pieces[target_grid.x][target_grid.y] = dragging_piece
 				# la cella (anche se era un buco) diventa attiva: da ora partecipa alla gravità
@@ -1595,7 +1773,7 @@ func _input(event: InputEvent) -> void:
 			else:
 				# Ritorna allo slot originale se non valido
 				dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
-				_tween_piece_scale(dragging_piece, BOTTOM_PIECE_SCALE)
+				_tween_piece_scale(dragging_piece, _bottom_scale)
 				_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
 				# TUTORIAL: colore/posto sbagliato → il cubo TRABALLA e torna nel tray
 				if _tut_active:
@@ -1622,6 +1800,19 @@ func _input(event: InputEvent) -> void:
 func check_game_over() -> void:
 	if _tut_active:
 		return   # nel tutorial guidato non si perde mai
+	# STORIA — rischio "spazio" GRADUALE per mondo:
+	#  • livelli a tempo: mai per spazio (valvola forte).
+	#  • Mondo 1 (3×3): non si perde per spazio (valvola 3).
+	#  • Mondo 2 (5×5): valvola leggera (1) → si perde molto di rado.
+	#  • Mondo 3 (7×7): NESSUNA valvola → si può perdere per spazio (sfida vera).
+	if _is_story and _story_time > 0.0:
+		if not is_game_over and not is_resolving and _is_board_full():
+			_remove_random_cells(10)
+		return
+	if _is_story and width <= 5:
+		if not is_game_over and not is_resolving and _is_board_full():
+			_remove_random_cells(3 if width <= 3 else 1)
+		return
 	if _is_speedrun:
 		# speedrun: si perde SOLO a tempo, mai per spazio. Se la board si riempie del tutto
 		# libera automaticamente qualche cella (valvola), così non si resta MAI bloccati.
@@ -1675,7 +1866,7 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 		piece.set_meta("origin", "grid")
 		_restore_normal_look(piece)   # sulla griglia: grafica cubo normale
 		_kill_piece_scale_tween(piece)   # nessun tween orfano che ingrandisca il cubo piazzato
-		piece.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+		piece.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 		piece.global_position = grid_to_pixel(target_grid.x, target_grid.y)
 		all_pieces[target_grid.x][target_grid.y] = piece
 		cell_active[target_grid.x][target_grid.y] = true
@@ -1711,7 +1902,7 @@ func _place_dragged_piece(piece: Node, slot: int, world_pos: Vector2) -> void:
 		check_game_over()
 	else:
 		piece.global_position = _bottom_slot_pixel(slot)
-		piece.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		piece.scale = Vector2(_bottom_scale, _bottom_scale)
 		_apply_select_look(piece)   # tornato nel tray: grafica SELECT
 	if piece is CanvasItem:
 		piece.z_index = 0
@@ -1730,7 +1921,7 @@ func _handle_multitouch(event: InputEvent) -> void:
 				_restore_normal_look(clicked)   # preso col dito: grafica cubo normale
 				if clicked is CanvasItem:
 					clicked.z_index = 999
-				clicked.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+				clicked.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 				settings.play_pickup()
 		elif _multi_drags.has(event.index):
 			var piece: Node = _multi_drags[event.index]
@@ -1918,6 +2109,285 @@ func _any_valid_bottom_placement() -> bool:
 					return true
 	return false
 
+# STORIA: obiettivo punti raggiunto → livello completato (overlay + ritorno alla mappa).
+# STORIA: registra un cubo distrutto (totale + per colore) per gli obiettivi del livello.
+func _story_add_destroyed(color: String, n: int) -> void:
+	_story_destroyed += n
+	_story_color_tally[color] = int(_story_color_tally.get(color, 0)) + n
+
+func _story_fmt_num(n: int) -> String:
+	var s := str(n)
+	var out := ""
+	var c := 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		c += 1
+		if c % 3 == 0 and i > 0:
+			out = "." + out
+	return out
+
+func _story_color_short(key: String) -> String:
+	match key:
+		"red": return loc.t("Rossi")
+		"green": return loc.t("Verdi")
+		"yellow": return loc.t("Gialli")
+	return key
+
+func _setup_story_hud() -> void:
+	var ui := get_node_or_null("../UI")
+	if ui == null:
+		return
+	var pfont: Font = null
+	var timed := _story_time > 0.0
+	var pl = ui.get_node_or_null("PointLabel") as Label
+	if pl:
+		pfont = pl.get_theme_font("font")
+		if timed:
+			pl.add_theme_font_size_override("font_size", 42)
+			pl.offset_top = 86.0
+			pl.offset_bottom = 128.0
+		else:
+			pl.add_theme_font_size_override("font_size", 66)
+			pl.offset_top = 128.0
+			pl.offset_bottom = 218.0
+	# 3 STELLE in alto, centrate tra la X e le impostazioni
+	_story_star_icons.clear()
+	var ssz := 46.0
+	var sgap := 16.0
+	var stot := 3.0 * ssz + 2.0 * sgap
+	var sx0 := (576.0 - stot) * 0.5
+	for i in 3:
+		var sic := TextureRect.new()
+		sic.texture = STORY_STAR_EMPTY
+		sic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		sic.position = Vector2(sx0 + i * (ssz + sgap), 2.0)
+		sic.size = Vector2(ssz, ssz)
+		sic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(sic)
+		_story_star_icons.append(sic)
+	# ETICHETTA obiettivo/progresso (sotto le stelle)
+	_story_hud = Label.new()
+	if pfont:
+		_story_hud.add_theme_font_override("font", pfont)
+	_story_hud.add_theme_font_size_override("font_size", 30)
+	_story_hud.add_theme_color_override("font_color", Color(1, 0.92, 0.45))
+	_story_hud.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_story_hud.add_theme_constant_override("outline_size", 6)
+	_story_hud.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_story_hud.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_story_hud.offset_left = 20.0
+	_story_hud.offset_right = 556.0
+	_story_hud.offset_top = 52.0
+	_story_hud.offset_bottom = 86.0
+	_story_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(_story_hud)
+	# TIMER (livelli a tempo) sotto il punteggio
+	if timed and _timer_label:
+		_timer_label.add_theme_font_size_override("font_size", 62)
+		_timer_label.offset_top = 150.0
+		_timer_label.offset_bottom = 228.0
+	# BARRA DI PROGRESSO pixel verso le 3 stelle — solo nei livelli NON a tempo (a tempo c'è il timer)
+	if not timed:
+		var bx := 128.0
+		var bw := 320.0
+		var by := 90.0
+		var bh := 26.0
+		var border := ColorRect.new()
+		border.color = Color(0.02, 0.05, 0.12)
+		border.position = Vector2(bx, by)
+		border.size = Vector2(bw, bh)
+		border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(border)
+		var track := ColorRect.new()
+		track.color = Color(0.11, 0.17, 0.30)
+		track.position = Vector2(bx + 5, by + 5)
+		track.size = Vector2(bw - 10, bh - 10)
+		track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(track)
+		_story_bar_fill = ColorRect.new()
+		_story_bar_fill.color = Color(0.29, 0.82, 0.34)
+		_story_bar_fill.position = Vector2(bx + 5, by + 5)
+		_story_bar_fill.size = Vector2(0, bh - 10)
+		_story_bar_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(_story_bar_fill)
+		_story_bar_hi = ColorRect.new()
+		_story_bar_hi.color = Color(0.55, 0.98, 0.6)
+		_story_bar_hi.position = Vector2(bx + 5, by + 5)
+		_story_bar_hi.size = Vector2(0, 5)
+		_story_bar_hi.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(_story_bar_hi)
+		_story_bar_max_w = bw - 10.0
+	_update_story_hud()
+
+# quante soglie superate (0..3) dal valore v nell'array crescente arr
+func _th_count(v: int, arr: Array) -> int:
+	var n := 0
+	for t in arr:
+		if int(t) > 0 and v >= int(t):
+			n += 1
+	return n
+
+# STELLE guadagnate ORA (0..3) in base al goal del livello
+func _story_stars_now() -> int:
+	match _story_goal:
+		"cubes":
+			return _th_count(_story_destroyed, _story_cube_th)
+		"colors":
+			var got := 0
+			for tier in _story_color_tiers:
+				var ok := true
+				for k in tier:
+					if int(_story_color_tally.get(k, 0)) < int(tier[k]):
+						ok = false
+						break
+				if ok:
+					got += 1
+				else:
+					break
+			return got
+		_:
+			return _th_count(score, _story_score_th)
+
+# progresso complessivo 0..1 verso le 3 stelle (per la barra)
+func _story_progress_fraction() -> float:
+	match _story_goal:
+		"cubes":
+			return float(_story_destroyed) / float(maxi(1, int(_story_cube_th[2]) if _story_cube_th.size() == 3 else 1))
+		"colors":
+			var got := 0
+			var need := 0
+			if _story_color_tiers.size() == 3:
+				var t3: Dictionary = _story_color_tiers[2]
+				for k in t3:
+					got += mini(int(_story_color_tally.get(k, 0)), int(t3[k]))
+					need += int(t3[k])
+			return float(got) / float(maxi(1, need))
+		_:
+			return float(score) / float(maxi(1, int(_story_score_th[2]) if _story_score_th.size() == 3 else 1))
+
+func _update_story_hud() -> void:
+	if _story_hud == null:
+		return
+	# testo progresso verso la 3ª stella (soglia massima)
+	var txt := ""
+	match _story_goal:
+		"cubes":
+			var c3: int = int(_story_cube_th[2]) if _story_cube_th.size() == 3 else _story_goal_cubes
+			txt = "%s %d/%d" % [loc.t("Cubi"), _story_destroyed, c3]
+		"colors":
+			var parts: Array = []
+			var t3: Dictionary = _story_color_tiers[2] if _story_color_tiers.size() == 3 else _story_goal_colors
+			for k in t3:
+				parts.append("%s %d/%d" % [_story_color_short(str(k)), mini(int(_story_color_tally.get(k, 0)), int(t3[k])), int(t3[k])])
+			txt = "   ".join(parts)
+		_:
+			var s3: int = int(_story_score_th[2]) if _story_score_th.size() == 3 else _story_target
+			txt = "%s / %s" % [_story_fmt_num(score), _story_fmt_num(s3)]
+	_story_hud.text = txt
+	# stelle: accende quelle raggiunte
+	var st := _story_stars_now()
+	for i in _story_star_icons.size():
+		if is_instance_valid(_story_star_icons[i]):
+			_story_star_icons[i].texture = STORY_STAR_FULL if i < st else STORY_STAR_EMPTY
+	# barra di progresso (solo dove esiste)
+	if _story_bar_fill:
+		var w: float = _story_bar_max_w * clampf(_story_progress_fraction(), 0.0, 1.0)
+		_story_bar_fill.size.x = w
+		if _story_bar_hi:
+			_story_bar_hi.size.x = w
+
+# STORIA: l'obiettivo del livello è stato raggiunto?
+func _story_goal_met() -> bool:
+	match _story_goal:
+		"cubes":
+			return _story_goal_cubes > 0 and _story_destroyed >= _story_goal_cubes
+		"colors":
+			if _story_goal_colors.is_empty():
+				return false
+			for cname in _story_goal_colors:
+				if int(_story_color_tally.get(cname, 0)) < int(_story_goal_colors[cname]):
+					return false
+			return true
+		_:
+			# "score" e "speedrun": obiettivo a punteggio
+			return _story_target > 0 and score >= _story_target
+
+func _story_win() -> void:
+	if _story_won:
+		return
+	_story_won = true
+	is_game_over = true
+	can_move = false
+	# vittoria = 3 STELLE (salva e sblocca il livello successivo)
+	settings.story_set_stars(_story_level, 3)
+	settings.vibrate(40)
+	var layer := CanvasLayer.new()
+	layer.layer = 3000
+	add_child(layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.72)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(dim)
+	var vb := VBoxContainer.new()
+	vb.set_anchors_preset(Control.PRESET_CENTER)
+	vb.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	vb.grow_vertical = Control.GROW_DIRECTION_BOTH
+	vb.add_theme_constant_override("separation", 20)
+	layer.add_child(vb)
+	# riga di 3 STELLE piene (vittoria = 3 stelle)
+	var stars_box := HBoxContainer.new()
+	stars_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	stars_box.add_theme_constant_override("separation", 18)
+	for _i in 3:
+		var si := TextureRect.new()
+		si.texture = STORY_STAR_FULL
+		si.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		si.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		si.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		si.custom_minimum_size = Vector2(96, 96)
+		stars_box.add_child(si)
+	vb.add_child(stars_box)
+	var t := Label.new()
+	t.text = loc.t("LIVELLO COMPLETATO!")
+	t.add_theme_font_override("font", POP_FONT)
+	t.add_theme_font_size_override("font_size", 64)
+	t.add_theme_color_override("font_color", Color(1, 0.85, 0.2))
+	t.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	t.add_theme_constant_override("outline_size", 8)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(t)
+	var sc := Label.new()
+	sc.text = "%d %s" % [score, loc.t("punti")]
+	sc.add_theme_font_override("font", POP_FONT)
+	sc.add_theme_font_size_override("font_size", 44)
+	sc.add_theme_color_override("font_color", Color(1, 1, 1))
+	sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(sc)
+	var b := Button.new()
+	b.text = loc.t("MAPPA")
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(280, 88)
+	b.add_theme_font_override("font", POP_FONT)
+	b.add_theme_font_size_override("font_size", 44)
+	b.add_theme_color_override("font_color", Color(1, 1, 1))
+	var gs := StyleBoxFlat.new()
+	gs.bg_color = Color(0.20, 0.70, 0.30)
+	gs.set_corner_radius_all(20)
+	gs.set_border_width_all(4)
+	gs.border_color = Color(1, 1, 1, 0.85)
+	b.add_theme_stylebox_override("normal", gs)
+	b.add_theme_stylebox_override("hover", gs)
+	b.add_theme_stylebox_override("pressed", gs)
+	b.pressed.connect(func() -> void:
+		settings.vibrate(15)
+		settings.open_story_on_load = true   # torna alla MAPPA storia, non alla home
+		transition.change_scene("res://CORE/Scene/MainMenu.tscn"))
+	vb.add_child(b)
+
+
 func _trigger_game_over(reason := "no_space") -> void:
 	is_game_over = true
 	if _tut_active:
@@ -1979,7 +2449,7 @@ func _trigger_game_over(reason := "no_space") -> void:
 
 	# Statistiche partita (per calibrare la durata)
 	var dur_s: int = (Time.get_ticks_msec() - _game_start_ms) / 1000
-	_last_session_stats = "%d:%02d  ·  %d pose  ·  %d pt" % [dur_s / 60, dur_s % 60, _stat_placements, score]
+	_last_session_stats = "%d:%02d  ·  %d %s  ·  %d %s" % [dur_s / 60, dur_s % 60, _stat_placements, loc.t("pose"), score, loc.t("pt")]
 	print("SESSION STATS → durata=%ds pose=%d punteggio=%d" % [dur_s, _stat_placements, score])
 
 	_last_defeat_reason = reason
@@ -2394,7 +2864,7 @@ func _show_preview_for(piece: Node, world_pos: Vector2) -> void:
 			_placement_preview.texture = piece.get_meta("normal_tex")
 		elif dspr:
 			_placement_preview.texture = dspr.texture
-		_placement_preview.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
+		_placement_preview.scale = Vector2(_cell_sprite_scale, _cell_sprite_scale)
 		_placement_preview.position = grid_to_pixel(g.x, g.y)
 		_placement_preview.modulate = Color(1, 1, 1, PREVIEW_ALPHA)
 		_placement_preview.visible = true
@@ -2423,7 +2893,7 @@ func _spawn_explosion(world_pos: Vector2, piece: Node) -> void:
 	asp.sprite_frames = _explo_frames
 	asp.animation = "boom"
 	asp.position = world_pos
-	asp.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
+	asp.scale = Vector2(_cell_sprite_scale, _cell_sprite_scale)
 	asp.z_index = 100
 	add_child(asp)
 	asp.play("boom")
@@ -2548,8 +3018,10 @@ func _build_plus_pools() -> void:
 
 # MODE C: costruisce le liste colore (normali + bonus) ordinate, per la progressione.
 func _build_mode_c_pools() -> void:
+	# STORIA usa un ordine colori dedicato (rosso/verde/giallo come 3 base)
+	var _color_order: Array = STORY_COLOR_ORDER if _is_story else MODE_C_COLOR_ORDER
 	_mc_normal_scenes.clear()
-	for c in MODE_C_COLOR_ORDER:
+	for c in _color_order:
 		if _color_to_scene.has(c):
 			_mc_normal_scenes.append(_color_to_scene[c])
 	_mc_plus_by_color.clear()
@@ -2575,6 +3047,8 @@ func _build_mode_c_pools() -> void:
 # SPEEDRUN: pochi colori all'inizio (tantissimi match) — basato sul TEMPO trascorso:
 # solo 3 colori per i primi 3 minuti, poi cresce lentamente (+1 ogni ~40s) fino a 6.
 func _mode_c_active_count() -> int:
+	if _is_story:
+		return _story_colors   # STORIA: numero colori FISSO per il livello (3/5/7)
 	if _is_test or _is_test_6:
 		return 4        # TEST / TEST 6: solo 4 colori
 	if _is_speedrun:
@@ -2609,6 +3083,17 @@ func _pick_normal_piece() -> PackedScene:
 func _pick_plus_scene() -> PackedScene:
 	if _plus_pool[1].is_empty():
 		_build_plus_pools()
+	# STORIA: solo le abilità abilitate dal livello (1=colonna, 2=riga, 3=bomba 3×3).
+	# Niente bomba X/angoli. Colore attivo così matcha con i normali.
+	if _is_story:
+		if _story_abilities.is_empty():
+			return _pick_normal_piece()
+		var sv: int = _story_abilities[randi() % _story_abilities.size()]
+		var sn: int = mini(_mc_active_count, STORY_COLOR_ORDER.size())
+		var scol: String = STORY_COLOR_ORDER[randi() % sn]
+		if _mc_plus_by_color.has(scol) and _mc_plus_by_color[scol].has(sv):
+			return _mc_plus_by_color[scol][sv]
+		return _plus_pool[sv].pick_random()
 	if _is_test:
 		# TEST: i cubi-bonus COLORATI sono SOLO frecce (V/O) e si attivano col match di colore
 		# (come prima). Le bombe sono separate: senza colore, attivate dallo swap.
@@ -2703,6 +3188,10 @@ func _spawn_plus_or_normal(prob: float) -> PackedScene:
 	return _pick_normal_piece()
 
 func _effective_plus_prob() -> float:
+	# STORIA: se il livello non prevede abilità, ZERO cubi-bonus (solo normali); altrimenti la
+	# frequenza di frecce/bombe d'aiuto CALA col livello (più aiuto all'inizio, meno alla fine).
+	if _is_story:
+		return lerpf(0.14, 0.06, _story_gd) if not _story_abilities.is_empty() else 0.0
 	# Mode C: frequenza fissa dei cubi-bonus (leggermente ridotta a difficoltà alta).
 	if _is_mode_c:
 		# power-up più rari (prima ce n'erano troppi): la board tende a riempirsi -> si può perdere
@@ -2822,7 +3311,7 @@ func _wiggle_hint_at(cell: Vector2i, src: Node) -> void:
 		ghost.texture = src.get_meta("normal_tex")
 	elif src != null and src.has_node("Sprite2D"):
 		ghost.texture = src.get_node("Sprite2D").texture
-	ghost.scale = Vector2(CELL_SPRITE_SCALE, CELL_SPRITE_SCALE)
+	ghost.scale = Vector2(_cell_sprite_scale, _cell_sprite_scale)
 	ghost.modulate = Color(1, 1, 1, 0.0)   # parte invisibile
 	ghost.z_index = 60
 	ghost.position = grid_to_pixel(cell.x, cell.y)
@@ -3118,7 +3607,7 @@ func _tut_demo_step(idx: int) -> void:
 				add_child(p)
 				_apply_bomb_bw(p)      # bombe: nuova grafica nera (primo frame statico)
 				p.position = grid_to_pixel(cells[k].x, cells[k].y)
-				p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+				p.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 				_tut_decor.append(p)   # decorativo: non in all_pieces → non toccabile
 		_tutorial_show_text(str(d["text"]))
 		get_tree().create_timer(2.6).timeout.connect(_tut_demo_step.bind(idx + 1))
@@ -3135,7 +3624,7 @@ func _tut_demo_step(idx: int) -> void:
 			add_child(sp)
 			_apply_bomb_bw(sp)     # bombe: nuova grafica nera (primo frame statico)
 			sp.position = grid_to_pixel(center.x, center.y)
-			sp.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+			sp.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 			all_pieces[center.x][center.y] = sp
 			cell_active[center.x][center.y] = true
 		_tutorial_show_text(str(d["text"]))
@@ -3169,7 +3658,7 @@ func _tut_fill_fake_board() -> void:
 			var p = _color_to_scene[col].instantiate()
 			add_child(p)
 			p.position = grid_to_pixel(i, j)
-			p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+			p.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 			all_pieces[i][j] = p
 			cell_active[i][j] = true
 
@@ -3224,7 +3713,7 @@ func _tut_place(color: String, i: int, j: int) -> void:
 	var p = _color_to_scene[color].instantiate()
 	add_child(p)
 	p.position = grid_to_pixel(i, j)
-	p.scale = Vector2(GRID_PIECE_SCALE, GRID_PIECE_SCALE)
+	p.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 	all_pieces[i][j] = p
 	cell_active[i][j] = true
 
@@ -3239,7 +3728,7 @@ func _tut_set_tray(colors: Array) -> void:
 		var p = _color_to_scene[colors[s]].instantiate()
 		add_child(p)
 		p.position = _bottom_slot_pixel(s)
-		p.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		p.scale = Vector2(_bottom_scale, _bottom_scale)
 		p.set_meta("origin", "bottom")
 		p.set_meta("slot_idx", s)
 		_apply_select_look(p)
@@ -3266,7 +3755,7 @@ func _tut_decor_tray(colors: Array) -> void:
 		var p = _color_to_scene[colors[s]].instantiate()
 		add_child(p)
 		p.position = _bottom_slot_pixel(s)
-		p.scale = Vector2(BOTTOM_PIECE_SCALE, BOTTOM_PIECE_SCALE)
+		p.scale = Vector2(_bottom_scale, _bottom_scale)
 		p.modulate = Color(1, 1, 1, 0.85)   # un filo trasparente = "non attivo"
 		var spr = p.get_node_or_null("Sprite2D")
 		if spr:
@@ -3326,7 +3815,7 @@ func _build_tutorial_ui() -> void:
 func _tutorial_show_text(txt: String) -> void:
 	if _tut_label == null:
 		return
-	_tut_label.text = txt
+	_tut_label.text = loc.t(txt)
 	_tut_panel.modulate.a = 1.0   # la banda appare subito (come la striscia NO SPACE)
 
 func _tutorial_end() -> void:

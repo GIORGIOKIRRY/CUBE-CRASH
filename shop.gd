@@ -16,6 +16,9 @@ const AVATARS := [
 	{"id": "av_bomb",     "icon": "res://CORE/Assets/Art/Home/Shop/av_bomb.png",     "color": Color(0.90, 0.20, 0.20), "price": 2500},
 	{"id": "av_mushroom", "icon": "res://CORE/Assets/Art/Home/Shop/av_mushroom.png", "color": Color(0.30, 0.75, 0.30), "price": 2500},
 	{"id": "av_penguin",  "icon": "res://CORE/Assets/Art/Home/Shop/av_penguin.png",  "color": Color(0.20, 0.55, 0.95), "price": 2500},
+	{"id": "av_fish",     "icon": "res://CORE/Assets/Art/Home/Shop/av_fish.png",     "color": Color(0.15, 0.45, 0.85), "price": 2500},
+	{"id": "av_skull",    "icon": "res://CORE/Assets/Art/Home/Shop/av_skull.png",    "color": Color(0.55, 0.30, 0.90), "price": 2500},
+	{"id": "av_pig",      "icon": "res://CORE/Assets/Art/Home/Shop/av_pig.png",      "color": Color(0.95, 0.45, 0.55), "price": 2500},
 ]
 
 # Pacchetti MONETE acquistabili con SOLDI VERI (€). NB: l'acquisto reale (StoreKit /

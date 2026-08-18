@@ -180,7 +180,7 @@ var can_move = true
 # fa match, scambia, combo) invece di comparire "a caso" ogni N secondi → si
 # capisce facendo, e finisce da solo appena hai imparato (cap 10 minuti).
 const TUT_CFG := "user://tutorial.cfg"
-const TUT_VERSION := 5                 # bumpare per FAR RICOMPARIRE il tutorial a tutti
+const TUT_VERSION := 7                 # bumpare per FAR RICOMPARIRE il tutorial a tutti
                                        # (installazioni nuove: ver=0 < TUT_VERSION → lo vedono sempre)
 var _tut_active := false
 var _tut_layer: Node = null
@@ -192,6 +192,9 @@ var _tut_need_color := ""         # colore da tenere nel tray durante il tutoria
 var _tut_decor: Array = []        # cubi decorativi (tray B/N non toccabile in fase swap)
 var _tut_gray_mat: ShaderMaterial = null   # shader grigio per i cubi decorativi
 var _tut_target_cell: Vector2i = Vector2i(-1, -1)   # cella valida per il drop in fase 0
+var _tut_advancing := false        # true durante la pausa fra una fase e la successiva
+const TUT_PHASE_PAUSE := 1.8       # pausa (s) per far VEDERE l'effetto prima della fase dopo
+var _tut_hint_node: Node2D = null  # riquadro pulsante che indica DOVE piazzare il cubo
 # DEMO ABILITÀ (dopo la combo): per ogni speciale prima lo MOSTRA, poi lo fa ESPLODERE
 # su una mappa piena così si vede l'effetto (colonna/riga/3x3/X/angoli).
 const TUT_DEMO := [
@@ -334,6 +337,13 @@ var _combo_frames: Dictionary = {}          # livello -> SpriteFrames (COMBO 1..
 var _combo_fx: Dictionary = {}              # livello -> SpriteFrames effetto a schermo intero (4 lati)
 var _active_combo_fx: CanvasLayer = null    # effetto full-screen attualmente in corso
 var _active_combo_num: AnimatedSprite2D = null   # numero COMBO attualmente in corso
+# --- SCREEN SHAKE (feedback "dopamine" sui match/combo, tutte le modalità) ---
+# Scuotiamo DIRETTAMENTE il nodo board (self): i cubi si muovono contro lo sfondo (CanvasLayer
+# fisso) → scossa sempre visibile, senza dipendere da una Camera2D "current".
+var _shake_base_pos := Vector2.ZERO
+var _shake_amount: float = 0.0
+const SHAKE_DECAY := 30.0     # px/s di decadimento (più basso = più morbido)
+const SHAKE_MAX := 11.0       # ampiezza massima (px) — scossa leggera
 var _special_beam_frames: Dictionary = {}        # colore -> SpriteFrames beam V/O per colore
 var _beam_clip: Control = null                    # maschera: clippa i beam dentro la griglia
 var _moves_since_balance: int = 0           # cooldown mosse per il bilanciamento
@@ -511,12 +521,14 @@ func _ready() -> void:
 		_cell_sprite_scale = CELL_SPRITE_SCALE * (offset / BASE_CELL)
 		var gnode := get_node_or_null("Grid") as TextureRect
 		if gnode:
+			# livelli a tempo (speedrun) = griglia ROSSA della stessa dimensione
+			var suffix := "_red" if _story_sr else ""
 			if side == 3:
-				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_3x3.svg")
+				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_3x3%s.svg" % suffix)
 			elif side == 5:
-				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_5x5.svg")
+				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_5x5%s.svg" % suffix)
 			else:
-				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_new.svg")
+				gnode.texture = load("res://CORE/Assets/Art/Game/griglia_new%s.svg" % suffix)
 		# STORIA: dimensione/posizione del tray per griglia (più piccoli che in passato)
 		if side <= 3:
 			_bottom_scale = 1.45
@@ -576,11 +588,16 @@ func _ready() -> void:
 			_tut_begin()           # TUTORIAL guidato: board + tray scriptati (niente random)
 		else:
 			_spawn_mode_c_start()  # griglia iniziale casuale/varia (non scacchiera)
+			if _is_story:
+				_story_seed_abilities()   # abilità del livello VISIBILI fin dall'inizio
 			_spawn_bottom_pieces()
+			_animate_board_intro()   # riempimento dall'alto verso il basso
 	else:
 		_spawn_checkerboard()
 		_spawn_bottom_pieces()
+		_animate_board_intro()
 	update_moves_label()
+	_setup_shake_camera()
 	_load_scores()
 	_prev_high_score = high_score   # record da battere in questa partita
 	_prev_speedrun_best = _speedrun_best
@@ -795,6 +812,26 @@ func _mode_c_fill_pattern() -> Array:
 			for j in height:
 				filled[i][j] = randf() >= holes
 	return filled
+
+# Animazione d'ingresso: la griglia si RIEMPIE gradualmente dall'ALTO verso il basso.
+# Ogni cubo cade dalla cella sopra + dissolvenza, con un ritardo crescente riga per riga.
+func _animate_board_intro() -> void:
+	var stagger := 0.045
+	for i in width:
+		for j in height:
+			var p = all_pieces[i][j]
+			if p == null or not is_instance_valid(p):
+				continue
+			var final_pos: Vector2 = p.position
+			var d: float = float(height - 1 - j) * stagger   # riga in ALTO per prima
+			p.position = final_pos - Vector2(0.0, offset * 1.1)   # parte un po' più in alto
+			p.modulate.a = 0.0
+			var tw := create_tween()
+			tw.tween_interval(d)
+			tw.tween_property(p, "position", final_pos, 0.30).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			var tw2 := create_tween()
+			tw2.tween_interval(d)
+			tw2.tween_property(p, "modulate:a", 1.0, 0.16)
 
 # Evita match immediato sul posizionamento
 func _random_piece_instance_avoiding_match(i: int, j: int) -> Node:
@@ -1101,6 +1138,8 @@ func destroy_matched() -> Array:
 		# SFX + vibrazione: distruzione cubi (più intensa, scala col numero distrutto)
 		settings.play_destroy()
 		settings.vibrate(45 + min(destroyed_count, 6) * 8)
+		# SHAKE dello schermo sul match (scala col numero di cubi distrutti)
+		_screen_shake(3.0 + minf(float(destroyed_count), 8.0) * 0.55)
 
 		# Match da 3 cubi = 100 punti base, +30 per ogni cubo oltre i 3,
 		# poi MOLTIPLICATORE combo: match normale x1, combo 1 x2, combo 2 x3, ...
@@ -1546,6 +1585,13 @@ func _cancel_drag() -> void:
 # Input: swipe per swap nella griglia + drag&drop dei pezzi dal BottomGrid
 # =========================================================
 func _process(_delta: float) -> void:
+	# SCREEN SHAKE: jitter decrescente sulla posizione del nodo board (sui match/combo)
+	if _shake_amount > 0.0:
+		position = _shake_base_pos + Vector2(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * _shake_amount
+		_shake_amount = maxf(0.0, _shake_amount - _delta * SHAKE_DECAY)
+		if _shake_amount <= 0.05:
+			_shake_amount = 0.0
+			position = _shake_base_pos
 	# musica speedrun pronta? riproducila DIRETTAMENTE sull'AudioStreamPlayer della scena
 	# (spegnendo la musica dei settings), caricata in background = mai bloccante.
 	if _sr_music_pending:
@@ -2366,26 +2412,21 @@ func _story_win() -> void:
 	sc.add_theme_color_override("font_color", Color(1, 1, 1))
 	sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(sc)
-	var b := Button.new()
-	b.text = loc.t("MAPPA")
+	# tasto CLOSE (immagine, testo già stampato): torna alla mappa storia
+	var b := TextureButton.new()
+	b.texture_normal = load("res://CORE/Assets/Art/Story/btn_close_wide.png")
+	b.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	b.custom_minimum_size = Vector2(260, 101)   # 360:140 in scala
 	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(280, 88)
-	b.add_theme_font_override("font", POP_FONT)
-	b.add_theme_font_size_override("font_size", 44)
-	b.add_theme_color_override("font_color", Color(1, 1, 1))
-	var gs := StyleBoxFlat.new()
-	gs.bg_color = Color(0.20, 0.70, 0.30)
-	gs.set_corner_radius_all(20)
-	gs.set_border_width_all(4)
-	gs.border_color = Color(1, 1, 1, 0.85)
-	b.add_theme_stylebox_override("normal", gs)
-	b.add_theme_stylebox_override("hover", gs)
-	b.add_theme_stylebox_override("pressed", gs)
 	b.pressed.connect(func() -> void:
 		settings.vibrate(15)
 		settings.open_story_on_load = true   # torna alla MAPPA storia, non alla home
 		transition.change_scene("res://CORE/Scene/MainMenu.tscn"))
-	vb.add_child(b)
+	var b_wrap := CenterContainer.new()
+	b_wrap.add_child(b)
+	vb.add_child(b_wrap)
 
 
 func _trigger_game_over(reason := "no_space") -> void:
@@ -2888,6 +2929,15 @@ func _on_preview_faded() -> void:
 # =========================================================
 # Esplosione cubo (6 frame) + bilanciamento tavola
 # =========================================================
+# Memorizza la posizione base del nodo board (a cui si aggiunge il jitter dello shake).
+func _setup_shake_camera() -> void:
+	_shake_base_pos = position
+
+# Innesca uno shake dello schermo (ampiezza in px); si somma/limita a SHAKE_MAX.
+func _screen_shake(strength: float) -> void:
+	_shake_amount = minf(SHAKE_MAX, maxf(_shake_amount, strength))
+
+
 func _spawn_explosion(world_pos: Vector2, piece: Node) -> void:
 	var asp := AnimatedSprite2D.new()
 	asp.sprite_frames = _explo_frames
@@ -2902,8 +2952,12 @@ func _spawn_explosion(world_pos: Vector2, piece: Node) -> void:
 		if is_instance_valid(piece):
 			piece.queue_free()
 	)
-	# libera l'overlay a fine animazione
+	# libera l'overlay a fine animazione + timer di sicurezza (mai residui a schermo)
 	asp.animation_finished.connect(asp.queue_free)
+	get_tree().create_timer(1.2).timeout.connect(func() -> void:
+		if is_instance_valid(asp):
+			asp.queue_free()
+	)
 
 func _count_occupied() -> int:
 	var c := 0
@@ -3088,7 +3142,8 @@ func _pick_plus_scene() -> PackedScene:
 	if _is_story:
 		if _story_abilities.is_empty():
 			return _pick_normal_piece()
-		var sv: int = _story_abilities[randi() % _story_abilities.size()]
+		# la BOMBA (3) è RARA: frecce (1,2) con peso 4, bomba con peso 1 (~1 su 9 se tutte attive)
+		var sv: int = _story_weighted_ability()
 		var sn: int = mini(_mc_active_count, STORY_COLOR_ORDER.size())
 		var scol: String = STORY_COLOR_ORDER[randi() % sn]
 		if _mc_plus_by_color.has(scol) and _mc_plus_by_color[scol].has(sv):
@@ -3180,6 +3235,60 @@ func _pick_plus_scene() -> PackedScene:
 			return _mc_plus_by_color[color][v]
 	return _plus_pool[v].pick_random()
 
+# STORIA: sceglie un'abilità pesata — frecce (1,2) frequenti, BOMBA (3) rara.
+func _story_weighted_ability() -> int:
+	var pool: Array = []
+	for v in _story_abilities:
+		var w: int = 1 if v == 3 else 4
+		for _k in w:
+			pool.append(v)
+	if pool.is_empty():
+		return int(_story_abilities[0])
+	return int(pool[randi() % pool.size()])
+
+
+# STORIA: mette 1+ abilità del livello sulla board GIÀ all'avvio (visibili subito), rimpiazzando
+# un cubo normale con un'abilità dello STESSO colore (così non forma un match immediato).
+func _story_seed_abilities() -> void:
+	if _story_abilities.is_empty():
+		return
+	var cap := 1
+	if width >= 7:
+		cap = 3
+	elif width >= 5:
+		cap = 2
+	cap = mini(cap, _story_abilities.size())
+	# abilità di valore più alto prima (bomba > riga > colonna): sono le "appena introdotte"
+	var vals: Array = _story_abilities.duplicate()
+	vals.sort()
+	vals.reverse()
+	var cells: Array = []
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null:
+				cells.append(Vector2i(i, j))
+	cells.shuffle()
+	var placed := 0
+	for v in vals:
+		if placed >= cap or cells.is_empty():
+			break
+		var c: Vector2i = cells.pop_back()
+		var old = all_pieces[c.x][c.y]
+		if old == null:
+			continue
+		var color := str(old.color)
+		if not (_mc_plus_by_color.has(color) and _mc_plus_by_color[color].has(v)):
+			continue
+		var np = _mc_plus_by_color[color][v].instantiate()
+		add_child(np)
+		_apply_bomb_bw(np)
+		np.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
+		np.position = grid_to_pixel(c.x, c.y)
+		old.queue_free()
+		all_pieces[c.x][c.y] = np
+		placed += 1
+
+
 # Con probabilità 'prob' restituisce un cubo-mossa (valore pesato dalle mosse),
 # altrimenti un cubo normale. Usato da tutti i punti di spawn.
 func _spawn_plus_or_normal(prob: float) -> PackedScene:
@@ -3191,7 +3300,8 @@ func _effective_plus_prob() -> float:
 	# STORIA: se il livello non prevede abilità, ZERO cubi-bonus (solo normali); altrimenti la
 	# frequenza di frecce/bombe d'aiuto CALA col livello (più aiuto all'inizio, meno alla fine).
 	if _is_story:
-		return lerpf(0.14, 0.06, _story_gd) if not _story_abilities.is_empty() else 0.0
+		# meno cubi-abilità di prima (troppe bombe/frecce): cala col livello
+		return lerpf(0.09, 0.04, _story_gd) if not _story_abilities.is_empty() else 0.0
 	# Mode C: frequenza fissa dei cubi-bonus (leggermente ridotta a difficoltà alta).
 	if _is_mode_c:
 		# power-up più rari (prima ce n'erano troppi): la board tende a riempirsi -> si può perdere
@@ -3473,6 +3583,8 @@ func _show_combo_fullscreen(level: int) -> void:
 
 func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	var anim_level: int = clampi(level, 1, 20)   # animazioni combo fino alla 20; oltre usa la 20
+	# SHAKE più marcato sulle COMBO (cresce col livello di combo)
+	_screen_shake(5.0 + float(anim_level) * 0.8)
 	_show_combo_fullscreen(anim_level)           # cornice a schermo intero per ogni combo
 	var frames: SpriteFrames = _get_combo_frames(anim_level)
 	if frames == null or frames.get_frame_count("c") == 0:
@@ -3483,7 +3595,8 @@ func _show_combo_effect(level: int, world_pos: Vector2) -> void:
 	var asp := AnimatedSprite2D.new()
 	asp.sprite_frames = frames
 	asp.animation = "c"
-	asp.position = world_pos
+	# nel tutorial la combo esce più in basso (era troppo in alto)
+	asp.position = world_pos + (Vector2(0, 180) if _tut_active else Vector2.ZERO)
 	asp.scale = Vector2(COMBO_EFFECT_SCALE, COMBO_EFFECT_SCALE)
 	asp.speed_scale = COMBO_SPEED * _combo_speed_factor(anim_level)
 	asp.z_index = 200
@@ -3560,6 +3673,7 @@ func _tut_setup_place() -> void:
 	_tut_place("red", 4, 3)
 	# tray: il ROSSO da usare + due distrattori
 	_tut_set_tray(["red", "yellow", "orange"])
+	_tut_show_hint(_tut_target_cell)
 	_tutorial_show_text("Trascina il cubo ROSSO in mezzo agli altri due")
 
 # --- Fase 1: SCAMBIA due blocchi per fare match ---
@@ -3581,11 +3695,121 @@ func _tut_setup_swap() -> void:
 	_tut_place("yellow", 4, 4)
 	_tutorial_show_text("Ora SCORRI col dito: scambia i 2 cubi al centro")
 
-# --- Fase 2: spiega la COMBO (lo swap ha fatto DUE linee insieme) → poi parte il gioco ---
+# Riquadro PULSANTE che indica dove piazzare il cubo (fasi con drop dal tray).
+func _tut_show_hint(cell: Vector2i) -> void:
+	_tut_clear_hint_marker()
+	if not is_in_grid(cell):
+		return
+	var h: float = offset * 0.46
+	var poly := Polygon2D.new()
+	poly.polygon = PackedVector2Array([Vector2(-h, -h), Vector2(h, -h), Vector2(h, h), Vector2(-h, h)])
+	poly.color = Color(1, 1, 1, 0.55)
+	poly.position = grid_to_pixel(cell.x, cell.y)
+	poly.z_index = 60
+	add_child(poly)
+	_tut_hint_node = poly
+	var tw := create_tween().set_loops()
+	tw.tween_property(poly, "scale", Vector2(1.12, 1.12), 0.5).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(poly, "modulate:a", 0.25, 0.5)
+	tw.tween_property(poly, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(poly, "modulate:a", 1.0, 0.5)
+
+func _tut_clear_hint_marker() -> void:
+	if is_instance_valid(_tut_hint_node):
+		_tut_hint_node.queue_free()
+	_tut_hint_node = null
+
+# piazza sulla board un pezzo da una SCENA (freccia/bomba), attivo e toccabile.
+func _tut_place_scene(path: String, i: int, j: int) -> void:
+	if not is_in_grid(Vector2i(i, j)):
+		return
+	var scene = load(path)
+	if scene == null:
+		return
+	var p = scene.instantiate()
+	add_child(p)
+	_apply_bomb_bw(p)   # bombe: grafica nera (primo frame statico)
+	p.position = grid_to_pixel(i, j)
+	p.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
+	all_pieces[i][j] = p
+	cell_active[i][j] = true
+
+# riempie una COLONNA/RIGA con cubi non-abbinabili (per far vedere il beam che li distrugge tutti)
+func _tut_fill_col(x: int, skip_y: int) -> void:
+	var seq := ["green", "yellow", "orange", "purple", "pink"]
+	for y in height:
+		if y == skip_y:
+			continue
+		_tut_place(seq[y % seq.size()], x, y)
+
+func _tut_fill_row(y: int, skip_x: int) -> void:
+	var seq := ["green", "yellow", "orange", "purple", "pink"]
+	for x in width:
+		if x == skip_x:
+			continue
+		_tut_place(seq[x % seq.size()], x, y)
+
+# --- Fase 2: FRECCIA VERTICALE — l'utente completa la linea blu; la freccia distrugge tutta la COLONNA (piena) ---
+func _tut_setup_arrow_v() -> void:
+	_tut_clear_board()
+	_tut_phase_done = false
+	_tut_need_color = "blue"
+	_tut_target_cell = Vector2i(4, 3)
+	_tut_fill_col(3, 3)                                                      # colonna 3 PIENA (si vedrà sparire tutta)
+	_tut_place_scene("res://CORE/Scene/PieceScene/blue_plus_1.tscn", 3, 3)   # freccia verticale (blu)
+	_tut_place("blue", 2, 3)
+	_tut_set_tray(["blue", "purple", "orange"])
+	_tut_show_hint(_tut_target_cell)
+	_tutorial_show_text("Metti il cubo BLU qui: la FRECCIA\ndistrugge TUTTA la colonna!")
+
+# --- Fase 3: FRECCIA ORIZZONTALE — l'utente completa la linea rossa; la freccia distrugge tutta la RIGA (piena) ---
+func _tut_setup_arrow_h() -> void:
+	_tut_clear_board()
+	_tut_phase_done = false
+	_tut_need_color = "red"
+	_tut_target_cell = Vector2i(3, 4)
+	_tut_fill_row(3, 3)                                                      # riga 3 PIENA (si vedrà sparire tutta)
+	_tut_place_scene("res://CORE/Scene/PieceScene/red_plus_2.tscn", 3, 3)    # freccia orizzontale (rossa)
+	_tut_place("red", 3, 2)
+	_tut_set_tray(["red", "yellow", "green"])
+	_tut_show_hint(_tut_target_cell)
+	_tutorial_show_text("Metti il cubo ROSSO qui: la FRECCIA\ndistrugge TUTTA la riga!")
+
+# Fase-bomba generica: BOARD PIENA (così si VEDE bene cosa esplode) + bomba al centro; lo swap
+# con un cubo vicino la fa detonare (in classic `_bomb_swap` detona qualsiasi bomba con lo swap).
+func _tut_bomb_phase(path: String, text: String) -> void:
+	_tut_clear_board()
+	_tut_phase_done = false
+	_tut_need_color = ""
+	_tut_set_tray([])
+	_tut_fill_fake_board()            # riempie tutta la griglia: il pattern d'esplosione è chiaro
+	var c := Vector2i(3, 3)
+	if all_pieces[c.x][c.y] != null and is_instance_valid(all_pieces[c.x][c.y]):
+		all_pieces[c.x][c.y].queue_free()
+	_tut_place_scene(path, c.x, c.y)  # bomba al centro (sostituisce il cubo finto)
+	_tutorial_show_text(text)
+
+# --- Fase 4: BOMBA 3×3 — board piena, si vede che esplode SOLO nel quadrato 3×3 ---
+func _tut_setup_bomb() -> void:
+	_tut_bomb_phase("res://CORE/Scene/PieceScene/green_plus_3.tscn",
+		"Scambia la BOMBA con un cubo vicino:\nesplode SOLO nel 3×3 attorno!")
+
+# --- Fase 5: BOMBA X — colpisce le due DIAGONALI ---
+func _tut_setup_bombx() -> void:
+	_tut_bomb_phase("res://CORE/Scene/PieceScene/purple_xbomb.tscn",
+		"BOMBA X: scambiala,\ncolpisce le due DIAGONALI!")
+
+# --- Fase 6: BOMBA ANGOLI — colpisce i 4 angoli della griglia ---
+func _tut_setup_bombangles() -> void:
+	_tut_bomb_phase("res://CORE/Scene/PieceScene/orange_angles.tscn",
+		"BOMBA ANGOLI: scambiala,\ncolpisce i 4 ANGOLI!")
+
+# --- Fine: parte la VERA partita ---
 func _tut_show_done() -> void:
 	_tut_need_color = ""
-	_tutorial_show_text("Hai fatto una COMBO!\nPiu match di fila o insieme = tanti punti extra")
-	get_tree().create_timer(4.5).timeout.connect(_tut_demo_step.bind(0))
+	_tut_clear_board()
+	_tutorial_show_text("Sei pronto!  Buona partita!")
+	get_tree().create_timer(1.3).timeout.connect(_tut_finish)
 
 # DEMO abilità: passo "show" (mostra il cubo) o "explode" (mappa piena → l'abilità esplode).
 func _tut_demo_step(idx: int) -> void:
@@ -3681,20 +3905,36 @@ func _tut_finish() -> void:
 	# avvia la VERA partita random
 	_spawn_mode_c_start()
 	_spawn_bottom_pieces()
+	_animate_board_intro()   # riempimento dall'alto verso il basso
 	is_resolving = false
 	can_move = true
 	_tutorial_end()       # chiude la banda + salva "visto"
 
-# Avanza di fase quando la fase è completata (match avvenuto e board ferma).
+# Avanza di fase quando la fase è completata (mossa dell'utente avvenuta e board ferma).
+# Tutte le mosse (piazza, scambia, frecce, bomba) le FA l'utente → si impara facendo.
 func _tut_scripted_tick() -> void:
-	if not _tut_active or is_resolving or not _tut_phase_done:
+	if not _tut_active or is_resolving or _tut_advancing or not _tut_phase_done:
 		return
+	# PAUSA: lascia vedere l'effetto (esplosione bomba / beam della freccia) prima di proseguire
+	_tut_advancing = true
+	_tut_clear_hint_marker()
+	_tutorial_show_text("Bravo!")
+	get_tree().create_timer(TUT_PHASE_PAUSE).timeout.connect(_tut_advance)
+
+func _tut_advance() -> void:
+	if not _tut_active:
+		return
+	_tut_advancing = false
 	_tut_phase_done = false
 	_tut_phase += 1
-	if _tut_phase == 1:
-		_tut_setup_swap()
-	elif _tut_phase == 2:
-		_tut_show_done()
+	match _tut_phase:
+		1: _tut_setup_swap()          # scambia (fa una COMBO)
+		2: _tut_setup_arrow_v()       # freccia verticale (l'utente la attiva)
+		3: _tut_setup_arrow_h()       # freccia orizzontale
+		4: _tut_setup_bomb()          # bomba 3×3 (swap)
+		5: _tut_setup_bombx()         # bomba X (diagonali)
+		6: _tut_setup_bombangles()    # bomba angoli
+		_: _tut_show_done()           # fine → buona partita
 
 # Durante il tutorial: un drop dal tray è valido SOLO se rispetta la fase.
 # Fase 0 (piazza): solo il colore richiesto (rosso) e SOLO nel buco previsto.
@@ -3735,6 +3975,7 @@ func _tut_set_tray(colors: Array) -> void:
 		bottom_pieces[s] = p
 
 func _tut_clear_board() -> void:
+	_tut_clear_hint_marker()
 	for p in _tut_decor:
 		if is_instance_valid(p):
 			p.queue_free()

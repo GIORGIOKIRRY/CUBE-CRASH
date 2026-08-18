@@ -176,5 +176,6 @@ func _grant(index: int) -> void:
 		return
 	missions.coins += int(shop.COIN_PACKS[index]["coins"])
 	missions._save()
+	settings.play_buy_coins()
 	purchase_success.emit(index)
 	_pending = -1

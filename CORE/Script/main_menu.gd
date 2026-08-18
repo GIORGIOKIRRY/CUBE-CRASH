@@ -327,8 +327,8 @@ var _mode_titles := {}                      # mode -> Texture2D (scritta a scher
 const STORY_LEVELS := 30                     # livelli per stagione (stagione 1)
 const STORY_NODE := 96.0                     # diametro del nodo-livello (unità di gioco)
 const STORY_V_GAP := 192.0                   # distanza verticale tra due livelli
-const STORY_PAD_TOP := 320.0     # spazio sopra il livello 30 (per la scritta NUOVA STAGIONE)
-const STORY_PAD_BOTTOM := 200.0  # spazio sotto il livello 1
+const STORY_PAD_TOP := 560.0     # spazio sopra il livello 30 (fascia nuvole in cima + testo/timer sovrapposti)
+const STORY_PAD_BOTTOM := 360.0  # spazio sotto il livello 1
 # Configurazione dei 30 livelli storia (spec utente 2026-08-14).
 # grid=lato griglia · colors=n. colori normali · v/h/b=abilità (verticale/orizzontale/bomba)
 # goal: "score"(target) · "cubes"(cubes) · "colors"(colors_goal {nome:qta}) · "speedrun"(target+time)
@@ -365,17 +365,24 @@ const STORY_LEVELS_DATA: Array = [
 	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"speedrun", "target":10000, "time":300.0},
 ]
 # --- Grafica MONDO 1: sfondo verde + isole cliccabili ---
-const STORY_BG_TEX := preload("res://CORE/Assets/Art/Story/sfondo_mondo1.png")
+const STORY_BG_TEX := preload("res://CORE/Assets/Art/Story/sfondo_story.png")
 const STORY_ISLAND_TEX := preload("res://CORE/Assets/Art/Story/isola_mondo1.png")
+const STORY_CLOUDS_TEX := preload("res://CORE/Assets/Art/Story/clouds_top.png")
+# Prossima stagione: parte il 1° settembre 2026 (countdown fino a quel giorno)
+const STORY_SEASON_TARGET_ISO := "2026-09-01T00:00:00"
 const STORY_ISLAND_W := 172.0                 # larghezza isola-livello (unità di gioco)
 const STORY_ISLAND_H := 160.0                 # altezza (aspetto 244×227)
 const STORY_ISLAND_GAP := 220.0               # distanza verticale tra due isole
 var _story_layer: CanvasLayer
 var _story_map_img: TextureRect
-var _story_bg_img: TextureRect                 # sfondo verde MONDO 1 (fisso, a tutto schermo)
+var _story_bg_img: ColorRect                   # fondo blu tinta unita (fisso, dietro tutto)
+var _story_bg_scroll: TextureRect              # sfondo a strisce blu SCORREVOLE (dentro il contenuto)
 var _story_num_labels: Array = []              # label numero su ogni isola
 var _story_bounce_tw: Tween = null             # tween di rimbalzo dell'isola del livello corrente
-var _story_season_lbl: Label = null            # "NUOVA STAGIONE PROSSIMAMENTE" sopra il livello 30
+var _story_season_lbl: Label = null            # "NUOVA STAGIONE IN ARRIVO" sopra il livello 30
+var _story_clouds: TextureRect = null          # fascia di nuvole in cima alla mappa (sotto il testo stagione)
+var _story_countdown_lbl: Label = null         # timer countdown alla prossima stagione (1 set)
+var _story_countdown_timer: Timer = null       # aggiorna il countdown ogni secondo
 var _story_island_stars: Array = []            # per ogni isola: [3 TextureRect stella]
 var _story_star_counter: Label = null          # contatore stelle totali (in alto a destra)
 var _story_counter_icon: TextureRect = null    # icona stella accanto al contatore
@@ -393,8 +400,34 @@ var _story_pop_desc: Label
 var _story_pop_mission: Label
 var _story_pop_star_icons: Array = []          # 3 icone stella nel popup
 var _story_pop_star_lbls: Array = []           # 3 missioni (una per stella) nel popup
+var _story_pop_reward_icons: Array = []        # 3 icone ricompensa (moneta/cosmetico)
+var _story_pop_reward_lbls: Array = []         # 3 label importo ricompensa
+var _story_pop_claim_btns: Array = []          # 3 tasti RISCUOTI
+var _story_pop_bigstar_icons: Array = []       # 3 stelle grandi in cima (stato livello)
+var _story_pop_num: Label                      # "LIVELLO N" grande
+# anteprima ANIMATA del livello (stile cube deck): griglia N×N coi colori del livello
+var _story_preview_box: Panel = null
+var _story_preview_cubes: Array = []
+var _story_preview_palette: Array = []
+var _story_preview_timer: Timer = null
+var _story_pop_stats: VBoxContainer            # caratteristiche: "Dimensioni griglia: N×N" + cubi
+# cubi colorati (icone piccole per la sezione caratteristiche); ordine come in grid.gd
+const STORY_CUBE_TEX := {
+	"red": preload("res://CORE/Assets/Art/Game/Cubes/Red/Red.svg"),
+	"green": preload("res://CORE/Assets/Art/Game/Cubes/Green/Green.svg"),
+	"yellow": preload("res://CORE/Assets/Art/Game/Cubes/Yellow/Yellow.svg"),
+	"blue": preload("res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg"),
+	"purple": preload("res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg"),
+	"orange": preload("res://CORE/Assets/Art/Game/Cubes/Orange/Orange.svg"),
+	"pink": preload("res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg"),
+}
+const STORY_COLOR_ORDER := ["red", "green", "yellow", "blue", "purple", "orange", "pink"]
 const STORY_STAR_FULL_TEX := preload("res://CORE/Assets/Art/Story/star_full.png")
 const STORY_STAR_EMPTY_TEX := preload("res://CORE/Assets/Art/Story/star_empty.png")
+const STORY_COIN_TEX := preload("res://CORE/Assets/Art/UI/Missions/coin_icon.png")
+const STORY_POPUP_PANEL_TEX := preload("res://CORE/Assets/Art/Story/popup_panel.png")
+const STORY_PLAY_TEX := preload("res://CORE/Assets/Art/Story/btn_play.png")
+const STORY_CLOSE_TEX := preload("res://CORE/Assets/Art/Story/btn_close.png")
 var _story_pop_play_idx := 1
 var _story_msg: Label
 var _story_back: TextureButton
@@ -846,6 +879,9 @@ func _build_screen_anim() -> void:
 	_mode_titles["mode_c"] = load("res://CORE/Assets/Art/Home/screen_title_classic.png")
 	_mode_anims["speedrun"] = _load_screen_frames("speedrun")
 	_mode_titles["speedrun"] = load("res://CORE/Assets/Art/Home/screen_title_speedrun.png")
+	# STORIA / CAMPAGNA: animazione (SOTRY.GIF) + scritta STORY a schermo
+	_mode_anims["story"] = _load_screen_frames("story")
+	_mode_titles["story"] = load("res://CORE/Assets/Art/Home/screen_title_story.png")
 
 
 func _load_screen_frames(prefix: String) -> SpriteFrames:
@@ -1034,10 +1070,11 @@ func _on_play_pressed() -> void:
 	# la modalità si sceglie con le frecce (mostrata sullo schermo): PLAY la avvia
 	var mode: String = MODES[_mode_index]["mode"]
 	if mode == "story":
-		# la campagna non avvia una partita: apre la MAPPA a livelli
+		# la campagna non avvia una partita: apre la MAPPA a livelli CON la stessa
+		# transizione (wipe) delle altre modalità: copri -> apri mappa -> scopri.
 		settings.play_playbutton()
 		settings.vibrate(15)
-		_open_story_map()
+		transition.wipe(_open_story_map)
 		return
 	_start_mode(mode)
 
@@ -4411,13 +4448,10 @@ func _build_story_map() -> void:
 	_story_map.visible = false
 	_story_layer.add_child(_story_map)
 
-	# sfondo campagna MONDO 1: immagine verde FISSA a tutto schermo (le isole scorrono sopra).
-	# COVERED = riempie sempre lo schermo su ogni dispositivo, niente bordi.
-	_story_bg_img = TextureRect.new()
-	_story_bg_img.texture = STORY_BG_TEX
-	_story_bg_img.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_story_bg_img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_story_bg_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	# fondo blu tinta unita FISSO (dietro tutto): evita bordi/trasparenze quando lo
+	# sfondo a strisce scorrevole non copre (colore = base dell'immagine sotry_back).
+	_story_bg_img = ColorRect.new()
+	_story_bg_img.color = Color(5.0 / 255.0, 120.0 / 255.0, 236.0 / 255.0)
 	_story_bg_img.mouse_filter = Control.MOUSE_FILTER_STOP
 	_story_bg_img.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_story_map.add_child(_story_bg_img)
@@ -4431,9 +4465,21 @@ func _build_story_map() -> void:
 
 	_story_content = Control.new()
 	_story_content.mouse_filter = Control.MOUSE_FILTER_PASS   # lascia scorrere il drag
-	_story_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_story_content.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# dentro un ScrollContainer verticale il contenuto NON deve espandersi in verticale
+	# (altrimenti viene schiacciato all'altezza del viewport e lo scroll si rompe): riempie
+	# solo in larghezza, l'altezza la dà custom_minimum_size.
+	_story_content.size_flags_horizontal = Control.SIZE_FILL
+	_story_content.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_story_scroll.add_child(_story_content)
+
+	# sfondo a strisce blu SCORREVOLE: dentro il contenuto (scorre con le isole), dietro tutto.
+	_story_bg_scroll = TextureRect.new()
+	_story_bg_scroll.texture = STORY_BG_TEX
+	_story_bg_scroll.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_story_bg_scroll.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_story_bg_scroll.stretch_mode = TextureRect.STRETCH_SCALE
+	_story_bg_scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_story_content.add_child(_story_bg_scroll)
 
 	# ISOLE-livello 1..STORY_LEVELS: ogni livello è un'isola cliccabile col numero pixelato sopra.
 	_story_level_buttons.clear()
@@ -4447,6 +4493,9 @@ func _build_story_map() -> void:
 		isl.ignore_texture_size = true
 		isl.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
 		isl.pivot_offset = Vector2(STORY_ISLAND_W * 0.5, STORY_ISLAND_H * 0.5)   # scala dal centro
+		# PASS: il TAP apre il livello, ma il DRAG passa allo ScrollContainer (si scorre anche
+		# partendo da un'isola; se ci si ferma e si tocca, apre il livello)
+		isl.mouse_filter = Control.MOUSE_FILTER_PASS
 		isl.pressed.connect(_on_story_level.bind(n))
 		# numero del livello sul pianoro erboso (parte alta dell'isola)
 		var lbl := Label.new()
@@ -4471,14 +4520,17 @@ func _build_story_map() -> void:
 			sm.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			isl.add_child(sm)
 			srow.append(sm)
+		# la stella centrale disegnata per ultima → sopra le laterali (senza z_index
+		# globale, che la farebbe sbucare sopra il popup del livello)
+		isl.move_child(srow[1], -1)
 		_story_island_stars.append(srow)
 		_story_content.add_child(isl)
 		_story_level_buttons.append(isl)
 		_story_num_labels.append(lbl)
 
-	# scritta "NUOVA STAGIONE / PROSSIMAMENTE" sopra l'ultima isola (scorre col contenuto)
+	# scritta "NUOVA STAGIONE / IN ARRIVO" sopra l'ultima isola (scorre col contenuto)
 	_story_season_lbl = Label.new()
-	_story_season_lbl.text = "%s\n%s" % [loc.t("NUOVA STAGIONE"), loc.t("PROSSIMAMENTE")]
+	_story_season_lbl.text = "%s\n%s" % [loc.t("NUOVA STAGIONE"), loc.t("IN ARRIVO")]
 	_story_season_lbl.add_theme_font_override("font", MODE_FONT)
 	_story_season_lbl.add_theme_font_size_override("font_size", 44)
 	_story_season_lbl.add_theme_color_override("font_color", Color(1, 0.92, 0.45))
@@ -4488,6 +4540,35 @@ func _build_story_map() -> void:
 	_story_season_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_story_season_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_story_content.add_child(_story_season_lbl)
+
+	# TIMER countdown alla prossima stagione (sotto il testo)
+	_story_countdown_lbl = Label.new()
+	_story_countdown_lbl.add_theme_font_override("font", MODE_FONT)
+	_story_countdown_lbl.add_theme_font_size_override("font_size", 40)
+	_story_countdown_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	_story_countdown_lbl.add_theme_color_override("font_outline_color", Color(0.12, 0.09, 0.05))
+	_story_countdown_lbl.add_theme_constant_override("outline_size", 7)
+	_story_countdown_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_story_countdown_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_story_countdown_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_story_content.add_child(_story_countdown_lbl)
+
+	# NUVOLE decorative in cima alla mappa, sotto il testo/timer
+	_story_clouds = TextureRect.new()
+	_story_clouds.texture = STORY_CLOUDS_TEX
+	_story_clouds.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_story_clouds.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_story_clouds.stretch_mode = TextureRect.STRETCH_SCALE
+	_story_clouds.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_story_content.add_child(_story_clouds)
+
+	# aggiornamento del countdown ogni secondo
+	_story_countdown_timer = Timer.new()
+	_story_countdown_timer.wait_time = 1.0
+	_story_countdown_timer.autostart = true
+	_story_countdown_timer.timeout.connect(_update_season_countdown)
+	_story_map.add_child(_story_countdown_timer)
+	_update_season_countdown()
 
 	# CONTATORE STELLE totali in alto a destra (icona stella + numero), header fisso
 	_story_counter_icon = TextureRect.new()
@@ -4529,6 +4610,7 @@ func _build_story_map() -> void:
 	_story_back.pressed.connect(_close_story_map)
 	_story_map.add_child(_story_back)
 
+
 	# toast (es. "PROSSIMAMENTE" sul tasto GIOCA)
 	_story_msg = Label.new()
 	_story_msg.add_theme_font_override("font", MODE_FONT)
@@ -4560,107 +4642,173 @@ func _build_story_popup() -> void:
 			_close_story_popup())
 	_story_popup.add_child(dim)
 
-	# pannello centrale (auto-dimensionato sul contenuto)
-	var panel := PanelContainer.new()
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	var ps := StyleBoxFlat.new()
-	ps.bg_color = Color(0.09, 0.16, 0.34)
-	ps.set_corner_radius_all(24)
-	ps.set_border_width_all(4)
-	ps.border_color = Color(1, 1, 1, 0.85)
-	ps.content_margin_left = 26
-	ps.content_margin_right = 26
-	ps.content_margin_top = 22
-	ps.content_margin_bottom = 22
-	panel.add_theme_stylebox_override("panel", ps)
+	# PANNELLO a DIMENSIONE FISSA (sempre uguale, indipendente dal livello), proporzioni
+	# dell'immagine così non si deforma. Centrato sullo schermo.
+	var pw := 432.0
+	var ph := 862.0   # pannello fisso (alto per immagine grande + caratteristiche + missioni)
+	var panel := Control.new()
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = -pw * 0.5
+	panel.offset_right = pw * 0.5
+	panel.offset_top = -ph * 0.5
+	panel.offset_bottom = ph * 0.5
 	_story_popup.add_child(panel)
 
+	# sfondo 9-patch (riempie il pannello, bordi/angoli non deformati)
+	var bg := NinePatchRect.new()
+	bg.texture = STORY_POPUP_PANEL_TEX
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg.patch_margin_left = 40
+	bg.patch_margin_right = 40
+	bg.patch_margin_top = 40
+	bg.patch_margin_bottom = 40
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_child(bg)
+
+	# (X rimossa: si chiude toccando fuori dal pannello)
+	# contenuto (VBox) ancorato con margini; offset_top per lasciar spazio alle STELLE grandi
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 14)
-	vb.custom_minimum_size = Vector2(360, 0)
+	vb.add_theme_constant_override("separation", 10)
+	vb.anchor_left = 0.0
+	vb.anchor_right = 1.0
+	vb.anchor_top = 0.0
+	vb.anchor_bottom = 1.0
+	vb.offset_left = 26
+	vb.offset_right = -26
+	vb.offset_top = 68
+	vb.offset_bottom = -58
 	panel.add_child(vb)
 
-	_story_pop_title = Label.new()
-	_story_pop_title.add_theme_font_override("font", MODE_FONT)
-	_story_pop_title.add_theme_font_size_override("font_size", 42)
-	_story_pop_title.add_theme_color_override("font_color", Color(1, 0.9, 0.4))
-	_story_pop_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vb.add_child(_story_pop_title)
+	# NUMERO livello, grande ("LIVELLO N")
+	_story_pop_num = Label.new()
+	_story_pop_num.add_theme_font_override("font", MODE_FONT)
+	_story_pop_num.add_theme_font_size_override("font_size", 68)
+	_story_pop_num.add_theme_color_override("font_color", Color(1, 1, 1))
+	_story_pop_num.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	_story_pop_num.add_theme_constant_override("outline_size", 6)
+	_story_pop_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(_story_pop_num)
 
-	# IMMAGINE PREVIEW del livello (screenshot della board), impostata in _open_story_level_popup
-	var img := PanelContainer.new()
+	# ANTEPRIMA ANIMATA del livello (stile cube deck): griglia N×N coi colori del livello,
+	# i cubi compaiono e si distruggono in loop. Riempita in _open_story_level_popup.
+	var img_wrap := CenterContainer.new()
+	_story_preview_box = Panel.new()
+	_story_preview_box.custom_minimum_size = Vector2(336, 250)   # grande e squadrato
+	_story_preview_box.clip_contents = true
 	var ibs := StyleBoxFlat.new()
-	ibs.bg_color = Color(0.05, 0.09, 0.18)
-	ibs.set_corner_radius_all(12)
+	ibs.bg_color = Color(0.04, 0.10, 0.16)
+	ibs.set_corner_radius_all(10)
 	ibs.set_border_width_all(3)
-	ibs.border_color = Color(1, 1, 1, 0.5)
-	img.add_theme_stylebox_override("panel", ibs)
-	img.custom_minimum_size = Vector2(300, 340)
-	vb.add_child(img)
-	_story_pop_img = TextureRect.new()
-	_story_pop_img.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_story_pop_img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_story_pop_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	_story_pop_img.custom_minimum_size = Vector2(300, 340)
-	_story_pop_img.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	img.add_child(_story_pop_img)
+	ibs.border_color = Color(1, 1, 1, 0.35)
+	_story_preview_box.add_theme_stylebox_override("panel", ibs)
+	img_wrap.add_child(_story_preview_box)
+	vb.add_child(img_wrap)
+	# timer che anima l'anteprima (pop di cubi casuali)
+	_story_preview_timer = Timer.new()
+	_story_preview_timer.wait_time = 0.7
+	_story_preview_timer.one_shot = false
+	_story_preview_timer.timeout.connect(_story_preview_tick)
+	_story_preview_box.add_child(_story_preview_timer)
 
+	# breve descrizione simpatica del livello
 	_story_pop_desc = Label.new()
 	_story_pop_desc.add_theme_font_override("font", MODE_FONT)
-	_story_pop_desc.add_theme_font_size_override("font_size", 28)
-	_story_pop_desc.add_theme_color_override("font_color", Color(1, 1, 1))
+	_story_pop_desc.add_theme_font_size_override("font_size", 24)
+	_story_pop_desc.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0))
 	_story_pop_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_story_pop_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_story_pop_desc.custom_minimum_size = Vector2(360, 0)
 	vb.add_child(_story_pop_desc)
 
-	# 3 STELLE con relative missioni (⭐ obiettivo · ⭐⭐ · ⭐⭐⭐)
+	# CARATTERISTICHE: dimensione griglia + cubi colorati (riempita in _open_story_level_popup)
+	_story_pop_stats = VBoxContainer.new()
+	_story_pop_stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	_story_pop_stats.add_theme_constant_override("separation", 6)
+	vb.add_child(_story_pop_stats)
+
+	# MISSIONI: 3 colonne, ognuna con la STELLA (B/N) in alto e SOTTO la quantità da ottenere.
 	_story_pop_star_icons.clear()
 	_story_pop_star_lbls.clear()
+	var miss_row := HBoxContainer.new()
+	miss_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	miss_row.add_theme_constant_override("separation", 18)
 	for i in 3:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
-		row.custom_minimum_size = Vector2(360, 0)
+		var col := VBoxContainer.new()
+		col.alignment = BoxContainer.ALIGNMENT_CENTER
+		col.add_theme_constant_override("separation", 3)
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.custom_minimum_size = Vector2(118, 0)
 		var ic := TextureRect.new()
-		ic.texture = STORY_STAR_EMPTY_TEX
+		ic.texture = STORY_STAR_EMPTY_TEX      # design stella in bianco e nero
 		ic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		ic.custom_minimum_size = Vector2(40, 40)
-		row.add_child(ic)
+		ic.custom_minimum_size = Vector2(54, 54)
+		ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(ic)
 		var ml := Label.new()
 		ml.add_theme_font_override("font", MODE_FONT)
-		ml.add_theme_font_size_override("font_size", 26)
-		ml.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
-		ml.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		ml.add_theme_font_size_override("font_size", 24)
+		ml.add_theme_color_override("font_color", Color(1, 1, 1))     # bianco (colore aggiornato in open)
+		ml.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+		ml.add_theme_constant_override("outline_size", 5)
+		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		ml.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(ml)
-		vb.add_child(row)
+		col.add_child(ml)
+		miss_row.add_child(col)
 		_story_pop_star_icons.append(ic)
 		_story_pop_star_lbls.append(ml)
+	vb.add_child(miss_row)
 
-	# tasto GIOCA (per ora NON avvia il livello: mostra "PROSSIMAMENTE")
-	var play := Button.new()
-	play.text = loc.t("GIOCA")
+	# spinge il PLAY in fondo al pannello
+	var play_spacer := Control.new()
+	play_spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vb.add_child(play_spacer)
+
+	# tasto PLAY in BASSO (immagine, "PLAY" già stampato)
+	var play_wrap := CenterContainer.new()
+	var play := TextureButton.new()
+	play.texture_normal = STORY_PLAY_TEX
+	play.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	play.ignore_texture_size = true
+	play.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	play.custom_minimum_size = Vector2(230, 90)
 	play.focus_mode = Control.FOCUS_NONE
-	play.custom_minimum_size = Vector2(0, 72)
-	play.add_theme_font_override("font", MODE_FONT)
-	play.add_theme_font_size_override("font_size", 38)
-	play.add_theme_color_override("font_color", Color(1, 1, 1))
-	play.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	play.add_theme_constant_override("outline_size", 6)
-	var gs := StyleBoxFlat.new()
-	gs.bg_color = Color(0.20, 0.70, 0.30)
-	gs.set_corner_radius_all(18)
-	gs.set_border_width_all(4)
-	gs.border_color = Color(1, 1, 1, 0.8)
-	play.add_theme_stylebox_override("normal", gs)
-	play.add_theme_stylebox_override("hover", gs)
-	play.add_theme_stylebox_override("pressed", gs)
 	play.pressed.connect(_on_story_play)
-	vb.add_child(play)
+	play_wrap.add_child(play)
+	vb.add_child(play_wrap)
+
+	# 3 STELLE MOLTO GRANDI a cavallo del bordo superiore (stile match-3): centrale enorme,
+	# laterali grandi; colorate se conquistate, altrimenti in bianco e nero.
+	var stars_holder := HBoxContainer.new()
+	stars_holder.alignment = BoxContainer.ALIGNMENT_CENTER
+	stars_holder.add_theme_constant_override("separation", 2)
+	stars_holder.anchor_left = 0.0
+	stars_holder.anchor_right = 1.0
+	stars_holder.anchor_top = 0.0
+	stars_holder.anchor_bottom = 0.0
+	stars_holder.offset_top = -56.0    # centro delle stelle sul bordo alto (metà fuori)
+	stars_holder.offset_bottom = 56.0
+	stars_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(stars_holder)
+	_story_pop_bigstar_icons.clear()
+	var big_sizes := [76, 108, 76]
+	for i in 3:
+		var st := TextureRect.new()
+		st.texture = STORY_STAR_EMPTY_TEX
+		st.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		st.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		st.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		st.custom_minimum_size = Vector2(big_sizes[i], big_sizes[i])
+		st.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		st.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		stars_holder.add_child(st)
+		_story_pop_bigstar_icons.append(st)
 
 
 func _layout_story() -> void:
@@ -4674,8 +4822,14 @@ func _layout_story() -> void:
 	_story_total_h = STORY_PAD_TOP + STORY_PAD_BOTTOM + float(STORY_LEVELS - 1) * STORY_ISLAND_GAP
 	_story_total_h = maxf(_story_total_h, view.y)
 	if _story_content:
+		# solo custom_minimum_size: è questa che definisce l'area scorrevole; NON impostare
+		# .size a mano (litiga con la gestione del ScrollContainer → scroll a scatti/strano).
 		_story_content.custom_minimum_size = Vector2(view.x, _story_total_h)
-		_story_content.size = Vector2(view.x, _story_total_h)
+	# sfondo a strisce scorrevole: copre tutta l'area del contenuto (scorre con le isole)
+	if _story_bg_scroll:
+		_story_bg_scroll.size = Vector2(view.x, _story_total_h)
+		_story_bg_scroll.position = Vector2.ZERO
+		_story_content.move_child(_story_bg_scroll, 0)   # dietro tutto
 	# posizioni a serpentina: livello 1 (i=0) IN BASSO
 	var amp: float = minf(view.x * 0.26, 150.0)
 	var cx := view.x * 0.5
@@ -4698,23 +4852,40 @@ func _layout_story() -> void:
 			var lbl: Label = _story_num_labels[i]
 			lbl.position = Vector2(0, STORY_ISLAND_H * 0.06)
 			lbl.size = Vector2(STORY_ISLAND_W, STORY_ISLAND_H * 0.44)
-		# 3 stelline sotto il numero
+		# 3 stelline sotto il numero: quella centrale più grande, le due laterali
+		# più piccole ma accostate (leggera sovrapposizione), allineate in basso.
 		if i < _story_island_stars.size():
-			var msz := 26.0
-			var mg := 5.0
-			var mtot := 3.0 * msz + 2.0 * mg
+			var side_sz := 24.0          # stelle laterali (più piccole)
+			var mid_sz := 36.0           # stella centrale (più grande)
+			var overlap := 4.0           # accosta/sovrappone leggermente
+			var mtot := 2.0 * side_sz + mid_sz - 2.0 * overlap
 			var mx := (STORY_ISLAND_W - mtot) * 0.5
-			var my := STORY_ISLAND_H * 0.54
+			var baseline := STORY_ISLAND_H * 0.54 + mid_sz   # bordo basso comune
 			var srow: Array = _story_island_stars[i]
+			var szs := [side_sz, mid_sz, side_sz]
+			var xoff := 0.0
 			for s in srow.size():
 				if is_instance_valid(srow[s]):
-					srow[s].size = Vector2(msz, msz)
-					srow[s].position = Vector2(mx + float(s) * (msz + mg), my)
-	# scritta stagione sopra l'ultima isola (livello 30 è centrato a y=STORY_PAD_TOP)
+					var ssz: float = szs[s]
+					srow[s].size = Vector2(ssz, ssz)
+					srow[s].position = Vector2(mx + xoff, baseline - ssz)
+					xoff += ssz - overlap
+	# NUVOLE attaccate in cima allo schermo (top del contenuto), col testo "NUOVA STAGIONE
+	# IN ARRIVO" + timer SOVRAPPOSTI sopra le nuvole.
+	var cloud_h := view.x * (520.0 / 768.0)
+	if _story_clouds:
+		_story_clouds.size = Vector2(view.x, cloud_h)
+		_story_clouds.position = Vector2(0, 0)
+		# nuvole sopra lo sfondo scorrevole (idx 0) ma dietro al testo/timer
+		_story_content.move_child(_story_clouds, 1)
+	# testo + timer più in basso, sotto la notch/dynamic island (offset fisso dal top)
+	var season_y := 150.0
 	if _story_season_lbl:
-		var top_island_y := _story_total_h - STORY_PAD_BOTTOM - float(STORY_LEVELS - 1) * STORY_ISLAND_GAP
-		_story_season_lbl.size = Vector2(view.x, 130.0)
-		_story_season_lbl.position = Vector2(0, top_island_y - STORY_ISLAND_H * 0.5 - 150.0)
+		_story_season_lbl.size = Vector2(view.x, 110.0)
+		_story_season_lbl.position = Vector2(0, season_y)
+	if _story_countdown_lbl:
+		_story_countdown_lbl.size = Vector2(view.x, 52.0)
+		_story_countdown_lbl.position = Vector2(0, season_y + 104.0)
 	# tasto indietro alla STESSA altezza/posizione della X di gioco (game.tscn UI/BackButton:
 	# design (36,-6), 74x74) traslata come gli overlay CanvasLayer (cam_dx/cam_dy)
 	var cam_dx := view.x * 0.5 - CAMERA_CENTER.x
@@ -4722,10 +4893,11 @@ func _layout_story() -> void:
 	if _story_back:
 		_story_back.size = Vector2(74, 74)
 		_story_back.position = Vector2(36.0 + cam_dx, -6.0 + cam_dy)
+	# freccia "torna al livello" in basso al centro (sopra la nav bar). Ruotata di 90°:
+	# il pivot al centro tiene il centro visivo fermo; posiziono il centro a (cx, y_basso).
 	if _story_title:
-		# titolo centrato, alla stessa altezza verticale del tasto indietro
-		_story_title.position = Vector2(0, 4.0 + cam_dy)
-		_story_title.size = Vector2(view.x, 60)
+		# titolo "STORIA" in alto RIMOSSO (nascosto) su richiesta
+		_story_title.visible = false
 	# contatore stelle in alto a DESTRA (icona + numero), alla stessa altezza dell'header
 	if _story_counter_icon:
 		_story_counter_icon.size = Vector2(44, 44)
@@ -4777,7 +4949,59 @@ func _story_color_name(key: String) -> String:
 	return key
 
 
+# Ricompense cosmetiche (3ª stella dei livelli-traguardo ogni 5): livello -> {tipo, id}.
+const STORY_MILESTONE_REWARDS := {
+	5:  {"type": "avatar", "id": "av_penguin"},
+	10: {"type": "skin",   "id": "sk_blue"},
+	15: {"type": "avatar", "id": "av_mushroom"},
+	20: {"type": "skin",   "id": "sk_green"},
+	25: {"type": "avatar", "id": "av_pig"},
+	30: {"type": "skin",   "id": "sk_purple"},
+}
+
+# Ricompensa della stella `s` (0/1/2) del livello n. Monete crescenti col livello;
+# la 3ª stella dei livelli-traguardo (5,10,…,30) dà un cosmetico (avatar/skin).
+func _story_reward(n: int, s: int) -> Dictionary:
+	if s == 2 and STORY_MILESTONE_REWARDS.has(n):
+		var r: Dictionary = STORY_MILESTONE_REWARDS[n]
+		var icon := _shop_cosmetic_icon(r["type"], r["id"])
+		return {"type": r["type"], "id": r["id"], "tex": icon, "amount": 0}
+	var amount: int = [20 + n * 5, 40 + n * 10, 75 + n * 15][s]
+	return {"type": "coins", "id": "", "tex": STORY_COIN_TEX, "amount": amount}
+
+
+# icona (Texture2D) di un cosmetico dello shop dato tipo+id
+func _shop_cosmetic_icon(kind: String, id: String) -> Texture2D:
+	var lst: Array = shop.AVATARS if kind == "avatar" else shop.SKINS
+	for it in lst:
+		if it["id"] == id:
+			var p := str(it["icon"])
+			return load(p) if ResourceLoader.exists(p) else null
+	return null
+
+
 # missione per la stella `tier` (0/1/2): stesse soglie di grid.gd (×1 / ×1.8 / ×2.8; colori ×1/1.7/2.6)
+# Obiettivo COMPATTO della stella `tier`: numero + cosa (es. "3000 punti", "270 cubi rossi").
+func _story_star_amount(cfg: Dictionary, tier: int) -> String:
+	var goal := str(cfg.get("goal", "score"))
+	match goal:
+		"cubes":
+			var base := int(cfg.get("cubes", 0))
+			var vc: int = [base, int(round(base * 1.8)), int(round(base * 2.8))][tier]
+			return "%s %s" % [_story_num(vc), loc.t("cubi")]
+		"colors":
+			var mult: float = [1.0, 1.7, 2.6][tier]
+			var cg: Dictionary = cfg.get("colors_goal", {})
+			var parts: Array = []
+			for k in cg:
+				parts.append("%d %s" % [int(ceil(float(int(cg[k])) * mult)), _story_color_name(str(k))])
+			return "\n".join(parts)
+		_:
+			var b := int(cfg.get("target", 0))
+			var vv: int = [b, int(round(b * 1.8)), int(round(b * 2.8))][tier]
+			return "%s %s" % [_story_num(vv), loc.t("punti")]
+
+
 func _story_star_mission(cfg: Dictionary, tier: int) -> String:
 	var goal := str(cfg.get("goal", "score"))
 	match goal:
@@ -4874,30 +5098,250 @@ func _story_start_bounce(idx: int) -> void:
 
 
 func _open_story_level_popup(n: int) -> void:
-	var info := _story_level_info(n)
 	_story_pop_play_idx = n
-	_story_pop_title.text = str(info.get("name", "%s %d" % [loc.t("LIVELLO"), n]))
-	_story_pop_desc.text = str(info.get("desc", ""))
-	# 3 stelle + relative missioni; le stelle già guadagnate sono piene
 	var cfg := _story_cfg(n)
 	var earned := settings.story_best_stars(n)
+	_story_pop_num.text = "%s %d" % [loc.t("LIVELLO"), n]
+	_story_pop_desc.text = _story_funny_desc(n, cfg)
+	# 3 stelle grandi in cima: colorate se conquistate, altrimenti bianco e nero
+	for i in _story_pop_bigstar_icons.size():
+		_story_pop_bigstar_icons[i].texture = STORY_STAR_FULL_TEX if i < earned else STORY_STAR_EMPTY_TEX
+	# caratteristiche: griglia N×N + cubi dei colori usati
+	_fill_story_stats(cfg)
+	# anteprima animata del livello (griglia + colori)
+	_build_story_preview(int(cfg.get("grid", 3)), int(cfg.get("colors", 3)))
+	# missioni: per ogni stella l'obiettivo. Stella conquistata = oro; non conquistata = bianco.
 	for i in 3:
 		if i < _story_pop_star_lbls.size():
-			_story_pop_star_lbls[i].text = _story_star_mission(cfg, i)
-			_story_pop_star_icons[i].texture = STORY_STAR_FULL_TEX if i < earned else STORY_STAR_EMPTY_TEX
-	# immagine preview del livello (screenshot)
-	if _story_pop_img:
-		var pp := "res://CORE/Assets/Art/Story/previews/lv%d.png" % n
-		_story_pop_img.texture = load(pp) if ResourceLoader.exists(pp) else null
+			_story_pop_star_lbls[i].text = _story_star_amount(cfg, i)
+			var got := i < earned
+			_story_pop_star_icons[i].texture = STORY_STAR_FULL_TEX if got else STORY_STAR_EMPTY_TEX
+			_story_pop_star_lbls[i].add_theme_color_override("font_color", Color(1, 0.92, 0.45) if got else Color(1, 1, 1))
 	_story_popup.visible = true
 
 
+# breve descrizione simpatica in base all'obiettivo del livello
+func _story_funny_desc(n: int, cfg: Dictionary) -> String:
+	if n == 1:
+		return loc.t("Il primo passo: rompi qualche cubo e prendici la mano!")
+	match str(cfg.get("goal", "score")):
+		"cubes":
+			return loc.t("Fai a pezzi tutti i cubi che puoi!")
+		"colors":
+			return loc.t("A caccia dei colori giusti!")
+		"speedrun":
+			return loc.t("Corri, il tempo scappa via!")
+		_:
+			return loc.t("Accumula più punti che riesci!")
+
+
+# riempie CARATTERISTICHE: riga1 "Dimensioni griglia: N×N", riga2 i cubi dei colori usati
+func _fill_story_stats(cfg: Dictionary) -> void:
+	if _story_pop_stats == null:
+		return
+	for c in _story_pop_stats.get_children():
+		_story_pop_stats.remove_child(c)
+		c.queue_free()
+	var g := int(cfg.get("grid", 3))
+	var ncol := int(cfg.get("colors", 3))
+	# riga 1: dimensione griglia
+	var gl := Label.new()
+	gl.add_theme_font_override("font", MODE_FONT)
+	gl.add_theme_font_size_override("font_size", 26)
+	gl.add_theme_color_override("font_color", Color(1, 0.92, 0.45))
+	gl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	gl.add_theme_constant_override("outline_size", 4)
+	gl.text = "%s %d×%d" % [loc.t("Dimensioni griglia:"), g, g]
+	gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_story_pop_stats.add_child(gl)
+	# riga 2: cubi dei colori disponibili
+	var cubes := HBoxContainer.new()
+	cubes.alignment = BoxContainer.ALIGNMENT_CENTER
+	cubes.add_theme_constant_override("separation", 8)
+	for i in mini(ncol, STORY_COLOR_ORDER.size()):
+		var ck: String = STORY_COLOR_ORDER[i]
+		var cube := TextureRect.new()
+		cube.texture = STORY_CUBE_TEX.get(ck, null)
+		cube.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		cube.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		cube.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		cube.custom_minimum_size = Vector2(36, 36)
+		cube.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cubes.add_child(cube)
+	_story_pop_stats.add_child(cubes)
+
+
 func _close_story_popup() -> void:
+	if _story_preview_timer:
+		_story_preview_timer.stop()   # ferma l'animazione anteprima (perf)
 	if _story_popup:
 		_story_popup.visible = false
 
 
+# ---- ANTEPRIMA ANIMATA DEL LIVELLO (stile cube deck) ----
+func _story_preview_base(cap: String) -> Texture2D:
+	return load("%s%s/%s.svg" % [CUBES_DIR, cap, cap]) as Texture2D
+
+func _story_preview_frames(cap: String) -> Array:
+	var out: Array = []
+	for i in range(2, 8):
+		var p := "%s%s/%s_%d.svg" % [CUBES_DIR, cap, cap, i]
+		if ResourceLoader.exists(p):
+			out.append(load(p))
+	return out
+
+# Costruisce la griglia N×N di cubi (colori del livello) e avvia il loop di animazione.
+func _build_story_preview(n: int, ncol: int) -> void:
+	if _story_preview_box == null:
+		return
+	# palette: primi `ncol` colori dello story order, capitalizzati (red -> Red)
+	_story_preview_palette.clear()
+	for i in mini(ncol, STORY_COLOR_ORDER.size()):
+		_story_preview_palette.append(String(STORY_COLOR_ORDER[i]).capitalize())
+	if _story_preview_palette.is_empty():
+		_story_preview_palette.append("Red")
+	# pulisci i cubi precedenti (tieni il Timer)
+	for c in _story_preview_cubes:
+		if is_instance_valid(c):
+			c.queue_free()
+	_story_preview_cubes.clear()
+	# geometria: N×N centrata nel box (area fissa 336×250)
+	var box := Vector2(336.0, 250.0)
+	var m := 16.0
+	var cell: float = minf((box.x - 2.0 * m) / float(n), (box.y - 2.0 * m) / float(n))
+	var cube_sz := cell * 0.92
+	var gw := cell * float(n)
+	var gh := cell * float(n)
+	var ox := (box.x - gw) * 0.5
+	var oy := (box.y - gh) * 0.5
+	for r in n:
+		for cc in n:
+			var cap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
+			var t := TextureRect.new()
+			t.texture = _story_preview_base(cap)
+			t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			t.size = Vector2(cube_sz, cube_sz)
+			t.pivot_offset = t.size * 0.5
+			t.position = Vector2(ox + cc * cell + (cell - cube_sz) * 0.5, oy + r * cell + (cell - cube_sz) * 0.5)
+			t.set_meta("cap", cap)
+			_story_preview_box.add_child(t)
+			_story_preview_cubes.append(t)
+	if _story_preview_timer:
+		_story_preview_timer.start()
+
+# A ogni tick fa "esplodere" 1-2 cubi casuali e li rigenera con un colore della palette.
+func _story_preview_tick() -> void:
+	if _story_preview_cubes.is_empty():
+		return
+	var pops: int = 1 if _story_preview_cubes.size() <= 9 else 2
+	for _k in pops:
+		var cube = _story_preview_cubes[randi() % _story_preview_cubes.size()]
+		_story_preview_pop(cube)
+
+func _story_preview_pop(cube: TextureRect) -> void:
+	if not is_instance_valid(cube):
+		return
+	var cap := str(cube.get_meta("cap", "Red"))
+	var frames := _story_preview_frames(cap)
+	var tw := create_tween()
+	tw.tween_property(cube, "scale", Vector2(1.15, 1.15), 0.06)
+	for f in frames:
+		var ff: Texture2D = f
+		tw.tween_callback(func() -> void:
+			if is_instance_valid(cube):
+				cube.texture = ff)
+		tw.tween_interval(0.04)
+	# rigenera con nuovo colore
+	var newcap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(cube):
+			cube.set_meta("cap", newcap)
+			cube.texture = _story_preview_base(newcap)
+			cube.scale = Vector2(0.3, 0.3))
+	tw.tween_property(cube, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+# Aggiorna, per il livello n, le 3 ricompense e lo stato dei tasti RISCUOTI.
+func _refresh_story_rewards(n: int) -> void:
+	var earned := settings.story_best_stars(n)
+	for i in 3:
+		if i >= _story_pop_claim_btns.size():
+			break
+		var rw := _story_reward(n, i)
+		var ri: TextureRect = _story_pop_reward_icons[i]
+		var rl: Label = _story_pop_reward_lbls[i]
+		var btn: Button = _story_pop_claim_btns[i]
+		ri.texture = rw.get("tex", null)
+		if rw["type"] == "coins":
+			rl.text = "+%d" % int(rw["amount"])
+		else:
+			rl.text = loc.t("SKIN") if rw["type"] == "skin" else loc.t("AVATAR")
+		var unlocked := i < earned
+		var claimed := settings.story_reward_claimed(n, i)
+		ri.modulate = Color(1, 1, 1) if unlocked else Color(1, 1, 1, 0.35)
+		rl.modulate = Color(1, 1, 1) if unlocked else Color(1, 1, 1, 0.35)
+		if claimed:
+			btn.text = loc.t("RISCOSSO")
+			btn.disabled = true
+			btn.modulate = Color(0.6, 1.0, 0.6)
+		elif unlocked:
+			btn.text = loc.t("RISCUOTI")
+			btn.disabled = false
+			btn.modulate = Color(1, 1, 1)
+		else:
+			btn.text = loc.t("BLOCCATO")
+			btn.disabled = true
+			btn.modulate = Color(1, 1, 1, 0.5)
+
+
+# Riscuote la ricompensa della stella `s` del livello aperto nel popup.
+func _on_claim_story_reward(s: int) -> void:
+	var n: int = _story_pop_play_idx
+	if s < 0 or s >= 3:
+		return
+	if s >= settings.story_best_stars(n):
+		return   # stella non ancora conquistata
+	if settings.story_reward_claimed(n, s):
+		return   # già riscossa
+	var rw := _story_reward(n, s)
+	match rw["type"]:
+		"coins":
+			missions.coins += int(rw["amount"])
+			missions._save()
+			settings.play_coin()
+		"avatar":
+			shop.owned_avatars[rw["id"]] = true
+			shop._save()
+			settings.button_feedback()
+		"skin":
+			shop.owned_skins[rw["id"]] = true
+			shop._save()
+			settings.button_feedback()
+	settings.story_mark_reward_claimed(n, s)
+	_refresh_story_rewards(n)
+
+
 # aggiorna l'aspetto dei nodi-livello: completato=verde, giocabile=normale, bloccato=spento
+# Aggiorna il countdown alla prossima stagione (1 settembre 2026). Formato: "TRA 14G 03H 22M 10S".
+func _update_season_countdown() -> void:
+	if _story_countdown_lbl == null:
+		return
+	var target := Time.get_unix_time_from_datetime_string(STORY_SEASON_TARGET_ISO)
+	var now := Time.get_unix_time_from_system()
+	var rem := int(target - now)
+	if rem <= 0:
+		_story_countdown_lbl.text = loc.t("IN ARRIVO")
+		return
+	var d := rem / 86400
+	var h := (rem % 86400) / 3600
+	var m := (rem % 3600) / 60
+	var s := rem % 60
+	_story_countdown_lbl.text = "%s %dG %02dH %02dM %02dS" % [loc.t("TRA"), d, h, m, s]
+
+
 func _refresh_story_nodes() -> void:
 	for i in _story_level_buttons.size():
 		var b: TextureButton = _story_level_buttons[i]

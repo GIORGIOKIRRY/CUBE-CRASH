@@ -60,6 +60,28 @@ func _fit_to_screen() -> void:
 	_sprite.scale = Vector2(sc, sc)
 	_sprite.position = vr.position + vr.size * 0.5
 
+# Transizione SENZA cambio scena (per overlay come la mappa storia): copri -> esegue
+# `on_covered` mentre lo schermo è coperto -> scopri. Stessa animazione del cambio scena.
+func wipe(on_covered: Callable = Callable()) -> void:
+	if _busy:
+		return
+	_busy = true
+	_fit_to_screen()
+	_sprite.visible = true
+	_sprite.play("cover")
+	await _sprite.animation_finished
+	# schermo coperto: applica il cambiamento (non si vede lo stacco)
+	if on_covered.is_valid():
+		on_covered.call()
+	# lascia renderizzare qualche frame prima di scoprire
+	for _i in 6:
+		await get_tree().process_frame
+	_sprite.play("reveal")
+	await _sprite.animation_finished
+	_sprite.visible = false
+	_busy = false
+
+
 # Cambia scena con transizione fluida: copri -> cambia -> scopri.
 func change_scene(path: String) -> void:
 	if _busy:

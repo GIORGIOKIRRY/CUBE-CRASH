@@ -62,6 +62,17 @@ func story_total_stars() -> int:
 	for k in story_stars:
 		tot += int(story_stars[k])
 	return tot
+
+# Ricompense storia riscosse: {"livello_stella" -> true}. Una stella conquistata dà
+# una ricompensa (monete o cosmetico) riscuotibile UNA volta.
+var story_claimed: Dictionary = {}
+
+func story_reward_claimed(level: int, star: int) -> bool:
+	return bool(story_claimed.get("%d_%d" % [level, star], false))
+
+func story_mark_reward_claimed(level: int, star: int) -> void:
+	story_claimed["%d_%d" % [level, star]] = true
+	save_settings()
 # se true, tornando in MainMenu si riapre subito la MAPPA storia (non la home).
 var open_story_on_load: bool = false
 
@@ -111,6 +122,8 @@ var _sfx_bomb: AudioStreamPlayer        # esplosione bombe (+3 / X / angoli)
 var _sfx_arrow: AudioStreamPlayer       # frecce cambio modalità (home)
 var _sfx_coin: AudioStreamPlayer        # animazione monete che salgono
 var _sfx_mission: AudioStreamPlayer     # riscossione missione completata
+var _sfx_buy_cosmetic: AudioStreamPlayer  # acquisto skin/avatar nello shop
+var _sfx_buy_coins: AudioStreamPlayer     # acquisto pacchetto di monete
 var _sfx_combo: Array[AudioStreamPlayer] = []       # combo NUOVI 1..11 (volume pieno)
 var _sfx_combo_old: Array[AudioStreamPlayer] = []   # combo VECCHI 1..5 (layer più basso)
 
@@ -241,6 +254,8 @@ func _setup_sfx_players() -> void:
 	_sfx_arrow = _make_sfx(SFX_DIR + "arrow.mp3")
 	_sfx_coin = _make_sfx(SFX_DIR + "coin.mp3")
 	_sfx_mission = _make_sfx(SFX_DIR + "mission.mp3")
+	_sfx_buy_cosmetic = _make_sfx(SFX_DIR + "buy_cosmetic.mp3")
+	_sfx_buy_coins = _make_sfx(SFX_DIR + "buy_coins.mp3")
 	for i in range(1, 12):   # 11 suoni combo NUOVI (1..11); oltre l'11 usa l'11
 		_sfx_combo.append(_make_sfx(SFX_DIR + "combo%d.wav" % i))
 	for i in range(1, 6):    # combo VECCHI (1..5) sotto, più bassi di volume
@@ -341,6 +356,12 @@ func play_coin() -> void:            # monete che salgono (contatore)
 
 func play_mission() -> void:         # missione completata riscossa
 	_play_sfx(_sfx_mission)
+
+func play_buy_cosmetic() -> void:    # acquisto skin/avatar nello shop
+	_play_sfx(_sfx_buy_cosmetic)
+
+func play_buy_coins() -> void:       # acquisto pacchetto di monete
+	_play_sfx(_sfx_buy_coins)
 
 func play_pickup() -> void:         # prendi un cubo dalla scorta
 	_play_sfx(_sfx_pickup)
@@ -446,6 +467,7 @@ func save_settings() -> void:
 	cfg.set_value("feedback", "vibration", vibration_enabled)
 	cfg.set_value("story", "completed", story_completed)
 	cfg.set_value("story", "stars", story_stars)
+	cfg.set_value("story", "claimed", story_claimed)
 	cfg.save(SETTINGS_PATH)
 
 func load_settings() -> void:
@@ -456,3 +478,4 @@ func load_settings() -> void:
 		vibration_enabled = bool(cfg.get_value("feedback", "vibration", true))
 		story_completed = int(cfg.get_value("story", "completed", 0))
 		story_stars = cfg.get_value("story", "stars", {})
+		story_claimed = cfg.get_value("story", "claimed", {})

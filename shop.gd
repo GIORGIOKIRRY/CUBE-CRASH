@@ -112,6 +112,7 @@ func buy_avatar(id: String) -> bool:
 		return false
 	owned_avatars[id] = true
 	_save()
+	settings.play_buy_cosmetic()
 	return true
 
 func buy_skin(id: String) -> bool:
@@ -121,6 +122,7 @@ func buy_skin(id: String) -> bool:
 		return false
 	owned_skins[id] = true
 	_save()
+	settings.play_buy_cosmetic()
 	return true
 
 func equip_avatar(id: String) -> void:

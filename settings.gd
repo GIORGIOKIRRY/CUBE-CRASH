@@ -32,6 +32,8 @@ var story_colors: int = 0            # n. colori normali ammessi (3/5/7); 0 = de
 var story_ab_vert: bool = true       # abilità VERTICALE (distrugge colonna) abilitata
 var story_ab_horiz: bool = true      # abilità ORIZZONTALE (distrugge riga) abilitata
 var story_ab_bomb: bool = true       # abilità BOMBA (area 3×3) abilitata
+var story_ab_xbomb: bool = false     # abilità BOMBA X (diagonali) abilitata
+var story_ab_angles: bool = false    # abilità BOMBA ANGOLI (quattro angoli) abilitata
 var story_time: float = 0.0          # tempo massimo in secondi (>0 = livello SPEEDRUN)
 var story_goal: String = "score"     # "score" | "cubes" | "colors" | "speedrun"
 var story_goal_cubes: int = 0        # per goal "cubes": n. cubi normali da distruggere

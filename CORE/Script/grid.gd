@@ -92,7 +92,9 @@ var _story_colors: int = 3                     # n. colori normali ammessi (3/5/
 var _story_ab_vert: bool = true                # abilità verticale (colonna) attiva
 var _story_ab_horiz: bool = true               # abilità orizzontale (riga) attiva
 var _story_ab_bomb: bool = true                # abilità bomba 3×3 attiva
-var _story_abilities: Array = []               # valori abilità attivi, subset di [1,2,3]
+var _story_ab_xbomb: bool = false              # abilità bomba X (diagonali) attiva
+var _story_ab_angles: bool = false             # abilità bomba angoli attiva
+var _story_abilities: Array = []               # valori abilità attivi, subset di [1,2,3,4,5]
 var _story_time: float = 0.0                   # >0 = livello a tempo (speedrun storia)
 var _story_goal: String = "score"              # "score" | "cubes" | "colors" | "speedrun"
 var _story_goal_cubes: int = 0                 # goal "cubes": cubi normali da distruggere
@@ -417,10 +419,14 @@ func _ready() -> void:
 		_story_ab_vert = settings.story_ab_vert
 		_story_ab_horiz = settings.story_ab_horiz
 		_story_ab_bomb = settings.story_ab_bomb
+		_story_ab_xbomb = settings.story_ab_xbomb
+		_story_ab_angles = settings.story_ab_angles
 		_story_abilities.clear()
 		if _story_ab_vert: _story_abilities.append(1)
 		if _story_ab_horiz: _story_abilities.append(2)
 		if _story_ab_bomb: _story_abilities.append(3)
+		if _story_ab_xbomb: _story_abilities.append(4)
+		if _story_ab_angles: _story_abilities.append(5)
 		_story_time = settings.story_time
 		_story_goal = settings.story_goal
 		_story_goal_cubes = settings.story_goal_cubes
@@ -1523,6 +1529,47 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 
 	var first_piece = all_pieces[column][row]
 	var other_piece = all_pieces[nx][ny]
+
+	# BOMBE (mooves>=3): stile CANDY CRUSH — la bomba si attiva SCAMBIANDOLA con un BLOCCO vicino
+	# (serve un blocco, non basta spostarla nel vuoto). La bomba scivola nella cella del blocco e
+	# lì ESPLODE. Vale per tutte e 3 le bombe (3×3, X, angoli).
+	if _bomb_swap:
+		var bomb: Node = null
+		var partner: Node = null
+		var bomb_from := Vector2i(column, row)
+		var partner_from := Vector2i(nx, ny)
+		if first_piece != null and _get_piece_mooves(first_piece) >= 3 and other_piece != null:
+			# swipe della BOMBA verso un blocco: si scambiano, la bomba esplode dov'era il blocco
+			bomb = first_piece
+			partner = other_piece
+			bomb_from = Vector2i(column, row)
+			partner_from = Vector2i(nx, ny)
+		elif other_piece != null and _get_piece_mooves(other_piece) >= 3 and first_piece != null:
+			# swipe di un BLOCCO verso la bomba: la bomba esplode nella cella del blocco
+			bomb = other_piece
+			partner = first_piece
+			bomb_from = Vector2i(nx, ny)
+			partner_from = Vector2i(column, row)
+		if bomb != null and partner != null:
+			# scambio posizioni: la bomba va dove stava il blocco, il blocco dove stava la bomba
+			all_pieces[partner_from.x][partner_from.y] = bomb
+			all_pieces[bomb_from.x][bomb_from.y] = partner
+			partner.move(grid_to_pixel(bomb_from.x, bomb_from.y))
+			_combo_count = 0
+			_find_wave = 0
+			_combo_matches = 0
+			_last_combo_shown = 0
+			bomb.matched = true
+			is_resolving = true
+			var slide := 0.16
+			bomb.move(grid_to_pixel(partner_from.x, partner_from.y), slide)   # scivola sul blocco
+			get_tree().create_timer(slide).timeout.connect(func() -> void:
+				if is_instance_valid(bomb):
+					bomb.dim()               # arrivata: esplode con la SUA animazione
+				get_tree().create_timer(BOMB_EXPLODE_TIME).timeout.connect(_on_destroy_timer_timeout))
+			return
+
+	# swap NORMALE: serve un vicino valido (due cubi esistenti)
 	if first_piece == null or other_piece == null:
 		return
 
@@ -1531,28 +1578,6 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 	all_pieces[nx][ny] = first_piece
 	first_piece.move(grid_to_pixel(nx, ny))
 	other_piece.move(grid_to_pixel(column, row))
-
-	# MODALITÀ TEST / TEST 7: se lo swap coinvolge un'ABILITÀ, si attiva SUBITO (senza match di colore)
-	# nella sua nuova posizione — stile Candy Crush. first_piece è ora a (nx,ny), other a (column,row).
-	if _bomb_swap:
-		# solo le BOMBE (mooves>=3) esplodono con lo swap; le frecce seguono il match normale
-		var mv1 := _get_piece_mooves(first_piece)
-		var mv2 := _get_piece_mooves(other_piece)
-		if mv1 >= 3 or mv2 >= 3:
-			_combo_count = 0
-			_find_wave = 0
-			_combo_matches = 0
-			_last_combo_shown = 0
-			if mv1 >= 3:
-				first_piece.matched = true
-				first_piece.dim()        # esplode con la SUA animazione (come i blocchi)
-			if mv2 >= 3:
-				other_piece.matched = true
-				other_piece.dim()
-			is_resolving = true
-			# lascia scorrere l'animazione di esplosione, poi distrugge + attiva il power-up
-			get_tree().create_timer(BOMB_EXPLODE_TIME).timeout.connect(_on_destroy_timer_timeout)
-			return
 
 	# Verifica match
 	_combo_count = 0
@@ -1574,6 +1599,16 @@ func swap_pieces(column: int, row: int, direction: Vector2i) -> void:
 func _cancel_drag() -> void:
 	_hide_placement_preview()
 	if dragging_piece != null:
+		# Se il pezzo è GIÀ stato piazzato sulla griglia (origin="grid") NON riportarlo nel tray:
+		# altrimenti, quando _cancel_drag viene chiamato da find_matches dopo un piazzamento che fa
+		# match, il cubo appena piazzato verrebbe spostato nel tray (scala tray) e lì partirebbe la
+		# sua animazione di distruzione → l'"animazione strana nel tray" segnalata.
+		if str(dragging_piece.get_meta("origin", "bottom")) == "grid":
+			if dragging_piece is CanvasItem:
+				dragging_piece.z_index = 0
+			dragging_piece = null
+			dragging_from_slot = -1
+			return
 		# torna allo slot
 		if dragging_from_slot >= 0:
 			dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
@@ -1643,6 +1678,8 @@ func _process(_delta: float) -> void:
 			_update_timer_label()
 			_trigger_game_over("time")
 			return
+		# colori progressivi basati sul tempo (come SPEEDRUN): pochi all'inizio = tanti match
+		_mc_active_count = _mode_c_active_count()
 		_update_timer_label()
 	if _tut_active:
 		_tut_scripted_tick()
@@ -3109,7 +3146,25 @@ func _build_mode_c_pools() -> void:
 # solo 3 colori per i primi 3 minuti, poi cresce lentamente (+1 ogni ~40s) fino a 6.
 func _mode_c_active_count() -> int:
 	if _is_story:
-		return _story_colors   # STORIA: numero colori FISSO per il livello (3/5/7)
+		if _story_time > 0.0:
+			# LIVELLO A TEMPO (storia Speed Runner): progressione colori diversa per tetto:
+			var cap: int = clampi(_story_colors, 2, MODE_C_COLOR_ORDER.size())
+			var elapsed := _story_time - _speedrun_time_left
+			if cap >= 7:
+				# liv.30 (7×7): IDENTICO alla SPEEDRUN normale — 4 → 5 → 6 → 7
+				if elapsed < 60.0:
+					return 4
+				elif elapsed < 120.0:
+					return 5
+				elif elapsed < 180.0:
+					return 6
+				return MODE_C_COLOR_ORDER.size()
+			elif cap >= 5:
+				# liv.20 (5×5): parte da 3, poi 4, poi 5
+				return clampi(3 + int(elapsed / 60.0), 3, cap)
+			# liv.10 (3×3): parte da 2, poi 3
+			return clampi(2 + int(elapsed / 40.0), 2, cap)
+		return _story_colors   # STORIA normale: numero colori FISSO per il livello (3/5/7)
 	if _is_test or _is_test_6:
 		return 4        # TEST / TEST 6: solo 4 colori
 	if _is_speedrun:
@@ -3144,8 +3199,8 @@ func _pick_normal_piece() -> PackedScene:
 func _pick_plus_scene() -> PackedScene:
 	if _plus_pool[1].is_empty():
 		_build_plus_pools()
-	# STORIA: solo le abilità abilitate dal livello (1=colonna, 2=riga, 3=bomba 3×3).
-	# Niente bomba X/angoli. Colore attivo così matcha con i normali.
+	# STORIA: solo le abilità abilitate dal livello (1=colonna, 2=riga, 3=bomba 3×3,
+	# 4=bomba X dal liv.15, 5=bomba angoli dal liv.25). Colore attivo così matcha coi normali.
 	if _is_story:
 		if _story_abilities.is_empty():
 			return _pick_normal_piece()
@@ -3244,14 +3299,29 @@ func _pick_plus_scene() -> PackedScene:
 
 # STORIA: sceglie un'abilità pesata — frecce (1,2) frequenti, BOMBA (3) rara.
 func _story_weighted_ability() -> int:
-	var pool: Array = []
+	if _story_abilities.is_empty():
+		return 1
+	# peso delle BOMBE (3=3×3, 4=X, 5=angoli): normalmente 1 (frecce 4). Nei livelli SPEED le
+	# bombe sono MOLTO più rare, specie all'inizio (come la speedrun normale): si trovavano troppo.
+	var bomb_w := 1.0
+	if _story_time > 0.0:
+		var el := _story_time - _speedrun_time_left
+		bomb_w = 0.05 + 0.55 * clampf((el - 40.0) / 140.0, 0.0, 1.0)   # ~0.05 -> 0.60
+	var weights: Array = []
+	var total := 0.0
 	for v in _story_abilities:
-		var w: int = 1 if v == 3 else 4
-		for _k in w:
-			pool.append(v)
-	if pool.is_empty():
+		var w: float = bomb_w if int(v) >= 3 else 4.0
+		weights.append(w)
+		total += w
+	if total <= 0.0:
 		return int(_story_abilities[0])
-	return int(pool[randi() % pool.size()])
+	var r := randf() * total
+	var acc := 0.0
+	for i in _story_abilities.size():
+		acc += weights[i]
+		if r <= acc:
+			return int(_story_abilities[i])
+	return int(_story_abilities[_story_abilities.size() - 1])
 
 
 # STORIA: mette 1+ abilità del livello sulla board GIÀ all'avvio (visibili subito), rimpiazzando
@@ -3265,10 +3335,17 @@ func _story_seed_abilities() -> void:
 	elif width >= 5:
 		cap = 2
 	cap = mini(cap, _story_abilities.size())
-	# abilità di valore più alto prima (bomba > riga > colonna): sono le "appena introdotte"
+	# quali abilità seminare all'avvio:
 	var vals: Array = _story_abilities.duplicate()
-	vals.sort()
-	vals.reverse()
+	if _story_time > 0.0:
+		# SPEED: NIENTE bombe pre-posizionate (si trovavano troppo facilmente) — solo frecce
+		vals = vals.filter(func(v): return int(v) < 3)
+		if vals.is_empty():
+			return
+	else:
+		# abilità di valore più alto prima (bomba > riga > colonna): sono le "appena introdotte"
+		vals.sort()
+		vals.reverse()
 	var cells: Array = []
 	for i in width:
 		for j in height:
@@ -3800,17 +3877,17 @@ func _tut_bomb_phase(path: String, text: String) -> void:
 # --- Fase 4: BOMBA 3×3 — board piena, si vede che esplode SOLO nel quadrato 3×3 ---
 func _tut_setup_bomb() -> void:
 	_tut_bomb_phase("res://CORE/Scene/PieceScene/green_plus_3.tscn",
-		"Scambia la BOMBA con un cubo vicino:\nesplode SOLO nel 3×3 attorno!")
+		"SPOSTA la BOMBA di un blocco:\nesplode dove arriva, nel 3×3!")
 
 # --- Fase 5: BOMBA X — colpisce le due DIAGONALI ---
 func _tut_setup_bombx() -> void:
 	_tut_bomb_phase("res://CORE/Scene/PieceScene/purple_xbomb.tscn",
-		"BOMBA X: scambiala,\ncolpisce le due DIAGONALI!")
+		"BOMBA X: spostala di un blocco,\ncolpisce le due DIAGONALI!")
 
 # --- Fase 6: BOMBA ANGOLI — colpisce i 4 angoli della griglia ---
 func _tut_setup_bombangles() -> void:
 	_tut_bomb_phase("res://CORE/Scene/PieceScene/orange_angles.tscn",
-		"BOMBA ANGOLI: scambiala,\ncolpisce i 4 ANGOLI!")
+		"BOMBA ANGOLI: spostala di un blocco,\ncolpisce i 4 ANGOLI!")
 
 # --- Fine: parte la VERA partita ---
 func _tut_show_done() -> void:

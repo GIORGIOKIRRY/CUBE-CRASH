@@ -247,12 +247,14 @@ const PROFILE_ICONS := [   # icone profilo selezionabili
 	"res://CORE/Assets/Art/Home/Shop/av_fish.png",
 	"res://CORE/Assets/Art/Home/Shop/av_skull.png",
 	"res://CORE/Assets/Art/Home/Shop/av_pig.png",
+	# icona EVENTO: mappamondo (pacchetto rilascio globale gratuito)
+	"res://CORE/Assets/Art/Home/Profile/profile_global.png",
 ]
 # icone SBLOCCABILI dalle missioni mensili: indice in PROFILE_ICONS -> id sblocco.
 # Se non sbloccata: mostrata in bianco/nero e NON selezionabile.
 # "creator"/"og" NON vengono dalle missioni: si sbloccano da remoto (approvazione
 # Creator / lista OG supporters).
-const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator", 8: "beta", 9: "og"}
+const PROFILE_ICON_LOCK := {3: "fire", 4: "trophy", 5: "cupgold", 6: "cupgreen", 7: "creator", 8: "beta", 9: "og", 16: "global"}
 # icone sbloccabili acquistandole nello SHOP: indice in PROFILE_ICONS -> id avatar shop.
 const PROFILE_ICON_SHOP := {10: "av_bomb", 11: "av_mushroom", 12: "av_penguin", 13: "av_fish", 14: "av_skull", 15: "av_pig"}
 const CREATOR_BIN_URL := "https://api.npoint.io/d307da3a533b2dd1bafa"
@@ -327,6 +329,8 @@ var _mode_titles := {}                      # mode -> Texture2D (scritta a scher
 # unità): banda centrale sicura 576 (px 96..672 dell'arte), 96 px per lato = bleed per tablet.
 # Altezza 5760 = 30 livelli × 192 di passo + 96 di margine sopra/sotto.
 const STORY_LEVELS := 30                     # livelli per stagione (stagione 1)
+const STORY_XBOMB_LEVEL := 15                 # livello che introduce la BOMBA X
+const STORY_ANGLES_LEVEL := 25               # livello che introduce la BOMBA ANGOLI
 const STORY_NODE := 96.0                     # diametro del nodo-livello (unità di gioco)
 const STORY_V_GAP := 192.0                   # distanza verticale tra due livelli
 const STORY_PAD_TOP := 560.0     # spazio sopra il livello 30 (fascia nuvole in cima + testo/timer sovrapposti)
@@ -344,7 +348,7 @@ const STORY_LEVELS_DATA: Array = [
 	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":20}},
 	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":15, "yellow":15}},
 	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":12, "green":12, "yellow":12}},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"speedrun", "target":3000, "time":180.0},
+	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"speedrun", "target":5000, "time":180.0},
 	{"grid":5, "colors":5, "v":false, "h":false, "b":false, "goal":"score", "target":4000},
 	{"grid":5, "colors":5, "v":true, "h":false, "b":false, "goal":"score", "target":5000},
 	{"grid":5, "colors":5, "v":true, "h":true, "b":false, "goal":"score", "target":6000},
@@ -354,7 +358,7 @@ const STORY_LEVELS_DATA: Array = [
 	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":40}},
 	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":30, "yellow":30}},
 	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":25, "green":25, "yellow":25}},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"speedrun", "target":8000, "time":300.0},
+	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"speedrun", "target":11000, "time":300.0},
 	{"grid":7, "colors":7, "v":false, "h":false, "b":false, "goal":"score", "target":6000},
 	{"grid":7, "colors":7, "v":true, "h":false, "b":false, "goal":"score", "target":8000},
 	{"grid":7, "colors":7, "v":true, "h":true, "b":false, "goal":"score", "target":10000},
@@ -364,11 +368,12 @@ const STORY_LEVELS_DATA: Array = [
 	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":60}},
 	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":45, "yellow":45}},
 	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":35, "green":35, "yellow":35}},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"speedrun", "target":10000, "time":300.0},
+	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"speedrun", "target":14000, "time":300.0},
 ]
 # --- Grafica MONDO 1: sfondo verde + isole cliccabili ---
 const STORY_BG_TEX := preload("res://CORE/Assets/Art/Story/sfondo_story.png")
 const STORY_ISLAND_TEX := preload("res://CORE/Assets/Art/Story/level_node.png")
+const STORY_ISLAND_SPEED_TEX := preload("res://CORE/Assets/Art/Game/base_level_speed.png")   # tile ROSSA (base level) per i livelli Speed Runner
 const STORY_CLOUDS_TEX := preload("res://CORE/Assets/Art/Story/clouds_top.png")
 # Prossima stagione: parte il 1° settembre 2026 (countdown fino a quel giorno)
 const STORY_SEASON_TARGET_ISO := "2026-09-01T00:00:00"
@@ -407,11 +412,15 @@ var _story_pop_reward_lbls: Array = []         # 3 label importo ricompensa
 var _story_pop_claim_btns: Array = []          # 3 tasti RISCUOTI
 var _story_pop_bigstar_icons: Array = []       # 3 stelle grandi in cima (stato livello)
 var _story_pop_num: Label                      # "LIVELLO N" grande
+var _story_pop_bg: NinePatchRect               # sfondo del pannello (blu, rosso per i livelli SPEED)
+var _story_pop_speed: Label                    # "Speed Run" sotto il numero (solo livelli a tempo)
 # anteprima ANIMATA del livello (stile cube deck): griglia N×N coi colori del livello
 var _story_preview_box: Panel = null
 var _story_preview_cubes: Array = []
+var _story_preview_n: int = 0                     # lato della griglia di anteprima (per indicizzare le linee)
 var _story_preview_palette: Array = []
 var _story_preview_timer: Timer = null
+var _story_preview_ability: TextureRect = null   # abilità mostrata al centro (livelli che la introducono)
 var _story_pop_stats: VBoxContainer            # caratteristiche: "Dimensioni griglia: N×N" + cubi
 # cubi colorati (icone piccole per la sezione caratteristiche); ordine come in grid.gd
 const STORY_CUBE_TEX := {
@@ -428,6 +437,7 @@ const STORY_STAR_FULL_TEX := preload("res://CORE/Assets/Art/Story/star_full.png"
 const STORY_STAR_EMPTY_TEX := preload("res://CORE/Assets/Art/Story/star_empty.png")
 const STORY_COIN_TEX := preload("res://CORE/Assets/Art/UI/Missions/coin_icon.png")
 const STORY_POPUP_PANEL_TEX := preload("res://CORE/Assets/Art/Story/popup_panel.png")
+const STORY_POPUP_PANEL_SPEED_TEX := preload("res://CORE/Assets/Art/Story/popup_panel_speed.png")   # pannello ROSSO per i livelli Speed Runner
 const STORY_PLAY_TEX := preload("res://CORE/Assets/Art/Story/btn_play.png")
 const STORY_CLOSE_TEX := preload("res://CORE/Assets/Art/Story/btn_close.png")
 var _story_pop_play_idx := 1
@@ -486,6 +496,10 @@ var _art_pos := CAMERA_CENTER
 var _intro_pending_music := false   # true finché l'intro TV-on non fa partire la musica
 
 func _ready() -> void:
+	# DEV: nelle build di debug rimetti disponibile il pacchetto GLOBAL (per testare acquisto+animazione)
+	if OS.is_debug_build() and missions.is_icon_unlocked("global"):
+		missions.unlocked_icons["global"] = false
+		missions._save()
 	# alla PRIMA apertura la musica parte a fine intro TV-on; al ritorno in home subito
 	if settings.home_intro_played:
 		settings.play_music(music_player.stream)
@@ -2672,6 +2686,15 @@ func _is_og(name: String) -> bool:
 	return bool(_og_names.get(name.strip_edges().to_lower(), false))
 
 # Etichetta dorata "[OG]" (stile oro con contorno scuro)
+# Font di sistema per le EMOJI a colori (il pixel font MODE_FONT non ha i glifi emoji).
+var _emoji_font_cached: Font = null
+func _emoji_font() -> Font:
+	if _emoji_font_cached == null:
+		var f := SystemFont.new()
+		f.font_names = PackedStringArray(["Apple Color Emoji", "Apple Color Emoji UI", "sans-serif"])
+		_emoji_font_cached = f
+	return _emoji_font_cached
+
 func _make_tag(txt: String, col: Color, size: int) -> Label:
 	var l := Label.new()
 	l.text = txt
@@ -2702,6 +2725,8 @@ func _apply_name_tags() -> void:
 		specs.append({"t": "[OG]", "c": Color(1.0, 0.82, 0.15)})   # oro
 	if _is_creator(_player_name):
 		specs.append({"t": "[CC]", "c": Color(0.30, 1.0, 0.38)})   # verde
+	if missions.is_icon_unlocked("global"):
+		specs.append({"t": "[GLO]", "c": Color(1, 1, 1), "rainbow": true})   # tag arcobaleno (pacchetto globale)
 	if specs.is_empty():
 		return
 	# tag SOTTO il nome, in fila partendo da SINISTRA (allineati col nome)
@@ -2709,13 +2734,18 @@ func _apply_name_tags() -> void:
 	var gap := 4.0
 	var x := _name_frame.size.x * 0.15
 	var y := _name_frame.size.y * 0.46
+	var tag_h := _name_frame.size.y * 0.40
 	for s in specs:
 		var w: float = MODE_FONT.get_string_size(s["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, tag_font).x + 4.0
 		var lbl := _make_tag(s["t"], s["c"], tag_font)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		lbl.position = Vector2(x, y)
-		lbl.size = Vector2(w, _name_frame.size.y * 0.40)
+		lbl.size = Vector2(w, tag_h)
 		_name_frame.add_child(lbl)   # figlio del frame: segue l'affondamento alla pressione
+		if bool(s.get("rainbow", false)):
+			var rtw := lbl.create_tween().set_loops()
+			for k in 6:
+				rtw.tween_property(lbl, "modulate", Color.from_hsv(float(k) / 6.0, 0.85, 1.0), 0.3)
 		_name_tags.append(lbl)
 		x += w + gap
 
@@ -4345,6 +4375,11 @@ func _populate_shop() -> void:
 	_shop_timer_label.text = _shop_timer_text()
 	vb.add_child(_shop_timer_label)
 	var first_section := true
+	# EVENTI (in ALTO): pacchetto GRATUITO del rilascio globale — per tutti, a tempo limitato
+	if _global_pack_available():
+		vb.add_child(_shop_section_label("EVENTI"))
+		vb.add_child(_shop_free_pack_card())
+		first_section = false
 	# AVATAR: sono solo 3, quindi sempre tutti (tolti quelli già posseduti)
 	var avatars: Array = shop.AVATARS.filter(func(it): return not shop.owns_avatar(str(it["id"])))
 	if not avatars.is_empty():
@@ -4370,6 +4405,199 @@ func _populate_shop() -> void:
 	spacer.custom_minimum_size = Vector2(0, nav_h + 60.0)
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vb.add_child(spacer)
+
+# --- EVENTO: pacchetto GRATUITO del rilascio globale (icona mappamondo) ---
+const GLOBAL_PACK_DEADLINE_ISO := "2026-09-20T00:00:00"   # ~32 giorni dal rilascio
+
+func _global_pack_available() -> bool:
+	if missions.is_icon_unlocked("global"):
+		return false   # già riscattato
+	var deadline := Time.get_unix_time_from_datetime_string(GLOBAL_PACK_DEADLINE_ISO)
+	return Time.get_unix_time_from_system() < deadline
+
+func _shop_free_pack_card() -> Control:
+	# la card mantiene l'ASPETTO del frame (2240×1280) così non si stira: dimensione FISSA
+	# centrata, bg che riempie (aspetto uguale → nessuna distorsione).
+	var pw := 470.0
+	var ph := pw * 1280.0 / 2240.0   # ≈ 269
+	var wrap := CenterContainer.new()
+	wrap.custom_minimum_size = Vector2(0, ph + 6.0)
+	var card := Button.new()
+	card.flat = true
+	card.focus_mode = Control.FOCUS_NONE
+	card.custom_minimum_size = Vector2(pw, ph)
+	card.pressed.connect(_on_free_pack_pressed)
+	wrap.add_child(card)
+	# frame verde di sfondo (riempie la card, che ha già l'aspetto giusto)
+	var bg := TextureRect.new()
+	bg.texture = load("res://CORE/Assets/Art/Home/Shop/free_pack_frame.png")
+	bg.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(bg)
+	# "GLOBAL RELEASE PACK" in alto
+	var top := Label.new()
+	top.text = loc.t("GLOBAL RELEASE PACK")
+	top.add_theme_font_override("font", MODE_FONT)
+	top.add_theme_font_size_override("font_size", 32)
+	top.add_theme_color_override("font_color", Color(1, 1, 1))
+	top.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	top.add_theme_constant_override("outline_size", 6)
+	top.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	top.position = Vector2(20.0, 14.0)
+	top.size = Vector2(pw - 40.0, 40.0)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(top)
+	# icona mappamondo (ricompensa) AL CENTRO, parte medio-alta
+	var icon := TextureRect.new()
+	icon.texture = load("res://CORE/Assets/Art/Home/Profile/profile_global.png")
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var isz := 90.0
+	icon.size = Vector2(isz, isz)
+	icon.position = Vector2((pw - isz) * 0.5, 56.0)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(icon)
+	# TAG ricompensa SOTTO l'icona: rettangolo nero (NON stondato, senza bordi) con dentro il
+	# mappamondo 🌍 — così il tag è SEMPRE ben visibile (il glifo emoji del font non si vedeva).
+	var badge := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0.55)
+	sb.set_corner_radius_all(0)
+	sb.set_border_width_all(0)
+	badge.add_theme_stylebox_override("panel", sb)
+	var bw := 92.0
+	var bh := 40.0
+	badge.size = Vector2(bw, bh)
+	badge.position = Vector2((pw - bw) * 0.5, 150.0)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(badge)
+	# tag [GLO] tutto ARCOBALENO (hue che scorre)
+	var tag := _make_tag("[GLO]", Color(1, 1, 1), 26)
+	tag.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_child(tag)
+	var rtw := tag.create_tween().set_loops()
+	for k in 6:
+		rtw.tween_property(tag, "modulate", Color.from_hsv(float(k) / 6.0, 0.85, 1.0), 0.3)
+	# "FREE" IN BASSO (un po' più in alto), bianco con contorno nero
+	var free := Label.new()
+	free.text = loc.t("FREE")
+	free.add_theme_font_override("font", MODE_FONT)
+	free.add_theme_font_size_override("font_size", 46)
+	free.add_theme_color_override("font_color", Color(1, 1, 1))
+	free.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	free.add_theme_constant_override("outline_size", 9)
+	free.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	free.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	free.position = Vector2(0.0, ph - 74.0)
+	free.size = Vector2(pw, 52.0)
+	free.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(free)
+	return wrap
+
+func _on_free_pack_pressed() -> void:
+	if not _global_pack_available():
+		return
+	missions.unlock_icon("global")
+	missions._save()
+	settings.play_buy_cosmetic()
+	settings.vibrate(35)
+	_apply_name_tags()      # aggiunge il tag arcobaleno [GLO]
+	_populate_shop()        # il pacchetto sparisce (riscattato)
+	_play_global_reward_anim()   # celebrazione: avatar + tag
+
+# Animazione di sblocco del pacchetto GLOBAL: mostra l'AVATAR (mappamondo) e il TAG [GLO]
+# arcobaleno che compaiono con un rimbalzo. Si chiude da sola (o al tocco).
+func _play_global_reward_anim() -> void:
+	var ov := Control.new()
+	ov.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ov.mouse_filter = Control.MOUSE_FILTER_STOP
+	ov.z_index = 4096
+	add_child(ov)
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.0)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	ov.add_child(dim)
+	var vs := get_viewport_rect().size
+	var cx := vs.x * 0.5
+	var cy := vs.y * 0.42
+	# AVATAR (mappamondo) grande, rimbalza in scala
+	var av := TextureRect.new()
+	av.texture = load("res://CORE/Assets/Art/Home/Profile/profile_global.png")
+	av.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	var asz := 210.0
+	av.size = Vector2(asz, asz)
+	av.pivot_offset = av.size * 0.5
+	av.position = Vector2(cx - asz * 0.5, cy - asz * 0.5)
+	av.scale = Vector2.ZERO
+	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.add_child(av)
+	# "SBLOCCATO!" sopra
+	var title := Label.new()
+	title.text = loc.t("SBLOCCATO!")
+	title.add_theme_font_override("font", MODE_FONT)
+	title.add_theme_font_size_override("font_size", 52)
+	title.add_theme_color_override("font_color", Color(1, 0.92, 0.4))
+	title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+	title.add_theme_constant_override("outline_size", 8)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.size = Vector2(vs.x, 64)
+	title.position = Vector2(0, cy - asz * 0.5 - 90.0)
+	title.modulate.a = 0.0
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.add_child(title)
+	# TAG [GLO] arcobaleno in una pillola nera, sotto l'avatar
+	var bw := 150.0
+	var bh := 60.0
+	var badge := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0, 0, 0, 0.55)
+	sb.set_corner_radius_all(0)
+	sb.set_border_width_all(0)
+	badge.add_theme_stylebox_override("panel", sb)
+	badge.size = Vector2(bw, bh)
+	badge.position = Vector2(cx - bw * 0.5, cy + asz * 0.5 + 26.0)
+	badge.pivot_offset = badge.size * 0.5
+	badge.scale = Vector2.ZERO
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.add_child(badge)
+	var tg := _make_tag("[GLO]", Color(1, 1, 1), 40)
+	tg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_child(tg)
+	var rtw := tg.create_tween().set_loops()
+	for k in 6:
+		rtw.tween_property(tg, "modulate", Color.from_hsv(float(k) / 6.0, 0.85, 1.0), 0.3)
+	# sequenza d'ingresso
+	dim.create_tween().tween_property(dim, "color", Color(0, 0, 0, 0.62), 0.25)
+	var at := av.create_tween()
+	at.tween_property(av, "scale", Vector2(1.18, 1.18), 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	at.tween_property(av, "scale", Vector2.ONE, 0.20).set_trans(Tween.TRANS_SINE)
+	title.create_tween().tween_property(title, "modulate:a", 1.0, 0.4)
+	var bt := badge.create_tween()
+	bt.tween_interval(0.3)
+	bt.tween_property(badge, "scale", Vector2(1.12, 1.12), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	bt.tween_property(badge, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_SINE)
+	# chiusura automatica (o al tocco)
+	var close := func() -> void:
+		if not is_instance_valid(ov):
+			return
+		var ct := ov.create_tween()
+		ct.tween_property(ov, "modulate:a", 0.0, 0.35)
+		ct.tween_callback(ov.queue_free)
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventScreenTouch and ev.pressed:
+			close.call()
+		elif ev is InputEventMouseButton and ev.pressed:
+			close.call())
+	get_tree().create_timer(2.2).timeout.connect(func() -> void: close.call())
 
 # Griglia dei pacchetti monete (3 per riga).
 func _coin_pack_grid() -> GridContainer:
@@ -4541,7 +4769,7 @@ func _build_story_map() -> void:
 	for i in STORY_LEVELS:
 		var n := i + 1
 		var isl := TextureButton.new()
-		isl.texture_normal = STORY_ISLAND_TEX
+		isl.texture_normal = STORY_ISLAND_SPEED_TEX if _story_is_speedrun(n) else STORY_ISLAND_TEX
 		isl.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST   # pixel art nitida
 		isl.ignore_texture_size = true
 		isl.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
@@ -4562,6 +4790,8 @@ func _build_story_map() -> void:
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		isl.add_child(lbl)
+		# (i livelli Speed Runner si distinguono per la tile ROSSA; sulla mappa il numero resta
+		# BIANCO come gli altri. La scritta "Speed Run" appare nel popup, sotto il numero.)
 		# 3 stelline sotto il numero (stato del livello)
 		var srow: Array = []
 		for s in 3:
@@ -4721,6 +4951,7 @@ func _build_story_popup() -> void:
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.add_child(bg)
+	_story_pop_bg = bg
 
 	# (X rimossa: si chiude toccando fuori dal pannello)
 	# contenuto (VBox) ancorato con margini; offset_top per lasciar spazio alle STELLE grandi
@@ -4746,6 +4977,18 @@ func _build_story_popup() -> void:
 	_story_pop_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(_story_pop_num)
 
+	# "Speed Run" sotto il numero (visibile solo per i livelli a tempo)
+	_story_pop_speed = Label.new()
+	_story_pop_speed.text = "Speed Run"
+	_story_pop_speed.add_theme_font_override("font", MODE_FONT)
+	_story_pop_speed.add_theme_font_size_override("font_size", 40)
+	_story_pop_speed.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55))
+	_story_pop_speed.add_theme_color_override("font_outline_color", Color(0.35, 0.05, 0.02))
+	_story_pop_speed.add_theme_constant_override("outline_size", 6)
+	_story_pop_speed.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_story_pop_speed.visible = false
+	vb.add_child(_story_pop_speed)
+
 	# ANTEPRIMA ANIMATA del livello (stile cube deck): griglia N×N coi colori del livello,
 	# i cubi compaiono e si distruggono in loop. Riempita in _open_story_level_popup.
 	var img_wrap := CenterContainer.new()
@@ -4762,7 +5005,7 @@ func _build_story_popup() -> void:
 	vb.add_child(img_wrap)
 	# timer che anima l'anteprima (pop di cubi casuali)
 	_story_preview_timer = Timer.new()
-	_story_preview_timer.wait_time = 0.7
+	_story_preview_timer.wait_time = 1.1
 	_story_preview_timer.one_shot = false
 	_story_preview_timer.timeout.connect(_story_preview_tick)
 	_story_preview_box.add_child(_story_preview_timer)
@@ -4906,13 +5149,14 @@ func _layout_story() -> void:
 			lbl.position = Vector2(0, STORY_ISLAND_H * 0.10)
 			lbl.size = Vector2(STORY_ISLAND_W, STORY_ISLAND_H * 0.42)
 		# 3 STELLE GRANDI sotto il numero: centrale più grande, laterali un po' più piccole.
+		# Volutamente GRANDI e più in basso: "escono" dal bordo inferiore della tile.
 		if i < _story_island_stars.size():
-			var side_sz := 34.0
-			var mid_sz := 46.0
-			var overlap := 4.0
+			var side_sz := 46.0
+			var mid_sz := 64.0
+			var overlap := 6.0
 			var mtot := 2.0 * side_sz + mid_sz - 2.0 * overlap
 			var mx := (STORY_ISLAND_W - mtot) * 0.5
-			var baseline := STORY_ISLAND_H * 0.80   # bordo basso comune (sopra l'ombra della tile)
+			var baseline := STORY_ISLAND_H * 0.98   # bordo basso: le stelle sporgono dalla tile
 			var srow: Array = _story_island_stars[i]
 			var szs := [side_sz, mid_sz, side_sz]
 			var xoff := 0.0
@@ -4969,6 +5213,11 @@ func _story_cfg(n: int) -> Dictionary:
 	if n >= 1 and n <= STORY_LEVELS_DATA.size():
 		return STORY_LEVELS_DATA[n - 1]
 	return {}
+
+# vero se il livello n è una prova a tempo (meccaniche identiche alla modalità SPEEDRUN)
+func _story_is_speedrun(n: int) -> bool:
+	var c := _story_cfg(n)
+	return not c.is_empty() and (str(c.get("goal", "")) == "speedrun" or float(c.get("time", 0.0)) > 0.0)
 
 
 # TEMP: tutti i livelli sbloccati (per test). Rimettere a false per la progressione reale.
@@ -5154,6 +5403,24 @@ func _open_story_level_popup(n: int) -> void:
 	var cfg := _story_cfg(n)
 	var earned := settings.story_best_stars(n)
 	_story_pop_num.text = "%s %d" % [loc.t("LIVELLO"), n]
+	# livelli Speed Runner: pannello ROSSO + "Speed Run" sotto il numero
+	var is_speed := _story_is_speedrun(n)
+	if is_instance_valid(_story_pop_bg):
+		if is_speed:
+			_story_pop_bg.texture = STORY_POPUP_PANEL_SPEED_TEX
+			# bordo del frame rosso: ~16px (base ~32px) su 624×969 → margini 9-patch dedicati
+			_story_pop_bg.patch_margin_left = 28
+			_story_pop_bg.patch_margin_right = 28
+			_story_pop_bg.patch_margin_top = 28
+			_story_pop_bg.patch_margin_bottom = 46
+		else:
+			_story_pop_bg.texture = STORY_POPUP_PANEL_TEX
+			_story_pop_bg.patch_margin_left = 40
+			_story_pop_bg.patch_margin_right = 40
+			_story_pop_bg.patch_margin_top = 40
+			_story_pop_bg.patch_margin_bottom = 40
+	if is_instance_valid(_story_pop_speed):
+		_story_pop_speed.visible = is_speed
 	_story_pop_desc.text = _story_funny_desc(n, cfg)
 	# 3 stelle grandi in cima: colorate se conquistate, altrimenti bianco e nero
 	for i in _story_pop_bigstar_icons.size():
@@ -5161,7 +5428,7 @@ func _open_story_level_popup(n: int) -> void:
 	# caratteristiche: griglia N×N + cubi dei colori usati
 	_fill_story_stats(cfg)
 	# anteprima animata del livello (griglia + colori)
-	_build_story_preview(int(cfg.get("grid", 3)), int(cfg.get("colors", 3)))
+	_build_story_preview(int(cfg.get("grid", 3)), int(cfg.get("colors", 3)), _story_ability_intro(n))
 	# missioni: per ogni stella l'obiettivo. Stella conquistata = oro; non conquistata = bianco.
 	for i in 3:
 		if i < _story_pop_star_lbls.size():
@@ -5173,9 +5440,80 @@ func _open_story_level_popup(n: int) -> void:
 
 
 # breve descrizione simpatica in base all'obiettivo del livello
+# Ritorna "v"/"h"/"b" se il livello n INTRODUCE per la prima volta quell'abilità, altrimenti "".
+func _story_ability_intro(n: int) -> String:
+	var cfg := _story_cfg(n)
+	if cfg.is_empty():
+		return ""
+	# BOMBA X introdotta al livello 15, BOMBA ANGOLI al 25 (per numero di livello)
+	if n == STORY_ANGLES_LEVEL:
+		return "angles"
+	if n == STORY_XBOMB_LEVEL:
+		return "x"
+	# PRIMA comparsa ASSOLUTA dell'abilità (nessun livello precedente la aveva): così l'intro
+	# "NUOVO!" non si ripete quando un livello con altro obiettivo la ri-abilita (es. liv. 6/16/26).
+	if bool(cfg.get("b", false)) and not _story_ability_seen_before(n, "b"):
+		return "b"
+	if bool(cfg.get("h", false)) and not _story_ability_seen_before(n, "h"):
+		return "h"
+	if bool(cfg.get("v", false)) and not _story_ability_seen_before(n, "v"):
+		return "v"
+	return ""
+
+# vero se una qualunque delle abilità `key` (v/h/b) è già stata attiva in un livello < n
+func _story_ability_seen_before(n: int, key: String) -> bool:
+	for m in range(1, n):
+		var c := _story_cfg(m)
+		if not c.is_empty() and bool(c.get(key, false)):
+			return true
+	return false
+
+# Descrizioni simpatiche per ogni livello (i livelli-abilità mostrano il tutorial dell'abilità).
+const STORY_DESC := [
+	"Il primo passo: rompi qualche cubo e prendici la mano!",           # 1
+	"", "", "",                                                          # 2,3,4 = intro abilità
+	"Tre in fila e spariscono: fai spazio con stile!",                  # 5
+	"I cubi non si muovono da soli... datti da fare tu!",               # 6
+	"Combo su combo: falli sparire a raffica!",                         # 7
+	"Metti il colore giusto al posto giusto, senza fretta.",            # 8
+	"Sei una macchina da match: dimostralo!",                           # 9
+	"Il tempo vola: rompi più veloce che puoi!",                        # 10 (speedrun)
+	"Mondo nuovo, griglia più grande: più spazio, più caos!",          # 11
+	"Cinque per cinque: qui servono cervello e dita veloci.",          # 12
+	"Fai piazza pulita: nessun cubo sopravviva!",                       # 13
+	"Le frecce sono tue amiche: usale con astuzia.",                   # 14
+	"Colori ovunque: metti ordine nel disordine!",                     # 15
+	"Un match tira l'altro: scatena la reazione a catena!",            # 16
+	"Riempi, rompi, ripeti. Semplice, no?",                            # 17
+	"La griglia trema di paura: falla esplodere!",                     # 18
+	"Precisione da cecchino: ogni mossa conta.",                       # 19
+	"Corri contro il tempo: batti il cronometro!",                     # 20 (speedrun)
+	"Ultimo mondo: sette per sette, roba da veri campioni.",           # 21
+	"Griglia gigante, ambizioni giganti!",                             # 22
+	"Qui i cubi non perdonano: sii più furbo di loro.",                # 23
+	"Scatena bombe e frecce: fai il finimondo!",                       # 24
+	"Colori a volontà: solo i migliori fanno l'en plein.",             # 25
+	"Combo leggendarie in arrivo: preparati!",                         # 26
+	"Rompi tutto e non guardarti indietro!",                           # 27
+	"Il gran finale si avvicina: dai il massimo!",                     # 28
+	"Penultima sfida: qui si separano i pro dai novellini.",           # 29
+	"L'ULTIMO livello: corri, esplodi, vinci. Leggenda!",              # 30 (speedrun)
+]
+
 func _story_funny_desc(n: int, cfg: Dictionary) -> String:
-	if n == 1:
-		return loc.t("Il primo passo: rompi qualche cubo e prendici la mano!")
+	match _story_ability_intro(n):
+		"v":
+			return loc.t("NUOVO! La FRECCIA VERTICALE: completa la sua linea di colore e distrugge tutta la COLONNA!")
+		"h":
+			return loc.t("NUOVO! La FRECCIA ORIZZONTALE: falla combaciare e polverizza l'intera RIGA!")
+		"b":
+			return loc.t("NUOVO! La BOMBA: scambiala con un cubo vicino e BOOM, esplode tutto il 3x3!")
+		"x":
+			return loc.t("NUOVO! La BOMBA X: scambiala e colpisce lungo le due DIAGONALI a forma di X!")
+		"angles":
+			return loc.t("NUOVO! La BOMBA ANGOLI: scambiala e spazza via i QUATTRO ANGOLI della griglia!")
+	if n >= 1 and n <= STORY_DESC.size() and str(STORY_DESC[n - 1]) != "":
+		return loc.t(STORY_DESC[n - 1])
 	match str(cfg.get("goal", "score")):
 		"cubes":
 			return loc.t("Fai a pezzi tutti i cubi che puoi!")
@@ -5243,9 +5581,13 @@ func _story_preview_frames(cap: String) -> Array:
 	return out
 
 # Costruisce la griglia N×N di cubi (colori del livello) e avvia il loop di animazione.
-func _build_story_preview(n: int, ncol: int) -> void:
+func _build_story_preview(n: int, ncol: int, ability := "") -> void:
 	if _story_preview_box == null:
 		return
+	# rimuovi l'eventuale abilità mostrata prima
+	if is_instance_valid(_story_preview_ability):
+		_story_preview_ability.queue_free()
+	_story_preview_ability = null
 	# palette: primi `ncol` colori dello story order, capitalizzati (red -> Red)
 	_story_preview_palette.clear()
 	for i in mini(ncol, STORY_COLOR_ORDER.size()):
@@ -5257,6 +5599,7 @@ func _build_story_preview(n: int, ncol: int) -> void:
 		if is_instance_valid(c):
 			c.queue_free()
 	_story_preview_cubes.clear()
+	_story_preview_n = n
 	# geometria: N×N centrata nel box (area fissa 336×250)
 	var box := Vector2(336.0, 250.0)
 	var m := 16.0
@@ -5266,54 +5609,115 @@ func _build_story_preview(n: int, ncol: int) -> void:
 	var gh := cell * float(n)
 	var ox := (box.x - gw) * 0.5
 	var oy := (box.y - gh) * 0.5
-	for r in n:
-		for cc in n:
-			var cap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
-			var t := TextureRect.new()
-			t.texture = _story_preview_base(cap)
-			t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-			t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			t.size = Vector2(cube_sz, cube_sz)
-			t.pivot_offset = t.size * 0.5
-			t.position = Vector2(ox + cc * cell + (cell - cube_sz) * 0.5, oy + r * cell + (cell - cube_sz) * 0.5)
-			t.set_meta("cap", cap)
-			_story_preview_box.add_child(t)
-			_story_preview_cubes.append(t)
-	if _story_preview_timer:
+	# griglia di cubi animata SOLO se il livello NON introduce un'abilità (in quel caso mostra
+	# solo il blocco-abilità, senza animazione dietro).
+	if ability == "":
+		for r in n:
+			for cc in n:
+				var cap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
+				var t := TextureRect.new()
+				t.texture = _story_preview_base(cap)
+				t.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+				t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				t.size = Vector2(cube_sz, cube_sz)
+				t.pivot_offset = t.size * 0.5
+				t.position = Vector2(ox + cc * cell + (cell - cube_sz) * 0.5, oy + r * cell + (cell - cube_sz) * 0.5)
+				t.set_meta("cap", cap)
+				_story_preview_box.add_child(t)
+				_story_preview_cubes.append(t)
+	# ABILITÀ introdotta in questo livello: mostra SOLO il blocco-abilità, GRANDE, al centro
+	if ability != "":
+		var ov := TextureRect.new()
+		match ability:
+			"b":
+				ov.texture = load("res://CORE/Assets/Art/Game/Cubes/_PLUS/Bomb/bomb_1.png")
+			"x":
+				ov.texture = load("res://CORE/Assets/Art/Game/Cubes/_XBOMB/Anim/xbomb_1.png")
+			"angles":
+				ov.texture = load("res://CORE/Assets/Art/Game/Cubes/_ANGLES/Anim/angles_1.png")
+			_:
+				var cap0: String = _story_preview_palette[0]
+				var ab := "res://CORE/Assets/Art/Game/Cubes/_PLUS/%s/ab_1.png" % cap0
+				ov.texture = load(ab) if ResourceLoader.exists(ab) else load("res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/ab_1.png")
+		ov.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		ov.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ov.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var isz := box.y * 0.74
+		ov.size = Vector2(isz, isz)
+		ov.pivot_offset = ov.size * 0.5
+		ov.position = (box - ov.size) * 0.5
+		if ability == "h":
+			ov.rotation = deg_to_rad(90.0)
+		ov.z_index = 5
+		_story_preview_box.add_child(ov)
+		_story_preview_ability = ov
+		# pulsazione per renderlo vivo
+		var ptw := ov.create_tween().set_loops()
+		ptw.tween_property(ov, "scale", Vector2(1.08, 1.08), 0.6).set_trans(Tween.TRANS_SINE)
+		ptw.tween_property(ov, "scale", Vector2.ONE, 0.6).set_trans(Tween.TRANS_SINE)
+		if _story_preview_timer:
+			_story_preview_timer.stop()   # niente griglia animata dietro → timer spento
+	elif _story_preview_timer:
 		_story_preview_timer.start()
 
-# A ogni tick fa "esplodere" 1-2 cubi casuali e li rigenera con un colore della palette.
+# A ogni tick simula un MATCH VERO: una linea di 3 cubi dello STESSO colore (come se il
+# giocatore l'avesse allineata) che scoppia insieme e si rigenera — non pop casuali.
 func _story_preview_tick() -> void:
-	if _story_preview_cubes.is_empty():
+	if _story_preview_cubes.is_empty() or _story_preview_palette.is_empty():
 		return
-	var pops: int = 1 if _story_preview_cubes.size() <= 9 else 2
-	for _k in pops:
-		var cube = _story_preview_cubes[randi() % _story_preview_cubes.size()]
-		_story_preview_pop(cube)
+	var n := _story_preview_n
+	if n < 3:
+		return
+	# linea di 3 dentro la griglia: orizzontale o verticale
+	var line: Array = []
+	if randi() % 2 == 0:
+		var r := randi() % n
+		var c0 := randi() % (n - 2)
+		for k in 3:
+			line.append(r * n + (c0 + k))
+	else:
+		var c := randi() % n
+		var r0 := randi() % (n - 2)
+		for k in 3:
+			line.append((r0 + k) * n + c)
+	_story_preview_match_line(line)
 
-func _story_preview_pop(cube: TextureRect) -> void:
-	if not is_instance_valid(cube):
-		return
-	var cap := str(cube.get_meta("cap", "Red"))
+# I 3 cubi diventano lo stesso colore (match formato), poi scoppiano INSIEME e si rigenerano.
+func _story_preview_match_line(line: Array) -> void:
+	var cap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
 	var frames := _story_preview_frames(cap)
-	var tw := create_tween()
-	tw.tween_property(cube, "scale", Vector2(1.15, 1.15), 0.06)
-	for f in frames:
-		var ff: Texture2D = f
+	for idx in line:
+		if idx < 0 or idx >= _story_preview_cubes.size():
+			continue
+		var cube: TextureRect = _story_preview_cubes[idx]
+		if not is_instance_valid(cube):
+			continue
+		# 1) allineamento: il cubo prende il colore del match con un piccolo pop
+		cube.set_meta("cap", cap)
+		cube.texture = _story_preview_base(cap)
+		var tw: Tween = cube.create_tween()
+		tw.tween_property(cube, "scale", Vector2(1.12, 1.12), 0.12).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(cube, "scale", Vector2.ONE, 0.10).set_trans(Tween.TRANS_SINE)
+		# 2) breve pausa (si VEDE il match), poi scoppia con l'animazione di rottura
+		tw.tween_interval(0.22)
+		tw.tween_property(cube, "scale", Vector2(1.15, 1.15), 0.06)
+		for f in frames:
+			var ff: Texture2D = f
+			tw.tween_callback(func() -> void:
+				if is_instance_valid(cube):
+					cube.texture = ff)
+			tw.tween_interval(0.04)
+		# 3) rigenera con un nuovo colore che "cade"
+		var newcap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
 		tw.tween_callback(func() -> void:
 			if is_instance_valid(cube):
-				cube.texture = ff)
-		tw.tween_interval(0.04)
-	# rigenera con nuovo colore
-	var newcap: String = _story_preview_palette[randi() % _story_preview_palette.size()]
-	tw.tween_callback(func() -> void:
-		if is_instance_valid(cube):
-			cube.set_meta("cap", newcap)
-			cube.texture = _story_preview_base(newcap)
-			cube.scale = Vector2(0.3, 0.3))
-	tw.tween_property(cube, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				cube.set_meta("cap", newcap)
+				cube.texture = _story_preview_base(newcap)
+				cube.scale = Vector2(0.3, 0.3))
+		tw.tween_property(cube, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 # Aggiorna, per il livello n, le 3 ricompense e lo stato dei tasti RISCUOTI.
@@ -5433,6 +5837,9 @@ func _on_story_play() -> void:
 	settings.story_ab_vert = bool(cfg.get("v", false))
 	settings.story_ab_horiz = bool(cfg.get("h", false))
 	settings.story_ab_bomb = bool(cfg.get("b", false))
+	# BOMBA X disponibile dal livello 15, BOMBA ANGOLI dal 25 (per numero di livello)
+	settings.story_ab_xbomb = (n >= STORY_XBOMB_LEVEL)
+	settings.story_ab_angles = (n >= STORY_ANGLES_LEVEL)
 	settings.story_goal = str(cfg.get("goal", "score"))
 	settings.story_target = int(cfg.get("target", 0))
 	settings.story_goal_cubes = int(cfg.get("cubes", 0))
@@ -5450,10 +5857,62 @@ func _open_story_map() -> void:
 	_close_story_popup()
 	_layout_story()
 	_refresh_story_nodes()
-	# la mappa parte dal BASSO (livello 1)
 	await get_tree().process_frame
+	# SCROLL: centra il PROSSIMO livello da fare (dopo l'ultimo completato). Per un nuovo
+	# giocatore (completed=0) → livello 1 in basso. Così tornando dopo un livello si arriva
+	# già alla zona del livello successivo.
 	if _story_scroll:
-		_story_scroll.scroll_vertical = int(_story_total_h)
+		var idx := clampi(settings.story_completed, 0, STORY_LEVELS - 1)
+		if idx < _story_level_pos.size():
+			var view := get_viewport_rect().size
+			var target: float = _story_level_pos[idx].y - view.y * 0.5
+			var maxs: float = maxf(0.0, _story_total_h - view.y)
+			_story_scroll.scroll_vertical = int(clampf(target, 0.0, maxs))
+		else:
+			_story_scroll.scroll_vertical = int(_story_total_h)
+	# ANIMAZIONE d'ingresso a cascata + DONDOLIO CONTINUO (mappa viva/giocosa)
+	_story_intro_hop()
+	_story_wobble_all()
+
+
+# Saltello a cascata di TUTTI i livelli (sfalsati) all'apertura della mappa.
+func _story_intro_hop() -> void:
+	for i in _story_level_buttons.size():
+		var b: TextureButton = _story_level_buttons[i]
+		if not is_instance_valid(b):
+			continue
+		var base_y: float = b.position.y
+		var tw := create_tween()
+		tw.tween_interval(float(i) * 0.05)
+		tw.tween_property(b, "position:y", base_y - 20.0, 0.16).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(b, "position:y", base_y, 0.30).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+
+# DONDOLIO CONTINUO "pop": ogni livello oscilla (rotazione dx/sx) E si sposta un po' a
+# destra/sinistra, in loop e sfasato tra le isole → mappa viva e giocosa.
+func _story_wobble_all() -> void:
+	for i in _story_level_buttons.size():
+		var b: TextureButton = _story_level_buttons[i]
+		if not is_instance_valid(b):
+			continue
+		b.rotation = 0.0
+		var dir := 1.0 if (i % 2 == 0) else -1.0            # metà partono a dx, metà a sx
+		var amp := deg_to_rad(2.5 + float(i % 3) * 1.0)     # 2.5..4.5° di rotazione (leggera)
+		var dur := 1.0 + float(i % 4) * 0.12                # periodo variabile → non sincroni
+		var delay := float(i % 5) * 0.09                    # partenze scaglionate
+		# ROTAZIONE (dondolio dx/sx)
+		var rtw := b.create_tween().set_loops()
+		rtw.tween_interval(delay)
+		rtw.tween_property(b, "rotation", amp * dir, dur).set_trans(Tween.TRANS_SINE)
+		rtw.tween_property(b, "rotation", -amp * dir, dur * 2.0).set_trans(Tween.TRANS_SINE)
+		rtw.tween_property(b, "rotation", 0.0, dur).set_trans(Tween.TRANS_SINE)
+		# OSCILLAZIONE laterale (dx/sx) abbinata → effetto "pop"
+		var base_x: float = b.position.x
+		var swing := 3.0 + float(i % 3) * 1.5               # 3..6 px (leggera)
+		var stw := b.create_tween().set_loops()
+		stw.tween_interval(delay)
+		stw.tween_property(b, "position:x", base_x + swing * dir, dur * 1.3).set_trans(Tween.TRANS_SINE)
+		stw.tween_property(b, "position:x", base_x - swing * dir, dur * 2.6).set_trans(Tween.TRANS_SINE)
+		stw.tween_property(b, "position:x", base_x, dur * 1.3).set_trans(Tween.TRANS_SINE)
 
 
 func _close_story_map() -> void:

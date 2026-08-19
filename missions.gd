@@ -90,9 +90,7 @@ func seconds_until_monthly_refresh() -> int:
 func _generate_monthly() -> void:
 	# NB: se una missione mensile era già stata riscattata (icona sbloccata) resta tale.
 	monthly = [
-		# BETA TESTER: già completata per chi gioca durante la beta (basta riscuotere l'icona)
-		{"type": "beta", "param": "", "target": 1, "progress": 1,
-			"reward_type": "icon", "reward_icon": "beta", "claimed": false},
+		# (BETA TESTER rimossa: l'icona beta non è più ottenibile in gioco)
 		{"type": "streak", "param": "", "target": 7, "progress": 0,
 			"reward_type": "icon", "reward_icon": "fire", "claimed": false},
 		{"type": "score_classic", "param": "", "target": 500000, "progress": 0,

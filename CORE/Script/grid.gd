@@ -814,24 +814,27 @@ func _mode_c_fill_pattern() -> Array:
 	return filled
 
 # Animazione d'ingresso: la griglia si RIEMPIE gradualmente dall'ALTO verso il basso.
-# Ogni cubo cade dalla cella sopra + dissolvenza, con un ritardo crescente riga per riga.
+# I cubi COMPARIONO sul posto (scala 0→piena + dissolvenza), riga per riga: NON si spostano,
+# quindi non "galleggiano" mai né sforano il bordo della griglia.
 func _animate_board_intro() -> void:
-	var stagger := 0.045
+	var stagger := 0.05
 	for i in width:
 		for j in height:
 			var p = all_pieces[i][j]
 			if p == null or not is_instance_valid(p):
 				continue
-			var final_pos: Vector2 = p.position
+			var base_scale: Vector2 = p.scale
+			if base_scale.x <= 0.01:
+				base_scale = Vector2(_grid_piece_scale, _grid_piece_scale)
 			var d: float = float(height - 1 - j) * stagger   # riga in ALTO per prima
-			p.position = final_pos - Vector2(0.0, offset * 1.1)   # parte un po' più in alto
+			p.scale = base_scale * 0.3
 			p.modulate.a = 0.0
 			var tw := create_tween()
 			tw.tween_interval(d)
-			tw.tween_property(p, "position", final_pos, 0.30).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(p, "scale", base_scale, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 			var tw2 := create_tween()
 			tw2.tween_interval(d)
-			tw2.tween_property(p, "modulate:a", 1.0, 0.16)
+			tw2.tween_property(p, "modulate:a", 1.0, 0.15)
 
 # Evita match immediato sul posizionamento
 func _random_piece_instance_avoiding_match(i: int, j: int) -> Node:
@@ -1574,7 +1577,10 @@ func _cancel_drag() -> void:
 		# torna allo slot
 		if dragging_from_slot >= 0:
 			dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
-			_tween_piece_scale(dragging_piece, _bottom_scale)
+			# SNAP diretto alla scala del tray (niente tween: in 3×3 la scala-griglia è molto
+			# più grande e l'animazione di ritorno faceva un effetto strano sotto il cubo)
+			_kill_piece_scale_tween(dragging_piece)
+			dragging_piece.scale = Vector2(_bottom_scale, _bottom_scale)
 			_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
 		if dragging_piece is CanvasItem:
 			dragging_piece.z_index = 0
@@ -1817,9 +1823,10 @@ func _input(event: InputEvent) -> void:
 				# Controlla il game over
 				check_game_over()
 			else:
-				# Ritorna allo slot originale se non valido
+				# Ritorna allo slot originale se non valido — SNAP diretto alla scala tray
 				dragging_piece.global_position = _bottom_slot_pixel(dragging_from_slot)
-				_tween_piece_scale(dragging_piece, _bottom_scale)
+				_kill_piece_scale_tween(dragging_piece)
+				dragging_piece.scale = Vector2(_bottom_scale, _bottom_scale)
 				_apply_select_look(dragging_piece)   # tornato nel tray: grafica SELECT
 				# TUTORIAL: colore/posto sbagliato → il cubo TRABALLA e torna nel tray
 				if _tut_active:
@@ -3355,10 +3362,11 @@ func _find_useful_move() -> Dictionary:
 
 func _show_hint() -> void:
 	# 1) se hai mosse e c'è un piazzamento utile dei 3 cubi in basso, suggerisci quello
+	# NB: NIENTE animazione sul cubo del tray (l'utente non la vuole): solo il fantasma
+	# sulla cella della griglia indica dove piazzare.
 	if current_moves > 0:
 		var move := _find_useful_move()
 		if not move.is_empty():
-			_bounce_bottom_piece(int(move["slot"]))
 			_wiggle_hint_at(move["cell"], bottom_pieces[int(move["slot"])])
 			return
 	# 2) altrimenti (mosse finite o niente piazzamento utile): suggerisci uno swap nella griglia
@@ -3753,14 +3761,14 @@ func _tut_fill_row(y: int, skip_x: int) -> void:
 func _tut_setup_arrow_v() -> void:
 	_tut_clear_board()
 	_tut_phase_done = false
-	_tut_need_color = "blue"
+	_tut_need_color = "red"
 	_tut_target_cell = Vector2i(4, 3)
 	_tut_fill_col(3, 3)                                                      # colonna 3 PIENA (si vedrà sparire tutta)
-	_tut_place_scene("res://CORE/Scene/PieceScene/blue_plus_1.tscn", 3, 3)   # freccia verticale (blu)
-	_tut_place("blue", 2, 3)
-	_tut_set_tray(["blue", "purple", "orange"])
+	_tut_place_scene("res://CORE/Scene/PieceScene/red_plus_1.tscn", 3, 3)    # freccia verticale (rossa)
+	_tut_place("red", 2, 3)
+	_tut_set_tray(["red", "purple", "orange"])
 	_tut_show_hint(_tut_target_cell)
-	_tutorial_show_text("Metti il cubo BLU qui: la FRECCIA\ndistrugge TUTTA la colonna!")
+	_tutorial_show_text("Metti il cubo ROSSO qui: la FRECCIA\ndistrugge TUTTA la colonna!")
 
 # --- Fase 3: FRECCIA ORIZZONTALE — l'utente completa la linea rossa; la freccia distrugge tutta la RIGA (piena) ---
 func _tut_setup_arrow_h() -> void:

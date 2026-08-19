@@ -47,8 +47,8 @@ const DECK_CARDS := [
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/Blue/Blue.svg",     "name": "CUBO BLU",     "special": false},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/Purple/Purple.svg", "name": "CUBO VIOLA",   "special": false},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/Pink/Pink.svg",     "name": "CUBO ROSA",    "special": false},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus1.svg", "name": "FRECCIA VERT.", "special": true, "frame": "res://CORE/Assets/Art/Home/Deck/card_frecce.png"},
-	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus2.svg", "name": "FRECCIA ORIZ.", "special": true, "frame": "res://CORE/Assets/Art/Home/Deck/card_frecce.png"},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/ab_1.png", "name": "FRECCIA VERT.", "special": true, "frame": "res://CORE/Assets/Art/Home/Deck/card_frecce.png"},
+	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/ab_1.png", "name": "FRECCIA ORIZ.", "special": true, "frame": "res://CORE/Assets/Art/Home/Deck/card_frecce.png"},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Bomb/bomb_1.png",   "name": "BOMBA",         "special": true},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/_XBOMB/Anim/xbomb_1.png", "name": "BOMBA X",       "special": true},
 	{"tex": "res://CORE/Assets/Art/Game/Cubes/_ANGLES/Anim/angles_1.png", "name": "BOMBA ANGOLI",  "special": true},
@@ -94,12 +94,12 @@ const CUBE_INFO := {
 	},
 	# ABILITÀ (speciali): popup con SOLA skin base (niente doppia skin).
 	"FRECCIA VERT.": {
-		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus1.svg", "name": "FRECCIA VERT.", "color_key": "",
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/ab_1.png", "name": "FRECCIA VERT.", "color_key": "",
 		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
 		"desc": "Distrugge tutta la COLONNA in cui si trova. Verticale e senza pieta.",
 	},
 	"FRECCIA ORIZ.": {
-		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/Red_plus2.svg", "name": "FRECCIA ORIZ.", "color_key": "",
+		"cube": "res://CORE/Assets/Art/Game/Cubes/_PLUS/Red/ab_1.png", "name": "FRECCIA ORIZ.", "color_key": "",
 		"type": "ABILITA", "color": Color(0.98, 0.35, 0.55),
 		"desc": "Spazza via l'intera RIGA. Orizzontale e implacabile.",
 	},
@@ -213,6 +213,8 @@ var _deck_bounce_tween: Tween
 # Barra in alto a destra: coin count + classifica + impostazioni
 var _coin_bar: TextureRect
 var _record_bar: TextureRect
+var _home_star_bar: TextureRect = null   # contatore STELLE (solo quando è selezionata STORY)
+var _home_star_label: Label = null
 var _coin_count_label: Label
 var _leader_btn: TextureButton
 var _news_btn: TextureButton
@@ -366,12 +368,12 @@ const STORY_LEVELS_DATA: Array = [
 ]
 # --- Grafica MONDO 1: sfondo verde + isole cliccabili ---
 const STORY_BG_TEX := preload("res://CORE/Assets/Art/Story/sfondo_story.png")
-const STORY_ISLAND_TEX := preload("res://CORE/Assets/Art/Story/isola_mondo1.png")
+const STORY_ISLAND_TEX := preload("res://CORE/Assets/Art/Story/level_node.png")
 const STORY_CLOUDS_TEX := preload("res://CORE/Assets/Art/Story/clouds_top.png")
 # Prossima stagione: parte il 1° settembre 2026 (countdown fino a quel giorno)
 const STORY_SEASON_TARGET_ISO := "2026-09-01T00:00:00"
-const STORY_ISLAND_W := 172.0                 # larghezza isola-livello (unità di gioco)
-const STORY_ISLAND_H := 160.0                 # altezza (aspetto 244×227)
+const STORY_ISLAND_W := 156.0                 # larghezza nodo-livello (tile quadrata)
+const STORY_ISLAND_H := 173.0                 # altezza (aspetto 1152×1280 ≈ 0.9)
 const STORY_ISLAND_GAP := 220.0               # distanza verticale tra due isole
 var _story_layer: CanvasLayer
 var _story_map_img: TextureRect
@@ -936,6 +938,19 @@ func _update_mode_screen() -> void:
 	var mode: String = m["mode"]
 	# aggiorna il contatore RECORD in alto alla modalità selezionata
 	_refresh_record_counters()
+	# STORY: mostra il contatore STELLE nella STESSA identica posizione del contatore RECORD
+	# (punti classic/speedrun) e nascondi il record. Copio pos/size dal record → nessuno sfasamento.
+	var is_story := mode == "story"
+	if _home_star_bar and is_instance_valid(_record_bar):
+		_home_star_bar.position = _record_bar.position
+		_home_star_bar.size = Vector2(REC_CLASSIC_W, COUNTER_H)
+		_home_star_bar.visible = is_story
+		if is_story and _home_star_label:
+			_home_star_label.position = Vector2(REC_CLASSIC_W * REC_CLASSIC_ICON_FRAC, 0.0)
+			_home_star_label.size = Vector2(REC_CLASSIC_W * (1.0 - REC_CLASSIC_ICON_FRAC), COUNTER_H)
+			_home_star_label.text = str(settings.story_total_stars())
+	if _record_bar:
+		_record_bar.visible = not is_story
 	# se la modalità ha un'animazione a schermo la mostro (dietro il cabinato) e nascondo il testo
 	if _screen_anim and _mode_anims.has(mode):
 		_screen_anim.sprite_frames = _mode_anims[mode]
@@ -1306,6 +1321,10 @@ func _make_deck_card(c: Dictionary, cw: float, ch: float) -> Control:
 	card.add_child(cube)
 	# FRECCE: nella card il cubo alterna tutti i colori (come una gif di preview)
 	var cname: String = c.get("name", "")
+	# la FRECCIA ORIZZONTALE mostra la grafica ruotata di 90° (il frame è "verticale")
+	if cname == "FRECCIA ORIZ.":
+		cube.pivot_offset = cube.size * 0.5
+		cube.rotation = deg_to_rad(90.0)
 	if cname == "FRECCIA VERT." or cname == "FRECCIA ORIZ.":
 		var plus_n := 2 if cname == "FRECCIA ORIZ." else 1
 		var idx := {"v": 0}
@@ -1319,7 +1338,8 @@ func _make_deck_card(c: Dictionary, cw: float, ch: float) -> Control:
 				return
 			idx["v"] = (idx["v"] + 1) % DEMO_COLORS.size()
 			var col: String = DEMO_COLORS[idx["v"]]
-			cube.texture = load("%s_PLUS/%s/%s_plus%d.svg" % [CUBES_DIR, col, col, plus_n]))
+			var ab := "%s_PLUS/%s/ab_1.png" % [CUBES_DIR, col.capitalize()]
+			cube.texture = load(ab) if ResourceLoader.exists(ab) else load("%s_PLUS/%s/%s_plus%d.svg" % [CUBES_DIR, col, col, plus_n]))
 	# Nome sotto: PIÙ GRANDE (bianco, contorno nero)
 	var nm := Label.new()
 	nm.text = loc.t(c["name"])
@@ -1668,7 +1688,9 @@ func _ci_cycle_match(t: Tween) -> void:
 func _ci_cycle_beam(t: Tween, horizontal: bool) -> void:
 	var color: String = DEMO_COLORS[_ci_demo_color_idx % DEMO_COLORS.size()]
 	var plus_n := 2 if horizontal else 1
-	var arrow := load("%s_PLUS/%s/%s_plus%d.svg" % [CUBES_DIR, color, color, plus_n]) as Texture2D
+	# freccia = nuovo cubo-abilità (ab_1) col fallback all'SVG se il colore non ha i frame
+	var ab_path := "%s_PLUS/%s/ab_1.png" % [CUBES_DIR, color.capitalize()]
+	var arrow: Texture2D = load(ab_path) if ResourceLoader.exists(ab_path) else load("%s_PLUS/%s/%s_plus%d.svg" % [CUBES_DIR, color, color, plus_n])
 	var N := 5
 	var mid := 2
 	var g := _ci_grid(N, N)
@@ -1686,6 +1708,10 @@ func _ci_cycle_beam(t: Tween, horizontal: bool) -> void:
 			else:
 				tex = _ci_skin_static(DEMO_COLORS[(_ci_demo_color_idx + col + row * 2 + 3) % DEMO_COLORS.size()])
 			var cube := _ci_cube_at(_ci_cell_center(g, col, row), size, tex)
+			# freccia ORIZZONTALE: cubo ruotato di 90° (il frame è "verticale")
+			if is_center and horizontal:
+				cube.pivot_offset = cube.size * 0.5
+				cube.rotation = PI / 2.0
 			if on_line:
 				line.append(cube)
 	# beam colorato lungo TUTTA la linea (N celle), animato a frame
@@ -1801,6 +1827,10 @@ func _build_cubeinfo_content(info: Dictionary) -> void:
 	_ci_cur_info = info
 	var cur_static := _skin_static_for(info["name"], info["cube"])
 	_ci_preview = _ci_texrect(cur_static, Vector2(40.0, 132.0), Vector2(206.0, 206.0), TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
+	# FRECCIA ORIZZONTALE: anteprima ruotata di 90° (il frame è "verticale")
+	if str(info.get("name", "")) == "FRECCIA ORIZ.":
+		_ci_preview.pivot_offset = _ci_preview.size * 0.5
+		_ci_preview.rotation = deg_to_rad(90.0)
 	var rx := 280.0
 	var rw := CI_PW - rx - 38.0
 	var name_col: Color = info.get("color", Color(1, 1, 1))
@@ -2146,6 +2176,29 @@ func _build_top_right() -> void:
 	_record_bar = rc[0] as TextureRect
 	_update_coin_count()
 	_refresh_record_counters()
+
+	# CONTATORE STELLE: solo in STORY, nella stessa posizione del contatore record
+	_home_star_bar = TextureRect.new()
+	_home_star_bar.texture = load("res://CORE/Assets/Art/Home/star_counter_home.png")
+	_home_star_bar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_home_star_bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_home_star_bar.stretch_mode = TextureRect.STRETCH_SCALE
+	_home_star_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# stessa posizione del contatore RECORD (punti classic/speedrun), che nascondo in story
+	_home_star_bar.size = Vector2(REC_CLASSIC_W, COUNTER_H)
+	_home_star_bar.position = Vector2(RECORD_X, COUNTER_Y)
+	_home_star_bar.visible = false
+	add_child(_home_star_bar)
+	_home_star_label = Label.new()
+	_home_star_label.add_theme_font_override("font", MODE_FONT)
+	_home_star_label.add_theme_font_size_override("font_size", 26)
+	_home_star_label.add_theme_color_override("font_color", Color(1, 1, 1))
+	_home_star_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_home_star_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_home_star_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_home_star_label.position = Vector2(REC_CLASSIC_W * 0.20, 0.0)
+	_home_star_label.size = Vector2(REC_CLASSIC_W * 0.80, COUNTER_H)
+	_home_star_bar.add_child(_home_star_label)
 
 	# CLASSIFICA (trofeo) — spostata a sinistra per far posto al tasto NEWS
 	_leader_btn = _make_icon_button("res://CORE/Assets/Art/UI/Menu/leaderboard.png", Vector2(302.0, 74.0), 78.0)
@@ -4501,7 +4554,7 @@ func _build_story_map() -> void:
 		var lbl := Label.new()
 		lbl.text = str(n)
 		lbl.add_theme_font_override("font", MODE_FONT)
-		lbl.add_theme_font_size_override("font_size", 52)
+		lbl.add_theme_font_size_override("font_size", 60)
 		lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 		lbl.add_theme_color_override("font_outline_color", Color(0.12, 0.09, 0.05))
 		lbl.add_theme_constant_override("outline_size", 8)
@@ -4847,20 +4900,19 @@ func _layout_story() -> void:
 		b.size = Vector2(STORY_ISLAND_W, STORY_ISLAND_H)
 		b.pivot_offset = Vector2(hw, hh)
 		b.position = _story_level_pos[i] - Vector2(hw, hh)
-		# numero sul pianoro erboso (parte alta dell'isola, ~centro erba)
+		# NUMERO grande CENTRATO nella parte alta della tile
 		if i < _story_num_labels.size() and is_instance_valid(_story_num_labels[i]):
 			var lbl: Label = _story_num_labels[i]
-			lbl.position = Vector2(0, STORY_ISLAND_H * 0.06)
-			lbl.size = Vector2(STORY_ISLAND_W, STORY_ISLAND_H * 0.44)
-		# 3 stelline sotto il numero: quella centrale più grande, le due laterali
-		# più piccole ma accostate (leggera sovrapposizione), allineate in basso.
+			lbl.position = Vector2(0, STORY_ISLAND_H * 0.10)
+			lbl.size = Vector2(STORY_ISLAND_W, STORY_ISLAND_H * 0.42)
+		# 3 STELLE GRANDI sotto il numero: centrale più grande, laterali un po' più piccole.
 		if i < _story_island_stars.size():
-			var side_sz := 24.0          # stelle laterali (più piccole)
-			var mid_sz := 36.0           # stella centrale (più grande)
-			var overlap := 4.0           # accosta/sovrappone leggermente
+			var side_sz := 34.0
+			var mid_sz := 46.0
+			var overlap := 4.0
 			var mtot := 2.0 * side_sz + mid_sz - 2.0 * overlap
 			var mx := (STORY_ISLAND_W - mtot) * 0.5
-			var baseline := STORY_ISLAND_H * 0.54 + mid_sz   # bordo basso comune
+			var baseline := STORY_ISLAND_H * 0.80   # bordo basso comune (sopra l'ombra della tile)
 			var srow: Array = _story_island_stars[i]
 			var szs := [side_sz, mid_sz, side_sz]
 			var xoff := 0.0

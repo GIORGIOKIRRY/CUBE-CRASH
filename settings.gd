@@ -38,6 +38,8 @@ var story_time: float = 0.0          # tempo massimo in secondi (>0 = livello SP
 var story_goal: String = "score"     # "score" | "cubes" | "colors" | "speedrun"
 var story_goal_cubes: int = 0        # per goal "cubes": n. cubi normali da distruggere
 var story_goal_colors: Dictionary = {}  # per goal "colors": {indice_colore:int -> quantità:int}
+# Override esplicito delle 3 soglie-stella (score/speedrun). Vuoto = calcolate da story_target.
+var story_star_targets: Array = []
 # Progressione: livello massimo COMPLETATO (0 = nessuno; livello n giocabile se completed>=n-1).
 var story_completed: int = 0
 # Stelle guadagnate per livello (3 fasi per livello): {livello:int -> stelle:int 0..3}.

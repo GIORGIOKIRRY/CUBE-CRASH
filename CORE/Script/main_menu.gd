@@ -348,7 +348,7 @@ const STORY_LEVELS_DATA: Array = [
 	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":20}},
 	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":15, "yellow":15}},
 	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":12, "green":12, "yellow":12}},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"speedrun", "target":5000, "time":180.0},
+	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"speedrun", "target":5000, "time":180.0, "stars":[5000, 20000, 40000]},
 	{"grid":5, "colors":5, "v":false, "h":false, "b":false, "goal":"score", "target":4000},
 	{"grid":5, "colors":5, "v":true, "h":false, "b":false, "goal":"score", "target":5000},
 	{"grid":5, "colors":5, "v":true, "h":true, "b":false, "goal":"score", "target":6000},
@@ -3221,6 +3221,9 @@ func _make_leader_row(e: Dictionary) -> Control:
 		lb_specs.append({"t": "[CC]", "c": Color(0.30, 1.0, 0.38)})
 	if _is_og(str(e["name"])):
 		lb_specs.append({"t": "[OG]", "c": Color(1.0, 0.82, 0.15)})
+	# tag [GLO] arcobaleno (pacchetto GLOBAL): sulla PROPRIA riga se riscattato
+	if is_player and missions.is_icon_unlocked("global"):
+		lb_specs.append({"t": "[GLO]", "c": Color(1, 1, 1), "rainbow": true})
 	for s in lb_specs:
 		var tw := MODE_FONT.get_string_size(s["t"], HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x + 2.0
 		var tg := _make_tag(s["t"], s["c"], 18)
@@ -3228,6 +3231,10 @@ func _make_leader_row(e: Dictionary) -> Control:
 		tg.position = Vector2(tx, 0)
 		tg.size = Vector2(tw, LB_ROW_H)
 		row.add_child(tg)
+		if bool(s.get("rainbow", false)):
+			var rtw := tg.create_tween().set_loops()
+			for k in 6:
+				rtw.tween_property(tg, "modulate", Color.from_hsv(float(k) / 6.0, 0.85, 1.0), 0.3)
 		tx += tw + 2.0
 	# punteggio agganciato a destra: giallo chiaro + stroke nero
 	var sc := _lb_label(_fmt_score(int(e["score"])), 24, Color(1, 0.93, 0.5), Vector2(LB_ROW_W * 0.60, 0), Vector2(LB_ROW_W * 0.36, LB_ROW_H), HORIZONTAL_ALIGNMENT_RIGHT)
@@ -4513,11 +4520,15 @@ func _on_free_pack_pressed() -> void:
 # Animazione di sblocco del pacchetto GLOBAL: mostra l'AVATAR (mappamondo) e il TAG [GLO]
 # arcobaleno che compaiono con un rimbalzo. Si chiude da sola (o al tocco).
 func _play_global_reward_anim() -> void:
+	# CanvasLayer dedicato SOPRA lo shop (layer 5): così la celebrazione si vede nella sezione shop
+	# e non resta nascosta dietro al pannello dello shop.
+	var anim_layer := CanvasLayer.new()
+	anim_layer.layer = 60
+	add_child(anim_layer)
 	var ov := Control.new()
 	ov.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ov.mouse_filter = Control.MOUSE_FILTER_STOP
-	ov.z_index = 4096
-	add_child(ov)
+	anim_layer.add_child(ov)
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.0)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -4591,7 +4602,7 @@ func _play_global_reward_anim() -> void:
 			return
 		var ct := ov.create_tween()
 		ct.tween_property(ov, "modulate:a", 0.0, 0.35)
-		ct.tween_callback(ov.queue_free)
+		ct.tween_callback(anim_layer.queue_free)
 	dim.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventScreenTouch and ev.pressed:
 			close.call()
@@ -5845,6 +5856,7 @@ func _on_story_play() -> void:
 	settings.story_goal_cubes = int(cfg.get("cubes", 0))
 	settings.story_goal_colors = (cfg.get("colors_goal", {}) as Dictionary).duplicate()
 	settings.story_time = float(cfg.get("time", 0.0))
+	settings.story_star_targets = (cfg.get("stars", []) as Array).duplicate()
 	settings.play_playbutton()
 	settings.vibrate(15)
 	transition.change_scene("res://CORE/Scene/game.tscn")

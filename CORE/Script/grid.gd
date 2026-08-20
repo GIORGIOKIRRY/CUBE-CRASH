@@ -102,6 +102,11 @@ var _story_goal_colors: Dictionary = {}        # goal "colors": {colore -> quant
 var _story_destroyed: int = 0                  # cubi distrutti finora (totale)
 var _story_color_tally: Dictionary = {}        # colore -> cubi distrutti finora
 var _story_level: int = 1                       # numero del livello storia corrente
+# Livello 15 = "vetrina" della BOMBA X: 1 bomba X piazzata all'avvio + 2 che compaiono a caso
+# durante la partita, e board quasi piena all'inizio (si vede bene come funziona la bomba).
+var _story_xbomb_intro: bool = false
+var _story_xbomb_extra: int = 0                 # bombe X ancora da far comparire durante la partita
+var _story_xbomb_next_ms: int = 0               # istante (ticks_msec) della prossima comparsa
 var _story_wpos: float = 0.0                    # posizione nel mondo (0=primo livello .. 1=ultimo)
 var _story_gd: float = 0.0                      # difficoltà globale 0..1 (livello 1 .. 30)
 var _story_hud: Label = null                   # etichetta obiettivo in partita
@@ -437,8 +442,16 @@ func _ready() -> void:
 		_story_level = maxi(1, settings.story_level)
 		_story_wpos = float((_story_level - 1) % 10) / 9.0
 		_story_gd = clampf(float(_story_level - 1) / 29.0, 0.0, 1.0)
+		# LIVELLO 15: vetrina della bomba X (1 all'avvio, +2 durante la partita, board piena)
+		_story_xbomb_intro = _story_level == 15 and _story_ab_xbomb
+		_story_xbomb_extra = 2 if _story_xbomb_intro else 0
+		_story_xbomb_next_ms = 0
 		# 3 SOGLIE stelle: ⭐ = obiettivo base, ⭐⭐ ≈ 1.8×, ⭐⭐⭐ ≈ 2.8× (colori: tier ×1/×1.7/×2.6)
-		_story_score_th = [_story_target, int(round(_story_target * 1.8)), int(round(_story_target * 2.8))]
+		# Se il livello definisce soglie esplicite (settings.story_star_targets), usa quelle.
+		if settings.story_star_targets.size() == 3:
+			_story_score_th = [int(settings.story_star_targets[0]), int(settings.story_star_targets[1]), int(settings.story_star_targets[2])]
+		else:
+			_story_score_th = [_story_target, int(round(_story_target * 1.8)), int(round(_story_target * 2.8))]
 		_story_cube_th = [_story_goal_cubes, int(round(_story_goal_cubes * 1.8)), int(round(_story_goal_cubes * 2.8))]
 		_story_color_tiers = []
 		if not _story_goal_colors.is_empty():
@@ -541,8 +554,9 @@ func _ready() -> void:
 			bottom_spacing_px = 158
 			bottom_y_offset_pixels = 198
 		elif side == 5:
-			_bottom_scale = 1.1
-			bottom_spacing_px = 132
+			# cubi del tray grandi come quelli sulla board 5×5 (più visibili)
+			_bottom_scale = 1.4
+			bottom_spacing_px = 152
 			bottom_y_offset_pixels = 150
 		# STORIA a tempo (speedrun): bordo griglia + sfondo ROSSI (la griglia resta dimensionata)
 		if _story_sr:
@@ -783,7 +797,7 @@ func _mode_c_fill_pattern() -> Array:
 			for j in height:
 				cells.append(Vector2i(i, j))
 		cells.shuffle()
-		var target_fill: int = int(round(lerpf(3.0, 6.0, _story_wpos)))
+		var target_fill: int = int(round(lerpf(4.0, 7.0, _story_wpos)))
 		for k in range(mini(target_fill, cells.size())):
 			var c: Vector2i = cells[k]
 			filled[c.x][c.y] = true
@@ -792,7 +806,8 @@ func _mode_c_fill_pattern() -> Array:
 	# STORIA 5×5/7×7: densità iniziale GRADUALE (primi livelli del mondo più vuoti = più facili,
 	# ultimi più pieni = più difficili). Scatter uniforme.
 	if _is_story:
-		var dens := lerpf(0.42, 0.82, _story_wpos)
+		# LIVELLO 15 (vetrina bomba X): board QUASI PIENA così si vede bene l'effetto della bomba.
+		var dens := 0.92 if _story_xbomb_intro else lerpf(0.58, 0.90, _story_wpos)
 		for i in width:
 			for j in height:
 				filled[i][j] = randf() < dens
@@ -1670,6 +1685,15 @@ func _process(_delta: float) -> void:
 			if st >= 3:
 				_story_win()
 				return
+	# LIVELLO 15: le 2 bombe X extra COMPAIONO a caso durante la partita (a board ferma).
+	if _story_xbomb_intro and _story_xbomb_extra > 0 and not is_resolving and not is_game_over:
+		var now_ms := Time.get_ticks_msec()
+		if _story_xbomb_next_ms == 0:
+			_story_xbomb_next_ms = now_ms + randi_range(12000, 22000)
+		elif now_ms >= _story_xbomb_next_ms:
+			if _story_place_ability(4):
+				_story_xbomb_extra -= 1
+			_story_xbomb_next_ms = now_ms + randi_range(14000, 26000)
 	# STORIA a tempo (livelli campagna speedrun): countdown; a 0 senza obiettivo = sconfitta
 	if _is_story and _story_time > 0.0 and not is_game_over:
 		_speedrun_time_left -= _delta
@@ -3303,13 +3327,18 @@ func _story_weighted_ability() -> int:
 		return 1
 	# peso delle BOMBE (3=3×3, 4=X, 5=angoli): normalmente 1 (frecce 4). Nei livelli SPEED le
 	# bombe sono MOLTO più rare, specie all'inizio (come la speedrun normale): si trovavano troppo.
-	var bomb_w := 1.0
+	# BOMBE (3=3×3, 4=X, 5=angoli) RARE: peso base 0.4 contro le frecce (4.0) → più rare di prima.
+	var bomb_w := 0.4
 	if _story_time > 0.0:
 		var el := _story_time - _speedrun_time_left
-		bomb_w = 0.05 + 0.55 * clampf((el - 40.0) / 140.0, 0.0, 1.0)   # ~0.05 -> 0.60
+		bomb_w = 0.03 + 0.35 * clampf((el - 40.0) / 140.0, 0.0, 1.0)   # ~0.03 -> 0.38
 	var weights: Array = []
 	var total := 0.0
 	for v in _story_abilities:
+		# LIVELLO 15: la bomba X (4) NON esce dal refill casuale — solo le 1+2 comparse scriptate.
+		if _story_xbomb_intro and int(v) == 4:
+			weights.append(0.0)
+			continue
 		var w: float = bomb_w if int(v) >= 3 else 4.0
 		weights.append(w)
 		total += w
@@ -3329,6 +3358,10 @@ func _story_weighted_ability() -> int:
 func _story_seed_abilities() -> void:
 	if _story_abilities.is_empty():
 		return
+	# LIVELLO 15 (vetrina bomba X): all'avvio 1 SOLA bomba X (le altre 2 compaiono in partita).
+	if _story_xbomb_intro:
+		_story_place_ability(4)
+		return
 	var cap := 1
 	if width >= 7:
 		cap = 3
@@ -3346,17 +3379,25 @@ func _story_seed_abilities() -> void:
 		# abilità di valore più alto prima (bomba > riga > colonna): sono le "appena introdotte"
 		vals.sort()
 		vals.reverse()
+	var placed := 0
+	for v in vals:
+		if placed >= cap:
+			break
+		if _story_place_ability(int(v)):
+			placed += 1
+
+# STORIA: rimpiazza un cubo NORMALE (mooves==0) a caso con un'abilità di valore v dello STESSO
+# colore (nessun match immediato). Ritorna true se piazzata. Usato dal seed iniziale e dalla
+# comparsa "a goccia" delle bombe X extra (livello 15).
+func _story_place_ability(v: int) -> bool:
 	var cells: Array = []
 	for i in width:
 		for j in height:
-			if all_pieces[i][j] != null:
+			var p = all_pieces[i][j]
+			if p != null and is_instance_valid(p) and int(p.mooves) == 0:
 				cells.append(Vector2i(i, j))
 	cells.shuffle()
-	var placed := 0
-	for v in vals:
-		if placed >= cap or cells.is_empty():
-			break
-		var c: Vector2i = cells.pop_back()
+	for c in cells:
 		var old = all_pieces[c.x][c.y]
 		if old == null:
 			continue
@@ -3370,7 +3411,8 @@ func _story_seed_abilities() -> void:
 		np.position = grid_to_pixel(c.x, c.y)
 		old.queue_free()
 		all_pieces[c.x][c.y] = np
-		placed += 1
+		return true
+	return false
 
 
 # Con probabilità 'prob' restituisce un cubo-mossa (valore pesato dalle mosse),

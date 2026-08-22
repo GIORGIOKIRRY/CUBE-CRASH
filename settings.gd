@@ -40,6 +40,9 @@ var story_goal_cubes: int = 0        # per goal "cubes": n. cubi normali da dist
 var story_goal_colors: Dictionary = {}  # per goal "colors": {indice_colore:int -> quantità:int}
 # Override esplicito delle 3 soglie-stella (score/speedrun). Vuoto = calcolate da story_target.
 var story_star_targets: Array = []
+# Abilità da seminare 1 volta AL CENTRO all'avvio (0=nessuna; 1=colonna,2=riga,3=bomba,4=bombaX,5=angoli).
+# Usato dai livelli che INTRODUCONO una meccanica: mostra 1 esemplare al centro per farla capire.
+var story_seed_center: int = 0
 # Progressione: livello massimo COMPLETATO (0 = nessuno; livello n giocabile se completed>=n-1).
 var story_completed: int = 0
 # Stelle guadagnate per livello (3 fasi per livello): {livello:int -> stelle:int 0..3}.

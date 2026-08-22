@@ -102,11 +102,10 @@ var _story_goal_colors: Dictionary = {}        # goal "colors": {colore -> quant
 var _story_destroyed: int = 0                  # cubi distrutti finora (totale)
 var _story_color_tally: Dictionary = {}        # colore -> cubi distrutti finora
 var _story_level: int = 1                       # numero del livello storia corrente
-# Livello 15 = "vetrina" della BOMBA X: 1 bomba X piazzata all'avvio + 2 che compaiono a caso
-# durante la partita, e board quasi piena all'inizio (si vede bene come funziona la bomba).
-var _story_xbomb_intro: bool = false
-var _story_xbomb_extra: int = 0                 # bombe X ancora da far comparire durante la partita
-var _story_xbomb_next_ms: int = 0               # istante (ticks_msec) della prossima comparsa
+# Livelli che INTRODUCONO una meccanica: 1 esemplare dell'abilità viene piazzato AL CENTRO
+# all'avvio (0=nessuno; 1=colonna,2=riga,3=bomba,4=bombaX,5=angoli). Dopo l'intro le bombe sono RARE.
+var _story_seed_center: int = 0
+var _story_xbomb_intro: bool = false            # (deprecato) mantenuto per compatibilità, sempre false
 var _story_wpos: float = 0.0                    # posizione nel mondo (0=primo livello .. 1=ultimo)
 var _story_gd: float = 0.0                      # difficoltà globale 0..1 (livello 1 .. 30)
 var _story_hud: Label = null                   # etichetta obiettivo in partita
@@ -420,7 +419,8 @@ func _ready() -> void:
 	if _is_story:
 		_mode = "mode_c"
 		_story_target = settings.story_target
-		_story_colors = maxi(3, settings.story_colors)
+		_story_colors = maxi(2, settings.story_colors)   # min 2 (liv.1 usa 2 colori)
+		_story_seed_center = settings.story_seed_center
 		_story_ab_vert = settings.story_ab_vert
 		_story_ab_horiz = settings.story_ab_horiz
 		_story_ab_bomb = settings.story_ab_bomb
@@ -442,10 +442,9 @@ func _ready() -> void:
 		_story_level = maxi(1, settings.story_level)
 		_story_wpos = float((_story_level - 1) % 10) / 9.0
 		_story_gd = clampf(float(_story_level - 1) / 29.0, 0.0, 1.0)
-		# LIVELLO 15: vetrina della bomba X (1 all'avvio, +2 durante la partita, board piena)
-		_story_xbomb_intro = _story_level == 15 and _story_ab_xbomb
-		_story_xbomb_extra = 2 if _story_xbomb_intro else 0
-		_story_xbomb_next_ms = 0
+		# L'introduzione delle bombe (normale L4, X L15, angoli L25) ora usa il seme al centro
+		# (_story_seed_center) + comparsa RNG rara: niente più "vetrina" a board piena.
+		_story_xbomb_intro = false
 		# 3 SOGLIE stelle: ⭐ = obiettivo base, ⭐⭐ ≈ 1.8×, ⭐⭐⭐ ≈ 2.8× (colori: tier ×1/×1.7/×2.6)
 		# Se il livello definisce soglie esplicite (settings.story_star_targets), usa quelle.
 		if settings.story_star_targets.size() == 3:
@@ -781,6 +780,21 @@ func _spawn_mode_c_start() -> void:
 
 # Genera un pattern booleano pieno/vuoto. Tavola piena con i BUCHI DISTRIBUITI IN MODO
 # OMOGENEO su tutta la griglia (mai spazi vuoti concentrati su un lato/in cima/a bande).
+# STORIA: sui livelli che INTRODUCONO un'abilità (_story_seed_center>0) forza il riempimento della
+# cella centrale + i 4 vicini ortogonali, così l'abilità piazzata al centro è ben CIRCONDATA da cubi
+# e il giocatore può testarla subito muovendosi (es. la bomba del liv.4).
+func _story_fill_center(filled: Array) -> void:
+	if not _is_story or _story_seed_center <= 0:
+		return
+	var cx := width / 2
+	var cy := height / 2
+	filled[cx][cy] = true
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var nx: int = cx + d.x
+		var ny: int = cy + d.y
+		if nx >= 0 and nx < width and ny >= 0 and ny < height:
+			filled[nx][ny] = true
+
 # Varia densità e "texture" così ogni partita è diversa, ma la rottura resta uniforme.
 func _mode_c_fill_pattern() -> Array:
 	var filled: Array = []
@@ -789,28 +803,29 @@ func _mode_c_fill_pattern() -> Array:
 		for j in height:
 			filled[i].append(false)
 
-	# STORIA 3×3 (mondo 1): parti con poche celle piene, che AUMENTANO gradualmente col livello
-	# (primo livello del mondo = 3, ultimo = 6 su 9): più pieno = più difficile, ma resta giocabile.
+	# STORIA 3×3 (mondo 1): abbastanza cubi per fare combo istintive (come Classic), senza svuotare
+	# né saturare: da 4 a 6 celle su 9 col progredire del mondo.
 	if _is_story and width <= 3:
 		var cells: Array = []
 		for i in width:
 			for j in height:
 				cells.append(Vector2i(i, j))
 		cells.shuffle()
-		var target_fill: int = int(round(lerpf(4.0, 7.0, _story_wpos)))
+		var target_fill: int = int(round(lerpf(4.0, 6.0, _story_wpos)))
 		for k in range(mini(target_fill, cells.size())):
 			var c: Vector2i = cells[k]
 			filled[c.x][c.y] = true
+		_story_fill_center(filled)
 		return filled
 
-	# STORIA 5×5/7×7: densità iniziale GRADUALE (primi livelli del mondo più vuoti = più facili,
-	# ultimi più pieni = più difficili). Scatter uniforme.
+	# STORIA 5×5/7×7: griglia PIENA stile Classic (abbastanza cubi per combo immediate), che cresce
+	# leggermente col livello. Riferimento density Classic ≈ 0.76-0.88.
 	if _is_story:
-		# LIVELLO 15 (vetrina bomba X): board QUASI PIENA così si vede bene l'effetto della bomba.
-		var dens := 0.92 if _story_xbomb_intro else lerpf(0.58, 0.90, _story_wpos)
+		var dens := lerpf(0.78, 0.88, _story_wpos)
 		for i in width:
 			for j in height:
 				filled[i][j] = randf() < dens
+		_story_fill_center(filled)
 		return filled
 
 	var kind := randi() % 3
@@ -1685,15 +1700,6 @@ func _process(_delta: float) -> void:
 			if st >= 3:
 				_story_win()
 				return
-	# LIVELLO 15: le 2 bombe X extra COMPAIONO a caso durante la partita (a board ferma).
-	if _story_xbomb_intro and _story_xbomb_extra > 0 and not is_resolving and not is_game_over:
-		var now_ms := Time.get_ticks_msec()
-		if _story_xbomb_next_ms == 0:
-			_story_xbomb_next_ms = now_ms + randi_range(12000, 22000)
-		elif now_ms >= _story_xbomb_next_ms:
-			if _story_place_ability(4):
-				_story_xbomb_extra -= 1
-			_story_xbomb_next_ms = now_ms + randi_range(14000, 26000)
 	# STORIA a tempo (livelli campagna speedrun): countdown; a 0 senza obiettivo = sconfitta
 	if _is_story and _story_time > 0.0 and not is_game_over:
 		_speedrun_time_left -= _delta
@@ -1914,18 +1920,13 @@ func _input(event: InputEvent) -> void:
 func check_game_over() -> void:
 	if _tut_active:
 		return   # nel tutorial guidato non si perde mai
-	# STORIA — rischio "spazio" GRADUALE per mondo:
-	#  • livelli a tempo: mai per spazio (valvola forte).
-	#  • Mondo 1 (3×3): non si perde per spazio (valvola 3).
-	#  • Mondo 2 (5×5): valvola leggera (1) → si perde molto di rado.
-	#  • Mondo 3 (7×7): NESSUNA valvola → si può perdere per spazio (sfida vera).
-	if _is_story and _story_time > 0.0:
+	# STORIA — i primi 30 livelli sono un tutorial EASY: non si perde MAI per spazio. Se la board
+	# si riempie del tutto, una valvola libera qualche cella (più piccola sulle griglie grandi, così
+	# la difficoltà resta ma senza game-over frustranti). Le griglie partono comunque piene (combo).
+	if _is_story:
 		if not is_game_over and not is_resolving and _is_board_full():
-			_remove_random_cells(10)
-		return
-	if _is_story and width <= 5:
-		if not is_game_over and not is_resolving and _is_board_full():
-			_remove_random_cells(3 if width <= 3 else 1)
+			var relief := 3 if width <= 3 else (4 if width <= 5 else 6)
+			_remove_random_cells(relief)
 		return
 	if _is_speedrun:
 		# speedrun: si perde SOLO a tempo, mai per spazio. Se la board si riempie del tutto
@@ -3325,20 +3326,17 @@ func _pick_plus_scene() -> PackedScene:
 func _story_weighted_ability() -> int:
 	if _story_abilities.is_empty():
 		return 1
-	# peso delle BOMBE (3=3×3, 4=X, 5=angoli): normalmente 1 (frecce 4). Nei livelli SPEED le
-	# bombe sono MOLTO più rare, specie all'inizio (come la speedrun normale): si trovavano troppo.
-	# BOMBE (3=3×3, 4=X, 5=angoli) RARE: peso base 0.4 contro le frecce (4.0) → più rare di prima.
-	var bomb_w := 0.4
+	# BOMBE (3=3×3, 4=X, 5=angoli) MOLTO RARE: peso base 0.25 contro le frecce (4.0) → ~1 su 17
+	# quando esce un'abilità, e le abilità stesse sono già rare (vedi _effective_plus_prob). Dopo
+	# l'esemplare seminato all'avvio dell'intro, le bombe sono quindi una vera rarità (solo RNG).
+	# Nei livelli SPEED sono ancora più rare all'inizio.
+	var bomb_w := 0.25
 	if _story_time > 0.0:
 		var el := _story_time - _speedrun_time_left
-		bomb_w = 0.03 + 0.35 * clampf((el - 40.0) / 140.0, 0.0, 1.0)   # ~0.03 -> 0.38
+		bomb_w = 0.03 + 0.30 * clampf((el - 40.0) / 140.0, 0.0, 1.0)   # ~0.03 -> 0.33
 	var weights: Array = []
 	var total := 0.0
 	for v in _story_abilities:
-		# LIVELLO 15: la bomba X (4) NON esce dal refill casuale — solo le 1+2 comparse scriptate.
-		if _story_xbomb_intro and int(v) == 4:
-			weights.append(0.0)
-			continue
 		var w: float = bomb_w if int(v) >= 3 else 4.0
 		weights.append(w)
 		total += w
@@ -3353,42 +3351,47 @@ func _story_weighted_ability() -> int:
 	return int(_story_abilities[_story_abilities.size() - 1])
 
 
-# STORIA: mette 1+ abilità del livello sulla board GIÀ all'avvio (visibili subito), rimpiazzando
-# un cubo normale con un'abilità dello STESSO colore (così non forma un match immediato).
+# STORIA: SOLO i livelli che introducono una meccanica (_story_seed_center>0) piazzano 1 esemplare
+# di quell'abilità AL CENTRO all'avvio, così il giocatore la vede e la testa subito. Tutti gli altri
+# livelli NON pre-piazzano nulla: frecce e bombe arrivano dal refill (bombe rarissime, vedi pesi).
 func _story_seed_abilities() -> void:
-	if _story_abilities.is_empty():
+	if _story_seed_center <= 0:
 		return
-	# LIVELLO 15 (vetrina bomba X): all'avvio 1 SOLA bomba X (le altre 2 compaiono in partita).
-	if _story_xbomb_intro:
-		_story_place_ability(4)
+	if not _story_abilities.has(_story_seed_center):
 		return
-	var cap := 1
-	if width >= 7:
-		cap = 3
-	elif width >= 5:
-		cap = 2
-	cap = mini(cap, _story_abilities.size())
-	# quali abilità seminare all'avvio:
-	var vals: Array = _story_abilities.duplicate()
-	if _story_time > 0.0:
-		# SPEED: NIENTE bombe pre-posizionate (si trovavano troppo facilmente) — solo frecce
-		vals = vals.filter(func(v): return int(v) < 3)
-		if vals.is_empty():
-			return
-	else:
-		# abilità di valore più alto prima (bomba > riga > colonna): sono le "appena introdotte"
-		vals.sort()
-		vals.reverse()
-	var placed := 0
-	for v in vals:
-		if placed >= cap:
-			break
-		if _story_place_ability(int(v)):
-			placed += 1
+	_story_place_ability_center(_story_seed_center)
+
+# STORIA: piazza l'abilità v sul cubo NORMALE più VICINO al centro della griglia (rimpiazzandolo con
+# un'abilità dello STESSO colore → nessun match immediato). Usato per l'esemplare-tutorial d'intro.
+func _story_place_ability_center(v: int) -> bool:
+	var center := Vector2(float(width) / 2.0 - 0.5, float(height) / 2.0 - 0.5)
+	var cells: Array = []
+	for i in width:
+		for j in height:
+			var p = all_pieces[i][j]
+			if p != null and is_instance_valid(p) and int(p.mooves) == 0:
+				cells.append(Vector2i(i, j))
+	cells.sort_custom(func(a, b):
+		return (Vector2(a) - center).length_squared() < (Vector2(b) - center).length_squared())
+	for c in cells:
+		var old = all_pieces[c.x][c.y]
+		if old == null:
+			continue
+		var color := str(old.color)
+		if not (_mc_plus_by_color.has(color) and _mc_plus_by_color[color].has(v)):
+			continue
+		var np = _mc_plus_by_color[color][v].instantiate()
+		add_child(np)
+		_apply_bomb_bw(np)
+		np.scale = Vector2(_grid_piece_scale, _grid_piece_scale)
+		np.position = grid_to_pixel(c.x, c.y)
+		old.queue_free()
+		all_pieces[c.x][c.y] = np
+		return true
+	return false
 
 # STORIA: rimpiazza un cubo NORMALE (mooves==0) a caso con un'abilità di valore v dello STESSO
-# colore (nessun match immediato). Ritorna true se piazzata. Usato dal seed iniziale e dalla
-# comparsa "a goccia" delle bombe X extra (livello 15).
+# colore (nessun match immediato). Ritorna true se piazzata. (Utility generica, ora non usata.)
 func _story_place_ability(v: int) -> bool:
 	var cells: Array = []
 	for i in width:

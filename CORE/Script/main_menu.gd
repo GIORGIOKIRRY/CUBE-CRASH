@@ -338,37 +338,43 @@ const STORY_PAD_BOTTOM := 360.0  # spazio sotto il livello 1
 # Configurazione dei 30 livelli storia (spec utente 2026-08-14).
 # grid=lato griglia · colors=n. colori normali · v/h/b=abilità (verticale/orizzontale/bomba)
 # goal: "score"(target) · "cubes"(cubes) · "colors"(colors_goal {nome:qta}) · "speedrun"(target+time)
+# Progressione a 3 BLOCCHI (spec utente 2026-08-22). Ogni blocco reintroduce le frecce e aggiunge
+# una NUOVA bomba. Chiave "seed" = abilità piazzata 1 volta AL CENTRO all'avvio del livello che la
+# introduce (1=colonna,2=riga,3=bomba,4=bombaX,5=angoli). Dopo l'intro le bombe sono RARE (RNG).
 const STORY_LEVELS_DATA: Array = [
-	{"grid":3, "colors":3, "v":false, "h":false, "b":false, "goal":"score", "target":1000},
-	{"grid":3, "colors":3, "v":true, "h":false, "b":false, "goal":"score", "target":1500},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":false, "goal":"score", "target":2000},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"score", "target":2500},
-	{"grid":3, "colors":3, "v":false, "h":false, "b":false, "goal":"cubes", "cubes":50},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"score", "target":3000},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":20}},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":15, "yellow":15}},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":12, "green":12, "yellow":12}},
-	{"grid":3, "colors":3, "v":true, "h":true, "b":true, "goal":"speedrun", "target":5000, "time":180.0, "stars":[5000, 20000, 40000]},
-	{"grid":5, "colors":5, "v":false, "h":false, "b":false, "goal":"score", "target":4000},
-	{"grid":5, "colors":5, "v":true, "h":false, "b":false, "goal":"score", "target":5000},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":false, "goal":"score", "target":6000},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"score", "target":7000},
-	{"grid":5, "colors":5, "v":false, "h":false, "b":false, "goal":"cubes", "cubes":120},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"score", "target":9000},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":40}},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":30, "yellow":30}},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":25, "green":25, "yellow":25}},
-	{"grid":5, "colors":5, "v":true, "h":true, "b":true, "goal":"speedrun", "target":11000, "time":300.0},
-	{"grid":7, "colors":7, "v":false, "h":false, "b":false, "goal":"score", "target":6000},
-	{"grid":7, "colors":7, "v":true, "h":false, "b":false, "goal":"score", "target":8000},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":false, "goal":"score", "target":10000},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"score", "target":12000},
-	{"grid":7, "colors":7, "v":false, "h":false, "b":false, "goal":"cubes", "cubes":200},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"score", "target":16000},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":60}},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"green":45, "yellow":45}},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"colors", "colors_goal":{"red":35, "green":35, "yellow":35}},
-	{"grid":7, "colors":7, "v":true, "h":true, "b":true, "goal":"speedrun", "target":14000, "time":300.0},
+	# --- BLOCCO 1 (1-10, 3×3): impara FRECCIA ORIZZONTALE (liv.2) + BOMBA (liv.4) ---
+	{"grid":3, "colors":2, "v":false, "h":false, "b":false, "goal":"score", "target":1000},                                        # 1 (2 colori: semplicissimo)
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":false, "goal":"score", "target":1500, "seed":2},                              # 2 intro freccia orizzontale
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":false, "goal":"score", "target":2000, "seed":2},                              # 3 pratica freccia orizzontale
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"score", "target":2500, "seed":3},                              # 4 intro BOMBA (al centro)
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"cubes", "cubes":50},                                           # 5
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"score", "target":3000},                                        # 6
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"colors", "colors_goal":{"red":20}},                           # 7
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"colors", "colors_goal":{"green":15, "yellow":15}},            # 8
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"colors", "colors_goal":{"red":12, "green":12, "yellow":12}},  # 9
+	{"grid":3, "colors":3, "v":false, "h":true,  "b":true,  "goal":"speedrun", "target":5000, "time":180.0, "stars":[5000, 20000, 40000]}, # 10
+	# --- BLOCCO 2 (11-20, 5×5): torna FRECCIA ORIZZ. + NUOVA FRECCIA VERTICALE (liv.12) + BOMBA X (liv.15) ---
+	{"grid":5, "colors":5, "v":false, "h":true,  "b":true,  "goal":"score", "target":4000},                                        # 11 (griglia più piena)
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"score", "target":5000, "seed":1},                              # 12 intro freccia VERTICALE
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"score", "target":6000},                                        # 13
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"score", "target":7000},                                        # 14
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"cubes", "cubes":120, "seed":4},                                # 15 intro BOMBA X (al centro)
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"score", "target":9000},                                        # 16 (facile, bombe rare)
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"colors", "colors_goal":{"red":40}},                           # 17
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"colors", "colors_goal":{"green":30, "yellow":30}},            # 18
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"colors", "colors_goal":{"red":25, "green":25, "yellow":25}},  # 19
+	{"grid":5, "colors":5, "v":true,  "h":true,  "b":true,  "goal":"speedrun", "target":11000, "time":300.0},                      # 20
+	# --- BLOCCO 3 (21-30, 7×7): tutte le abilità + NUOVA BOMBA ANGOLI (liv.25). Griglie piene stile Classic ---
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"score", "target":6000},                                        # 21 (griglia molto piena)
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"score", "target":8000},                                        # 22
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"score", "target":10000},                                       # 23
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"score", "target":12000},                                       # 24
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"cubes", "cubes":200, "seed":5},                                # 25 intro BOMBA ANGOLI (al centro)
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"score", "target":16000},                                       # 26
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"colors", "colors_goal":{"red":60}},                           # 27
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"colors", "colors_goal":{"green":45, "yellow":45}},            # 28
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"colors", "colors_goal":{"red":35, "green":35, "yellow":35}},  # 29
+	{"grid":7, "colors":7, "v":true,  "h":true,  "b":true,  "goal":"speedrun", "target":14000, "time":300.0},                      # 30
 ]
 # --- Grafica MONDO 1: sfondo verde + isole cliccabili ---
 const STORY_BG_TEX := preload("res://CORE/Assets/Art/Story/sfondo_story.png")
@@ -5857,6 +5863,8 @@ func _on_story_play() -> void:
 	settings.story_goal_colors = (cfg.get("colors_goal", {}) as Dictionary).duplicate()
 	settings.story_time = float(cfg.get("time", 0.0))
 	settings.story_star_targets = (cfg.get("stars", []) as Array).duplicate()
+	# abilità da seminare 1 volta AL CENTRO all'avvio (livelli che introducono una meccanica)
+	settings.story_seed_center = int(cfg.get("seed", 0))
 	settings.play_playbutton()
 	settings.vibrate(15)
 	transition.change_scene("res://CORE/Scene/game.tscn")
